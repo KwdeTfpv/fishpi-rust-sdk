@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::utils::error::Error;
 
 fn to_md5(input: &str) -> String {
-    let hash = md5::compute(input.as_bytes());
+    let hash = md5::compute(input);
     format!("{:x}", hash)
 }
 
@@ -13,7 +13,7 @@ fn to_md5(input: &str) -> String {
 pub struct LoginData {
     #[serde(rename = "nameOrEmail")]
     pub username: String,
-    #[serde(rename = "passwd")]
+    #[serde(rename = "userPassword")]
     pub password: String,
     #[serde(rename = "mfaCode")]
     pub mfa_code: Option<String>,
