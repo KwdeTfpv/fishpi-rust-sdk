@@ -5,7 +5,6 @@
 //! ## 主要组件
 //!
 //! - [`FishPi`] - 静态客户端，提供不需要认证的操作（如登录、注册、验证）。
-//! - [`Client`] - 认证客户端，持有 API 密钥和各个子模块实例，提供需要认证的完整 API 操作。
 //! - [`api`] - API 客户端模块，包含各个子模块（如用户、文章等）。
 //! - [`model`] - 数据模型模块，定义请求和响应的数据结构。
 //! - [`utils`] - 工具模块，提供 HTTP 请求、错误处理等辅助功能。
@@ -20,21 +19,18 @@
 //! ## 示例
 //!
 //! ```rust,no_run
-//! use fishpi_sdk::{FishPi, Client};
+//! use fishpi_sdk::{FishPi, api::user::User};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     // 登录获取用户实例
 //!     let user = FishPi::login(&login_data).await?;
 //!
-//!     // 创建认证客户端
-//!     let client = Client::new(user.get_api_key().to_string());
-//!
 //!     // 获取用户信息
-//!     let user_info = client.get_user("username").await?;
+//!     let user_info = user.info().await?;
 //!
 //!     // 发送评论
-//!     let result = client.comment.send(&comment_data).await?;
+//!     let result = user.comment.send(&comment_data).await?;
 //!
 //!     Ok(())
 //! }
