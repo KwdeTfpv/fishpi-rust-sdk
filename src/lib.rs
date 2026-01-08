@@ -4,7 +4,8 @@
 //!
 //! ## 主要组件
 //!
-//! - [`FishPi`] - 主要接口结构体，包含所有 API 操作。
+//! - [`FishPi`] - 静态客户端，提供不需要认证的操作（如登录、注册、验证）。
+//! - [`Client`] - 认证客户端，持有 API 密钥和各个子模块实例，提供需要认证的完整 API 操作。
 //! - [`api`] - API 客户端模块，包含各个子模块（如用户、文章等）。
 //! - [`model`] - 数据模型模块，定义请求和响应的数据结构。
 //! - [`utils`] - 工具模块，提供 HTTP 请求、错误处理等辅助功能。
@@ -19,21 +20,21 @@
 //! ## 示例
 //!
 //! ```rust,no_run
-//! use fishpi_sdk::FishPi;
+//! use fishpi_sdk::{FishPi, Client};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // 创建实例
-//!     let mut fishpi = FishPi::new("your_api_key".to_string());
+//!     // 登录获取用户实例
+//!     let user = FishPi::login(&login_data).await?;
 //!
-//!     // 登录
-//!     let token = fishpi.login(&login_data).await?;
+//!     // 创建认证客户端
+//!     let client = Client::new(user.get_api_key().to_string());
 //!
 //!     // 获取用户信息
-//!     let user_info = fishpi.get_user("username").await?;
+//!     let user_info = client.get_user("username").await?;
 //!
 //!     // 发送评论
-//!     let result = fishpi.comment.send(&comment_data).await?;
+//!     let result = client.comment.send(&comment_data).await?;
 //!
 //!     Ok(())
 //! }
@@ -45,74 +46,27 @@ pub mod utils;
 use serde_json::{Value, json};
 
 use crate::{
-    api::{
-        article::Article, breezemoon::BreezeMoon, chat::Chat, chatroom::ChatRoom, comment::Comment,
-        notice::Notice, redpacket::Redpacket, user::User,
-    },
+    api::user::User,
     model::{
         misc::{
-            Log, LoginData, PreRegisterInfo, RegisterInfo, Report, UploadResult, UserLite,
-            UserVipInfo,
+            Log, LoginData, PreRegisterInfo, RegisterInfo,UserLite,UserVipInfo,
         },
-        user::{AtUser, UserInfo},
+        user::AtUser,
     },
-    utils::{ResponseResult, error::Error, get, post, upload_files},
+    utils::{ResponseResult, error::Error, get, post},
 };
 
 /// 摸鱼派 Rust SDK 接口
-pub struct FishPi {
-    api_key: String,
-    pub user: User,
-    pub chatroom: ChatRoom,
-    pub chat: Chat,
-    pub breezemoon: BreezeMoon,
-    pub article: Article,
-    pub notice: Notice,
-    pub redpacket: Redpacket,
-    pub comment: Comment,
-}
+pub struct FishPi;
 
 impl FishPi {
-    pub fn new(api_key: String) -> Self {
-        Self {
-            api_key: api_key.clone(),
-            user: User::new(api_key.clone()),
-            chatroom: ChatRoom::new(api_key.clone()),
-            chat: Chat::new(api_key.clone()),
-            breezemoon: BreezeMoon::new(api_key.clone()),
-            article: Article::new(api_key.clone()),
-            notice: Notice::new(api_key.clone()),
-            redpacket: Redpacket::new(api_key.clone()),
-            comment: Comment::new(api_key.clone()),
-        }
-    }
-
-    pub fn get_api_key(&self) -> &str {
-        &self.api_key
-    }
-
-    pub fn set_api_key(&mut self, api_key: String) {
-        self.api_key = api_key.clone();
-        self.user = User::new(api_key.clone());
-        self.chatroom = ChatRoom::new(api_key.clone());
-        self.chat = Chat::new(api_key.clone());
-        self.breezemoon = BreezeMoon::new(api_key.clone());
-        self.article = Article::new(api_key.clone());
-        self.notice = Notice::new(api_key.clone());
-        self.redpacket = Redpacket::new(api_key.clone());
-        self.comment = Comment::new(api_key.clone());
-    }
-
-    pub fn is_logined(&self) -> bool {
-        !self.api_key.is_empty()
-    }
 
     /// 登录
     ///
     /// - `data` 登录账密
     ///
-    /// 返回用户的 Token
-    pub async fn login(&mut self, data: &LoginData) -> Result<String, Error> {
+    /// 返回用户实例
+    pub async fn login(data: &LoginData) -> Result<User, Error> {
         let url = "api/getKey".to_string();
 
         let data_json = data.to_value()?;
@@ -126,9 +80,8 @@ impl FishPi {
         }
 
         let token = rsp["Key"].as_str().unwrap_or("").trim().to_string();
-        self.set_api_key(token.clone());
 
-        Ok(token)
+        Ok(User::new(token))
     }
 
     /// 预注册
@@ -136,7 +89,7 @@ impl FishPi {
     /// - `data` 预注册数据
     ///
     /// 返回预注册结果
-    pub async fn pre_register(&self, data: &PreRegisterInfo) -> Result<ResponseResult, Error> {
+    pub async fn pre_register(data: &PreRegisterInfo) -> Result<ResponseResult, Error> {
         let url = "register".to_string();
 
         let data_json = serde_json::to_value(data)
@@ -152,7 +105,7 @@ impl FishPi {
     /// - `code` 验证码
     ///
     /// 返回用户 ID
-    pub async fn verify(&self, code: &str) -> Result<String, Error> {
+    pub async fn verify(code: &str) -> Result<String, Error> {
         let url = format!("verify?code={}", code);
 
         let rsp = get(&url).await?;
@@ -171,7 +124,7 @@ impl FishPi {
     /// - `data` 注册数据 [RegisterInfo]
     ///
     /// 返回注册结果
-    pub async fn register(&self, data: &RegisterInfo) -> Result<ResponseResult, Error> {
+    pub async fn register(data: &RegisterInfo) -> Result<ResponseResult, Error> {
         let url = if let Some(r) = &data.r {
             format!("register2?r={}", r)
         } else {
@@ -194,31 +147,12 @@ impl FishPi {
         ResponseResult::from_value(&rsp)
     }
 
-    /// 获取用户信息
-    ///
-    /// - `username` 用户名
-    ///
-    /// 返回用户信息
-    pub async fn get_user(&self, username: &str) -> Result<UserInfo, Error> {
-        let url = format!("user/{}?apiKey={}", username, self.api_key);
-
-        let rsp = get(&url).await?;
-
-        if rsp.get("code").and_then(|c| c.as_i64()).unwrap_or(0) != 0 {
-            return Err(Error::Api(
-                rsp["msg"].as_str().unwrap_or("API error").to_string(),
-            ));
-        }
-
-        UserInfo::from_value(&rsp)
-    }
-
     /// 获取用户名联想
     ///
     /// - `name` 用户名
     ///
     /// 返回用户名联想列表
-    pub async fn names(&self, name: &str) -> Result<Vec<AtUser>, Error> {
+    pub async fn names(name: &str) -> Result<Vec<AtUser>, Error> {
         let url = "users/names".to_string();
 
         let data_json = json!({
@@ -246,7 +180,7 @@ impl FishPi {
     /// 获取最近注册的 20 个用户
     ///
     /// 返回用户列表
-    pub async fn recent_register(&self) -> Result<Vec<UserLite>, Error> {
+    pub async fn recent_register() -> Result<Vec<UserLite>, Error> {
         let url = "api/user/recentReg".to_string();
 
         let rsp = get(&url).await?;
@@ -266,7 +200,7 @@ impl FishPi {
     /// - `user_id` 用户ID
     ///
     /// 返回用户VIP信息
-    pub async fn vip_info(&self, user_id: &str) -> Result<UserVipInfo, Error> {
+    pub async fn vip_info(user_id: &str) -> Result<UserVipInfo, Error> {
         let url = format!("api/membership/{}", user_id);
 
         let rsp = get(&url).await?;
@@ -323,30 +257,13 @@ impl FishPi {
         UserVipInfo::from_value(&data)
     }
 
-    /// 举报
-    ///
-    /// - `data` 举报数据 [Report]
-    ///
-    /// 返回举报结果
-    pub async fn report(&self, data: &Report) -> Result<ResponseResult, Error> {
-        let url = "report".to_string();
-
-        let mut data_json = serde_json::to_value(data)
-            .map_err(|e| Error::Parse(format!("Failed to serialize Report: {}", e)))?;
-        data_json["apiKey"] = Value::String(self.api_key.clone());
-
-        let rsp = post(&url, Some(data_json)).await?;
-
-        ResponseResult::from_value(&rsp)
-    }
-
     /// 获取操作日志
     ///
     /// - `page` 页码
     /// - `page_size` 每页数量
     ///
     /// 返回日志列表
-    pub async fn log(&self, page: u32, page_size: u32) -> Result<Vec<Log>, Error> {
+    pub async fn log(page: u32, page_size: u32) -> Result<Vec<Log>, Error> {
         let url = format!("logs/more?page={}&pageSize={}", page, page_size);
 
         let rsp = get(&url).await?;
@@ -361,28 +278,4 @@ impl FishPi {
         Ok(logs)
     }
 
-    /// 上传文件
-    ///
-    /// - `files` 文件路径列表
-    ///
-    /// 返回上传结果
-    pub async fn upload(&self, files: Vec<String>) -> Result<UploadResult, Error> {
-        // 检查文件是否存在
-        for file in &files {
-            if !std::path::Path::new(file).exists() {
-                return Err(Error::Api(format!("File not exist: {}", file)));
-            }
-        }
-
-        let url = "upload".to_string();
-        let rsp = upload_files(&url, files, &self.api_key).await?;
-
-        if rsp.get("code").and_then(|c| c.as_i64()).unwrap_or(-1) != 0 {
-            return Err(Error::Api(
-                rsp["msg"].as_str().unwrap_or("API error").to_string(),
-            ));
-        }
-
-        UploadResult::from_value(&rsp["data"])
-    }
 }

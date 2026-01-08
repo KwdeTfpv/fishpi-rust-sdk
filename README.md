@@ -25,22 +25,24 @@ cargo add fishpi-sdk
 ## 快速开始
 
 ```rust
-use fishpi_sdk::FishPi;
+use fishpi_sdk::{FishPi, api::user::User};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 创建实例
-    let mut fishpi = FishPi::new("your_api_key".to_string());
-
-    // 登录
-    // let token = fishpi.login(&login_data).await?;
-
+    // 登录获取认证用户客户端
+    let fishpi = FishPi::login(&login_data).await?;
+    
     // 获取用户信息
-    let user_info = fishpi.get_user("username").await?;
+    let user_info = fishpi.info().await?;
     println!("User: {:?}", user_info);
 
     // 发送评论
-    // let result = fishpi.comment.send(&comment_data).await?;
+    let result = fishpi.comment.send(&comment_data).await?;
+    println!("Comment result: {:?}", result);
+
+    // 使用其他模块
+    let articles = fishpi.article.get_recent().await?;
+    let chat_result = fishpi.chatroom.send("Hello!").await?;
 
     Ok(())
 }
@@ -48,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## 功能
 
-- 用户管理：登录、注册、获取用户信息
+- 用户管理：登录、注册、获取用户信息、修改资料
 - 内容操作：文章、评论、清风明月
 - 聊天：聊天室、私聊
 - 其他：通知、红包、举报、日志、文件上传
