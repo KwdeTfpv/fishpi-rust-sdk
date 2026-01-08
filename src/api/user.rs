@@ -1,0 +1,258 @@
+//! 用户 API 模块
+//!
+//! 这个模块提供了与用户相关的 API 操作，包括获取用户信息、查询表情、活跃度、签到、转账、关注、修改头像和用户信息等功能。
+//! 主要结构体是 `User`，用于管理用户的 API 请求。
+//!
+//! # 主要组件
+//!
+//! - [`User`] - 用户客户端结构体，负责所有用户相关的 API 调用。
+//!
+//! # 方法列表
+//!
+//! - [`User::new`] - 创建新的用户客户端实例。
+//! - [`User::set_token`] - 重新设置请求 token。
+//! - [`User::info`] - 返回登录账户信息。
+//! - [`User::emotions`] - 查询登录用户常用表情。
+//! - [`User::liveness`] - 查询登录用户当前活跃度。
+//! - [`User::is_checkin`] - 检查用户是否已经签到。
+//! - [`User::is_collected_liveness`] - 检查用户是否领取昨日活跃奖励。
+//! - [`User::reward_liveness`] - 领取昨日活跃度奖励。
+//! - [`User::transfer`] - 转账。
+//! - [`User::follow`] - 关注用户。
+//! - [`User::unfollow`] - 取消关注用户。
+//! - [`User::update_avatar`] - 修改用户头像。
+//! - [`User::update_user_info`] - 修改用户信息。
+//!
+//! # 示例
+//!
+//! ```rust,no_run
+//! use crate::api::user::User;
+//! use crate::model::user::UpdateUserInfoParams;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let user = User::new("your_api_key".to_string());
+//!
+//!     // 获取用户信息
+//!     let info = user.info().await?;
+//!     println!("User name: {}", info.user_name);
+//!
+//!     // 查询表情
+//!     let emotions = user.emotions().await?;
+//!     println!("Emotions: {:?}", emotions);
+//!
+//!     // 转账
+//!     user.transfer("target_user", 100, "Gift").await?;
+//!
+//!     // 修改用户信息
+//!     let params = UpdateUserInfoParams {
+//!         nickName: Some("New Name".to_string()),
+//!         userUrl: Some("https://example.com".to_string()),
+//!         userIntro: Some("New intro".to_string()),
+//!         userTag: Some("tag".to_string()),
+//!     };
+//!     user.update_user_info(params).await?;
+//!
+//!     Ok(())
+//! }
+//! ```
+use crate::model::user::{UpdateUserInfoParams, UserInfo};
+use crate::utils::error::Error;
+use crate::utils::{get, post};
+use serde_json::{Value, json};
+
+pub struct User {
+    api_key: String,
+}
+
+impl User {
+    pub fn new(api_key: String) -> Self {
+        Self { api_key }
+    }
+
+    /// 重新设置请求token
+    pub fn set_token(&mut self, token: String) {
+        self.api_key = token;
+    }
+
+    /// 返回登录账户信息，需要先登录或设置有效api_key
+    pub async fn info(&self) -> Result<UserInfo, Error> {
+        let mut resp = get(&format!("api/user?apiKey={}", &self.api_key)).await?;
+
+        if resp["code"] != 0 {
+            return Err(Error::Api(
+                resp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
+
+        let data_value = if let Some(data_str) = resp["data"].as_str() {
+            serde_json::from_str(data_str).map_err(|e| Error::Api(e.to_string()))?
+        } else {
+            resp["data"].take()
+        };
+
+        UserInfo::from_value(&data_value)
+    }
+
+    /// 查询登录用户常用表情
+    pub async fn emotions(&self) -> Result<Vec<String>, Error> {
+        let mut resp = get(&format!("users/emotions?apiKey={}", &self.api_key)).await?;
+
+        if resp["code"] != 0 {
+            return Err(Error::Api(
+                resp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
+
+        let data: Vec<Value> =
+            serde_json::from_value(resp["data"].take()).map_err(|e| Error::Api(e.to_string()))?;
+        let emotions: Vec<String> = data
+            .into_iter()
+            .filter_map(|v| {
+                v.as_object()
+                    .and_then(|obj| obj.values().next())
+                    .and_then(|val| val.as_str())
+                    .map(|s| s.to_string())
+            })
+            .collect();
+        Ok(emotions)
+    }
+
+    /// 查询登录用户当前活跃度，请求频率请控制在 30 ~ 60 秒一次
+    pub async fn liveness(&self) -> Result<u32, Error> {
+        let resp = get(&format!("user/liveness?apiKey={}", &self.api_key)).await?;
+
+        let liveness = resp["liveness"].as_u64().unwrap_or(0) as u32;
+        Ok(liveness)
+    }
+
+    /// 检查用户是否已经签到
+    pub async fn is_checkin(&self) -> Result<bool, Error> {
+        let resp = get(&format!("user/isCheckin?apiKey={}", &self.api_key)).await?;
+
+        let is_checkin: bool = resp["isCheckin"].as_bool().unwrap_or(false);
+        Ok(is_checkin)
+    }
+
+    /// 检查用户是否领取昨日活跃奖励
+    pub async fn is_collected_liveness(&self) -> Result<bool, Error> {
+        let resp = get(&format!(
+            "api/activity/is-collected-liveness?apiKey={}",
+            &self.api_key
+        ))
+        .await?;
+
+        let is_rewarded: bool = resp["isLivenessRewarded"].as_bool().unwrap_or(false);
+        Ok(is_rewarded)
+    }
+
+    /// 领取昨日活跃度奖励
+    pub async fn reward_liveness(&self) -> Result<u32, Error> {
+        let resp = get(&format!(
+            "activity/yesterday-liveness-reward-api?apiKey={}",
+            &self.api_key
+        ))
+        .await?;
+
+        let success: u32 = resp["sum"].as_u64().unwrap_or(0) as u32;
+        Ok(success)
+    }
+
+    /// 转账
+    pub async fn transfer(&self, username: &str, amount: u32, memo: &str) -> Result<bool, Error> {
+        let data = json!({
+            "username": username,
+            "amount": amount,
+            "memo": memo,
+            "apiKey": self.api_key,
+        });
+
+        let resp = post("point/transfer", Some(data)).await?;
+
+        if resp["code"] != 0 {
+            return Err(Error::Api(
+                resp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
+
+        Ok(true)
+    }
+
+    /// 关注用户
+    pub async fn follow(&self, following_id: &str) -> Result<bool, Error> {
+        let data = json!({
+            "followingId": following_id,
+            "apiKey": self.api_key,
+        });
+
+        let resp = post("follow/user", Some(data)).await?;
+
+        if resp["code"] != 0 {
+            return Err(Error::Api(
+                resp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
+
+        Ok(true)
+    }
+
+    /// 取消关注用户
+    pub async fn unfollow(&self, following_id: &str) -> Result<bool, Error> {
+        let data = json!({
+            "followingId": following_id,
+            "apiKey": self.api_key,
+        });
+
+        let resp = post("unfollow/user", Some(data)).await?;
+
+        if resp["code"] != 0 {
+            return Err(Error::Api(
+                resp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
+
+        Ok(true)
+    }
+
+    /// 修改用户头像
+    pub async fn update_avatar(&self, avatar_url: &str) -> Result<bool, Error> {
+        let data = json!({
+            "userAvatarURL": avatar_url,
+            "apiKey": self.api_key
+        });
+
+        let resp = post("api/settings/avatar", Some(data)).await?;
+
+        if resp["code"] != 0 {
+            return Err(Error::Api(
+                resp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
+
+        Ok(true)
+    }
+
+    /// 修改用户信息
+    ///
+    /// #### 参数
+    /// * `params` 用户信息参数 [UpdateUserInfoParams]
+    pub async fn update_user_info(&self, params: UpdateUserInfoParams) -> Result<bool, Error> {
+        let data = json!({
+            "userNickname": params.nickName,
+            "userURL": params.userUrl,
+            "userIntro": params.userIntro,
+            "userTag": params.userTag,
+            "apiKey": self.api_key,
+        });
+
+        let resp = post("api/settings/profiles", Some(data)).await?;
+
+        if resp["code"] != 0 {
+            return Err(Error::Api(
+                resp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
+
+        Ok(true)
+    }
+}
