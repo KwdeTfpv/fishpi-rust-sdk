@@ -8,7 +8,7 @@
 //!
 //! - [`ChatRoom`] - 聊天室客户端结构体，负责连接、发送消息和管理监听器。
 //! - [`ChatRoomHandler`] - 聊天室消息处理器，实现 `MessageHandler` trait，处理 WebSocket 消息并发射事件。
-//! - [`ChatRoomEventData`] - 聊天室事件数据枚举，包装所有消息类型（如连接成功、消息撤回、普通消息等）。
+//! - [`ChatRoomEventData`] - 聊天室事件数据枚举，包装所有消息类型（如在线用户、话题修改、普通消息等）。
 //! - [`ChatRoomListener`] - 聊天室事件监听器类型别名，定义监听器函数的签名。
 //! - [`ChatRoomNodeResponse`] 和 [`ChatRoomAvailableNode`] - 聊天室节点相关结构体，用于获取可用节点。
 //!
@@ -19,7 +19,16 @@
 //! - [`ChatRoom::get_ws_url`] - 获取 WebSocket URL。
 //! - [`ChatRoom::connect`] - 连接聊天室。
 //! - [`ChatRoom::reconnect`] - 重连聊天室。
-//! - [`ChatRoom::on`] - 添加事件监听器。
+//! - [`ChatRoom::on_online`] - 监听在线用户更新事件。
+//! - [`ChatRoom::on_discuss`] - 监听话题变更事件。
+//! - [`ChatRoom::on_revoke`] - 监听消息撤回事件。
+//! - [`ChatRoom::on_msg`] - 监听普通消息事件。
+//! - [`ChatRoom::on_barrager`] - 监听弹幕消息事件。
+//! - [`ChatRoom::on_redpacket`] - 监听红包消息事件。
+//! - [`ChatRoom::on_redpacketstatus`] - 监听红包状态事件。
+//! - [`ChatRoom::on_music`] - 监听音乐消息事件。
+//! - [`ChatRoom::on_weather`] - 监听天气消息事件。
+//! - [`ChatRoom::on_custom`] - 监听进出场消息事件。
 //! - [`ChatRoom::off`] - 移除事件监听器。
 //! - [`ChatRoom::disconnect`] - 断开连接。
 //! - [`ChatRoom::send`] - 发送消息。
@@ -39,20 +48,25 @@
 //! # 示例
 //!
 //! ```rust,no_run
-//! use crate::api::chatroom::{ChatRoom, ChatRoomEventData};
+//! use crate::api::chatroom::{ChatRoom, ChatRoomMsg, BarragerMsg};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let mut chatroom = ChatRoom::new("your_api_key".to_string());
 //!
-//!     // 添加消息监听器
-//!     chatroom.on("msg", |event: ChatRoomEventData| {
-//!         match event {
-//!             ChatRoomEventData::Msg(msg) => {
-//!                 println!("Received message: {}", msg.content);
-//!             }
-//!             _ => {}
-//!         }
+//!     // 监听普通消息（直接传递 ChatRoomMsg，无需 match）
+//!     chatroom.on_msg(|msg: ChatRoomMsg| {
+//!         println!("Received message: {}", msg.content);
+//!     }).await;
+//!
+//!     // 监听弹幕消息
+//!     chatroom.on_barrager(|barrager: BarragerMsg| {
+//!         println!("Barrage: {}", barrager.content);
+//!     }).await;
+//!
+//!     // 监听在线用户更新
+//!     chatroom.on_online(|users: Vec<crate::model::chatroom::OnlineInfo>| {
+//!         println!("Online users: {}", users.len());
 //!     }).await;
 //!
 //!     // 连接聊天室
@@ -71,24 +85,22 @@
 //! }
 //! ```
 //!
-//! # 事件类型
+//! # 事件类型 [ChatRoomEventType]
 //!
-//! 聊天室支持以下事件类型（通过 `on` 方法监听）：
+//! 聊天室支持以下事件类型（通过特定 `on_*` 方法监听）：
 //!
-//! - `"open"` - 连接成功。
-//! - `"close"` - 连接断开。
-//! - `"error"` - 连接错误。
-//! - `"online"` - 在线用户更新。
-//! - `"discussChanged"` - 话题修改。
-//! - `"revoke"` - 消息撤回。
-//! - `"msg"` - 普通消息。
-//! - `"barrager"` - 弹幕消息。
-//! - `"redPacket"` - 红包消息。
-//! - `"redPacketStatus"` - 红包状态。
-//! - `"music"` - 音乐消息。
-//! - `"weather"` - 天气消息。
-//! - `"custom"` - 进出场消息。
-//! - `"all"` - 所有事件（除了自身）。
+//! - `Online` - 在线用户更新。
+//! - `DiscussChanged` - 话题修改。
+//! - `Revoke` - 消息撤回。
+//! - `Msg` - 普通消息。
+//! - `Barrager` - 弹幕消息。
+//! - `RedPacket` - 红包消息。
+//! - `RedPacketStatus` - 红包状态。
+//! - `Music` - 音乐消息。
+//! - `Weather` - 天气消息。
+//! - `Custom` - 进出场消息。
+//! - `All` - 所有事件（除了自身）。
+
 use crate::api::ws::{MessageHandler, WebSocketClient, WebSocketError};
 use crate::model::MuteItem;
 use crate::model::chatroom::{
@@ -127,12 +139,6 @@ pub struct ChatRoomAvailableNode {
 /// 聊天室事件数据（包装所有消息类型）
 #[derive(Debug, Clone)]
 pub enum ChatRoomEventData {
-    /// 连接成功
-    Open,
-    /// 连接断开
-    Close,
-    /// 连接错误
-    Error(String),
     /// 在线用户
     Online(Vec<OnlineInfo>),
     /// 话题修改
@@ -155,12 +161,39 @@ pub enum ChatRoomEventData {
     Custom(CustomMsg),
 }
 
+/// 聊天室事件类型枚举
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ChatRoomEventType {
+    /// 在线用户更新
+    Online,
+    /// 话题修改
+    DiscussChanged,
+    /// 消息撤回
+    Revoke,
+    /// 普通消息
+    Msg,
+    /// 弹幕消息
+    Barrager,
+    /// 红包消息
+    RedPacket,
+    /// 红包状态
+    RedPacketStatus,
+    /// 音乐消息
+    Music,
+    /// 天气消息
+    Weather,
+    /// 进出场消息
+    Custom,
+    /// 所有事件（除了自身）
+    All,
+}
+
 /// 聊天室事件监听器类型
-pub type ChatRoomListener = Box<dyn Fn(ChatRoomEventData) + Send + Sync + 'static>;
+pub type ChatRoomListener = Arc<dyn Fn(ChatRoomEventData) + Send + Sync + 'static>;
 
 /// 聊天室消息处理器
 pub struct ChatRoomHandler {
-    emitter: Arc<Mutex<HashMap<String, Vec<ChatRoomListener>>>>,
+    emitter: Arc<Mutex<HashMap<ChatRoomEventType, Vec<ChatRoomListener>>>>,
 }
 
 impl Default for ChatRoomHandler {
@@ -176,28 +209,36 @@ impl ChatRoomHandler {
         Self::default()
     }
 
-    pub fn get_emitter(&self) -> Arc<Mutex<HashMap<String, Vec<ChatRoomListener>>>> {
+    pub fn get_emitter(&self) -> Arc<Mutex<HashMap<ChatRoomEventType, Vec<ChatRoomListener>>>> {
         self.emitter.clone()
     }
 
     /// 发射事件
     async fn emit_event(
-        emitter: &Arc<Mutex<HashMap<String, Vec<ChatRoomListener>>>>,
-        event_type: &str,
+        emitter: &Arc<Mutex<HashMap<ChatRoomEventType, Vec<ChatRoomListener>>>>,
+        event_type: ChatRoomEventType,
         event: ChatRoomEventData,
     ) {
-        let listeners = emitter.lock().await;
-        if let Some(event_listeners) = listeners.get(event_type) {
-            for listener in event_listeners {
-                listener(event.clone());
-            }
+        let listeners: Vec<ChatRoomListener> = {
+            let guard = emitter.lock().await;
+            guard.get(&event_type).cloned().unwrap_or_default()
+        };
+        for listener in listeners {
+            let event = event.clone();
+            tokio::spawn(async move { listener(event) });
         }
-        // 同时发送到 "all" 事件
-        if event_type != "all"
-            && let Some(all_listeners) = listeners.get("all")
-        {
+        // 处理 "all" 事件
+        if event_type != ChatRoomEventType::All {
+            let all_listeners: Vec<ChatRoomListener> = {
+                let guard = emitter.lock().await;
+                guard
+                    .get(&ChatRoomEventType::All)
+                    .cloned()
+                    .unwrap_or_default()
+            };
             for listener in all_listeners {
-                listener(event.clone());
+                let event = event.clone();
+                tokio::spawn(async move { listener(event) });
             }
         }
     }
@@ -210,7 +251,7 @@ impl MessageHandler for ChatRoomHandler {
             tokio::spawn(async move {
                 match parse_chatroom_message(&json) {
                     Ok((event_type, event)) => {
-                        Self::emit_event(&emitter, &event_type, event).await;
+                        Self::emit_event(&emitter, event_type, event).await;
                     }
                     Err(e) => {
                         eprintln!("解析聊天室消息失败: {}", e);
@@ -223,7 +264,7 @@ impl MessageHandler for ChatRoomHandler {
 
 /// 解析聊天室消息，返回 (事件类型, 事件数据)
 #[allow(non_snake_case)]
-fn parse_chatroom_message(json: &Value) -> Result<(String, ChatRoomEventData), Error> {
+fn parse_chatroom_message(json: &Value) -> Result<(ChatRoomEventType, ChatRoomEventData), Error> {
     let type_str = json["type"]
         .as_str()
         .ok_or_else(|| Error::Parse("Missing type in message".to_string()))?;
@@ -244,7 +285,7 @@ fn parse_chatroom_message(json: &Value) -> Result<(String, ChatRoomEventData), E
                     })
                     .collect();
                 Ok((
-                    ChatRoomMessageType::Online.to_string(),
+                    ChatRoomEventType::Online,
                     ChatRoomEventData::Online(online_info),
                 ))
             } else {
@@ -257,7 +298,7 @@ fn parse_chatroom_message(json: &Value) -> Result<(String, ChatRoomEventData), E
                 .ok_or_else(|| Error::Parse("Missing newDiscuss".to_string()))?
                 .to_string();
             Ok((
-                ChatRoomMessageType::DiscussChanged.to_string(),
+                ChatRoomEventType::DiscussChanged,
                 ChatRoomEventData::DiscussChanged(new_discuss),
             ))
         }
@@ -266,10 +307,7 @@ fn parse_chatroom_message(json: &Value) -> Result<(String, ChatRoomEventData), E
                 .as_str()
                 .ok_or_else(|| Error::Parse("Missing oId in revoke".to_string()))?
                 .to_string();
-            Ok((
-                ChatRoomMessageType::Revoke.to_string(),
-                ChatRoomEventData::Revoke(o_id),
-            ))
+            Ok((ChatRoomEventType::Revoke, ChatRoomEventData::Revoke(o_id)))
         }
         ChatRoomMessageType::Msg => {
             let chat_msg = ChatRoomMsg::from_value(json)?;
@@ -277,33 +315,30 @@ fn parse_chatroom_message(json: &Value) -> Result<(String, ChatRoomEventData), E
             // 检查 content 是否为 music 或 weather
             if let Value::Object(ref obj) = chat_msg.content {
                 if obj.get("msgType").and_then(|v| v.as_str()) == Some("music") {
-                    Ok(("music".to_string(), ChatRoomEventData::Music(chat_msg)))
+                    Ok((ChatRoomEventType::Music, ChatRoomEventData::Music(chat_msg)))
                 } else if obj.get("msgType").and_then(|v| v.as_str()) == Some("weather") {
-                    Ok(("weather".to_string(), ChatRoomEventData::Weather(chat_msg)))
-                } else {
                     Ok((
-                        ChatRoomMessageType::Msg.to_string(),
-                        ChatRoomEventData::Msg(chat_msg),
+                        ChatRoomEventType::Weather,
+                        ChatRoomEventData::Weather(chat_msg),
                     ))
+                } else {
+                    Ok((ChatRoomEventType::Msg, ChatRoomEventData::Msg(chat_msg)))
                 }
             } else {
-                Ok((
-                    ChatRoomMessageType::Msg.to_string(),
-                    ChatRoomEventData::Msg(chat_msg),
-                ))
+                Ok((ChatRoomEventType::Msg, ChatRoomEventData::Msg(chat_msg)))
             }
         }
         ChatRoomMessageType::RedPacket => {
             let redpacket_msg = ChatRoomMsg::from_value(json)?;
             Ok((
-                ChatRoomMessageType::RedPacket.to_string(),
+                ChatRoomEventType::RedPacket,
                 ChatRoomEventData::RedPacket(redpacket_msg),
             ))
         }
         ChatRoomMessageType::Barrager => {
             let barrager = BarragerMsg::from_value(json)?;
             Ok((
-                ChatRoomMessageType::Barrager.to_string(),
+                ChatRoomEventType::Barrager,
                 ChatRoomEventData::Barrager(barrager),
             ))
         }
@@ -313,14 +348,14 @@ fn parse_chatroom_message(json: &Value) -> Result<(String, ChatRoomEventData), E
                 .ok_or_else(|| Error::Parse("Missing message in custom".to_string()))?
                 .to_string();
             Ok((
-                ChatRoomMessageType::Custom.to_string(),
+                ChatRoomEventType::Custom,
                 ChatRoomEventData::Custom(CustomMsg { message }),
             ))
         }
         ChatRoomMessageType::RedPacketStatus => {
             let redpacket_status = RedPacketStatusMsg::from_value(json)?;
             Ok((
-                ChatRoomMessageType::RedPacketStatus.to_string(),
+                ChatRoomEventType::RedPacketStatus,
                 ChatRoomEventData::RedPacketStatus(redpacket_status),
             ))
         }
@@ -415,42 +450,6 @@ impl ChatRoom {
         // 连接 WebSocket
         let ws = WebSocketClient::connect(&url, self.handler.clone()).await?;
 
-        // 监听基础 WebSocket 事件并转换为聊天室事件
-        let emitter = self.handler.get_emitter();
-        ws.on_open({
-            let emitter = emitter.clone();
-            move || {
-                let emitter = emitter.clone();
-                tokio::spawn(async move {
-                    ChatRoomHandler::emit_event(&emitter, "open", ChatRoomEventData::Open).await;
-                });
-            }
-        })
-        .await;
-
-        ws.on_close({
-            let emitter = emitter.clone();
-            move |_reason| {
-                let emitter = emitter.clone();
-                tokio::spawn(async move {
-                    ChatRoomHandler::emit_event(&emitter, "close", ChatRoomEventData::Close).await;
-                });
-            }
-        })
-        .await;
-
-        ws.on_error({
-            let emitter = emitter.clone();
-            move |error| {
-                let emitter = emitter.clone();
-                tokio::spawn(async move {
-                    ChatRoomHandler::emit_event(&emitter, "error", ChatRoomEventData::Error(error))
-                        .await;
-                });
-            }
-        })
-        .await;
-
         self.ws = Some(ws);
         Ok(())
     }
@@ -460,48 +459,195 @@ impl ChatRoom {
         self.connect(true).await
     }
 
-    /// 监听事件
-    ///
-    /// # 参数
-    /// * `event` - 事件类型
-    /// * `listener` - 监听器函数 [ChatRoomEventData]
-    pub async fn on<F>(&self, event: &str, listener: F)
+    /// 监听在线用户更新事件
+    pub async fn on_online<F>(&self, listener: F)
+    where
+        F: Fn(Vec<OnlineInfo>) + Send + Sync + 'static,
+    {
+        let onlines = Arc::clone(&self.onlines);
+        let wrapped_listener: ChatRoomListener = Arc::new(move |event: ChatRoomEventData| {
+            if let ChatRoomEventData::Online(users) = event {
+                // 更新状态
+                if let Ok(mut onlines_guard) = onlines.try_lock() {
+                    *onlines_guard = users.clone();
+                }
+                listener(users);
+            }
+        });
+        let mut emitter = self.handler.emitter.lock().await;
+        emitter
+            .entry(ChatRoomEventType::Online)
+            .or_insert_with(Vec::new)
+            .push(wrapped_listener);
+    }
+
+    /// 监听话题变更事件
+    pub async fn on_discuss<F>(&self, listener: F)
+    where
+        F: Fn(String) + Send + Sync + 'static,
+    {
+        let discuss = Arc::clone(&self.discuss);
+        let wrapped_listener: ChatRoomListener = Arc::new(move |event: ChatRoomEventData| {
+            if let ChatRoomEventData::DiscussChanged(topic) = event {
+                // 更新状态
+                if let Ok(mut discuss_guard) = discuss.try_lock() {
+                    *discuss_guard = topic.clone();
+                }
+                listener(topic);
+            }
+        });
+        let mut emitter = self.handler.emitter.lock().await;
+        emitter
+            .entry(ChatRoomEventType::DiscussChanged)
+            .or_insert_with(Vec::new)
+            .push(wrapped_listener);
+    }
+
+    /// 监听消息撤回事件
+    pub async fn on_revoke<F>(&self, listener: F)
+    where
+        F: Fn(String) + Send + Sync + 'static,
+    {
+        self.add_listener(
+            ChatRoomEventType::Revoke,
+            move |event: ChatRoomEventData| {
+                if let ChatRoomEventData::Revoke(msg_id) = event {
+                    listener(msg_id);
+                }
+            },
+        )
+        .await;
+    }
+
+    /// 监听普通消息事件
+    pub async fn on_msg<F>(&self, listener: F)
+    where
+        F: Fn(ChatRoomMsg) + Send + Sync + 'static,
+    {
+        self.add_listener(ChatRoomEventType::Msg, move |event: ChatRoomEventData| {
+            if let ChatRoomEventData::Msg(msg) = event {
+                listener(msg);
+            }
+        })
+        .await;
+    }
+
+    /// 监听弹幕消息事件
+    pub async fn on_barrager<F>(&self, listener: F)
+    where
+        F: Fn(BarragerMsg) + Send + Sync + 'static,
+    {
+        self.add_listener(
+            ChatRoomEventType::Barrager,
+            move |event: ChatRoomEventData| {
+                if let ChatRoomEventData::Barrager(barrager) = event {
+                    listener(barrager);
+                }
+            },
+        )
+        .await;
+    }
+
+    /// 监听红包消息事件
+    pub async fn on_redpacket<F>(&self, listener: F)
+    where
+        F: Fn(ChatRoomMsg<Value>) + Send + Sync + 'static,
+    {
+        self.add_listener(
+            ChatRoomEventType::RedPacket,
+            move |event: ChatRoomEventData| {
+                if let ChatRoomEventData::RedPacket(red_packet) = event {
+                    listener(red_packet);
+                }
+            },
+        )
+        .await;
+    }
+
+    /// 监听红包状态事件
+    pub async fn on_redpacketstatus<F>(&self, listener: F)
+    where
+        F: Fn(RedPacketStatusMsg) + Send + Sync + 'static,
+    {
+        self.add_listener(
+            ChatRoomEventType::RedPacketStatus,
+            move |event: ChatRoomEventData| {
+                if let ChatRoomEventData::RedPacketStatus(status) = event {
+                    listener(status);
+                }
+            },
+        )
+        .await;
+    }
+
+    /// 监听音乐消息事件
+    pub async fn on_music<F>(&self, listener: F)
+    where
+        F: Fn(ChatRoomMsg<Value>) + Send + Sync + 'static,
+    {
+        self.add_listener(ChatRoomEventType::Music, move |event: ChatRoomEventData| {
+            if let ChatRoomEventData::Music(music) = event {
+                listener(music);
+            }
+        })
+        .await;
+    }
+
+    /// 监听天气消息事件
+    pub async fn on_weather<F>(&self, listener: F)
+    where
+        F: Fn(ChatRoomMsg<Value>) + Send + Sync + 'static,
+    {
+        self.add_listener(
+            ChatRoomEventType::Weather,
+            move |event: ChatRoomEventData| {
+                if let ChatRoomEventData::Weather(weather) = event {
+                    listener(weather);
+                }
+            },
+        )
+        .await;
+    }
+
+    /// 监听进出场消息事件
+    pub async fn on_custom<F>(&self, listener: F)
+    where
+        F: Fn(CustomMsg) + Send + Sync + 'static,
+    {
+        self.add_listener(
+            ChatRoomEventType::Custom,
+            move |event: ChatRoomEventData| {
+                if let ChatRoomEventData::Custom(custom) = event {
+                    listener(custom);
+                }
+            },
+        )
+        .await;
+    }
+
+    pub async fn on_all<F>(&self, listener: F)
     where
         F: Fn(ChatRoomEventData) + Send + Sync + 'static,
     {
-        let discuss = Arc::clone(&self.discuss);
-        let onlines = Arc::clone(&self.onlines);
+        self.add_listener(ChatRoomEventType::All, listener).await;
+    }
 
-        let wrapped_listener = move |event_data: ChatRoomEventData| {
-            // 更新状态
-            match &event_data {
-                ChatRoomEventData::Online(new_onlines) => {
-                    if let Ok(mut onlines_guard) = onlines.try_lock() {
-                        *onlines_guard = new_onlines.clone();
-                    }
-                }
-                ChatRoomEventData::DiscussChanged(new_discuss) => {
-                    if let Ok(mut discuss_guard) = discuss.try_lock() {
-                        *discuss_guard = new_discuss.clone();
-                    }
-                }
-                _ => {}
-            }
-            // 用户监听器
-            listener(event_data);
-        };
-
+    async fn add_listener<F>(&self, event: ChatRoomEventType, listener: F)
+    where
+        F: Fn(ChatRoomEventData) + Send + Sync + 'static,
+    {
+        let wrapped_listener: ChatRoomListener = Arc::new(listener);
         let mut emitter = self.handler.emitter.lock().await;
         emitter
-            .entry(event.to_string())
+            .entry(event)
             .or_insert_with(Vec::new)
-            .push(Box::new(wrapped_listener));
+            .push(wrapped_listener);
     }
 
     /// 移除监听
-    pub async fn off(&self, event: &str) {
+    pub async fn off(&self, event: ChatRoomEventType) {
         let mut emitter = self.handler.emitter.lock().await;
-        emitter.remove(event);
+        emitter.remove(&event);
     }
 
     /// 断开连接

@@ -67,7 +67,7 @@ pub enum ChatRoomMessageMode {
     After = 2,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ChatRoomMessageType {
     /// 在线用户
     Online,

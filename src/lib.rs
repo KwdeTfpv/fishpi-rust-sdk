@@ -44,9 +44,7 @@ use serde_json::{Value, json};
 use crate::{
     api::user::User,
     model::{
-        misc::{
-            Log, LoginData, PreRegisterInfo, RegisterInfo,UserLite,UserVipInfo,
-        },
+        misc::{Log, LoginData, PreRegisterInfo, RegisterInfo, UserLite, UserVipInfo},
         user::AtUser,
     },
     utils::{ResponseResult, error::Error, get, post},
@@ -56,7 +54,6 @@ use crate::{
 pub struct FishPi;
 
 impl FishPi {
-
     /// 登录
     ///
     /// - `data` 登录账密
@@ -273,5 +270,4 @@ impl FishPi {
 
         Ok(logs)
     }
-
 }

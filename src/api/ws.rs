@@ -95,8 +95,17 @@ pub enum WsBaseEvent {
     Error(String),
 }
 
+/// WebSocket 事件类型枚举
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum WsEventType {
+    Open,
+    Close,
+    Error,
+    All,
+}
+
 /// 事件监听器类型
-pub type EventListener = Box<dyn Fn(WsBaseEvent) + Send + Sync + 'static>;
+pub type EventListener = Arc<dyn Fn(WsBaseEvent) + Send + Sync + 'static>;
 
 /// WebSocket 消息处理器 trait
 pub trait MessageHandler: Send + Sync {
@@ -106,7 +115,7 @@ pub trait MessageHandler: Send + Sync {
 
 /// 基础 WebSocket 客户端
 pub struct WebSocketClient {
-    listeners: Arc<Mutex<HashMap<String, Vec<EventListener>>>>,
+    listeners: Arc<Mutex<HashMap<WsEventType, Vec<EventListener>>>>,
     cancel_token: CancellationToken,
     _handle: tokio::task::JoinHandle<()>,
 }
@@ -117,7 +126,7 @@ impl WebSocketClient {
     where
         H: MessageHandler + 'static,
     {
-        let listeners = Arc::new(Mutex::new(HashMap::<String, Vec<EventListener>>::new()));
+        let listeners = Arc::new(Mutex::new(HashMap::<WsEventType, Vec<EventListener>>::new()));
         let cancel_token = CancellationToken::new();
 
         let (ws_stream, _) = connect_async(url)
@@ -135,7 +144,7 @@ impl WebSocketClient {
                 _ = cancel.cancelled() => {}
                 _ = async {
                     // 发送 Open 事件
-                    Self::emit_event(&listeners_clone, "open", WsBaseEvent::Open).await;
+                    Self::emit_event(&listeners_clone, &WsEventType::Open, WsBaseEvent::Open).await;
 
                     while let Some(msg) = read.next().await {
                         match msg {
@@ -144,11 +153,11 @@ impl WebSocketClient {
                             }
                             Ok(Message::Close(frame)) => {
                                 let reason = frame.map(|f| f.reason.to_string());
-                                Self::emit_event(&listeners_clone, "close", WsBaseEvent::Close(reason)).await;
+                                Self::emit_event(&listeners_clone, &WsEventType::Close, WsBaseEvent::Close(reason)).await;
                                 break;
                             }
                             Err(e) => {
-                                Self::emit_event(&listeners_clone, "error", WsBaseEvent::Error(e.to_string())).await;
+                                Self::emit_event(&listeners_clone, &WsEventType::Error, WsBaseEvent::Error(e.to_string())).await;
                                 break;
                             }
                             _ => {}
@@ -166,15 +175,15 @@ impl WebSocketClient {
     }
 
     /// 添加事件监听器
-    pub async fn add_listener<F>(&self, event: &str, listener: F)
+    pub async fn add_listener<F>(&self, event: WsEventType, listener: F)
     where
         F: Fn(WsBaseEvent) + Send + Sync + 'static,
     {
         let mut listeners = self.listeners.lock().await;
         listeners
-            .entry(event.to_string())
+            .entry(event)
             .or_insert_with(Vec::new)
-            .push(Box::new(listener));
+            .push(Arc::new(listener));
     }
 
     /// 监听 open 事件
@@ -182,7 +191,8 @@ impl WebSocketClient {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.add_listener("open", move |_| listener()).await;
+        self.add_listener(WsEventType::Open, move |_| listener())
+            .await;
     }
 
     /// 监听 close 事件
@@ -190,7 +200,7 @@ impl WebSocketClient {
     where
         F: Fn(Option<String>) + Send + Sync + 'static,
     {
-        self.add_listener("close", move |event| {
+        self.add_listener(WsEventType::Close, move |event| {
             if let WsBaseEvent::Close(reason) = event {
                 listener(reason);
             }
@@ -203,7 +213,7 @@ impl WebSocketClient {
     where
         F: Fn(String) + Send + Sync + 'static,
     {
-        self.add_listener("error", move |event| {
+        self.add_listener(WsEventType::Error, move |event| {
             if let WsBaseEvent::Error(error) = event {
                 listener(error);
             }
@@ -212,11 +222,11 @@ impl WebSocketClient {
     }
 
     /// 移除监听器
-    pub async fn remove_listener(&self, event: Option<&str>) {
+    pub async fn remove_listener(&self, event: Option<WsEventType>) {
         let mut listeners = self.listeners.lock().await;
         match event {
             Some(e) => {
-                listeners.remove(e);
+                listeners.remove(&e);
             }
             None => {
                 listeners.clear();
@@ -231,22 +241,30 @@ impl WebSocketClient {
 
     /// 内部方法：发射事件
     async fn emit_event(
-        listeners: &Arc<Mutex<HashMap<String, Vec<EventListener>>>>,
-        event: &str,
+        listeners: &Arc<Mutex<HashMap<WsEventType, Vec<EventListener>>>>,
+        event: &WsEventType,
         data: WsBaseEvent,
     ) {
-        let listeners_guard = listeners.lock().await;
-        if let Some(event_listeners) = listeners_guard.get(event) {
-            for listener in event_listeners {
-                listener(data.clone());
-            }
+        let event_listeners: Vec<EventListener> = {
+            let listeners_guard = listeners.lock().await;
+            listeners_guard.get(event).cloned().unwrap_or_default()
+        };
+        for listener in event_listeners {
+            let data = data.clone();
+            tokio::spawn(async move { listener(data) });
         }
         // 同时发送到 "all" 事件
-        if event != "all"
-            && let Some(all_listeners) = listeners_guard.get("all")
-        {
+        if *event != WsEventType::All {
+            let all_listeners: Vec<EventListener> = {
+                let listeners_guard = listeners.lock().await;
+                listeners_guard
+                    .get(&WsEventType::All)
+                    .cloned()
+                    .unwrap_or_default()
+            };
             for listener in all_listeners {
-                listener(data.clone());
+                let data = data.clone();
+                tokio::spawn(async move { listener(data) });
             }
         }
     }

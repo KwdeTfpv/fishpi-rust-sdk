@@ -27,7 +27,7 @@ pub struct ArticlePost {
     pub notifyFollowers: bool,
     /// 帖子类型，ArticleType
     #[serde(rename = "articleType")]
-    pub type_: u32,
+    pub type_: ArticleType,
     /// 是否在列表展示
     #[serde(rename = "articleShowInList")]
     pub showInList: u32,
@@ -474,7 +474,7 @@ impl Pagination {
 }
 
 /// 帖子类型
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum ArticleType {
     Normal = 0,

@@ -12,7 +12,7 @@
 
 ```toml
 [dependencies]
-fishpi-sdk = "0.1.3"
+fishpi-sdk = "0.1.4"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -25,24 +25,28 @@ cargo add fishpi-sdk
 ## 快速开始
 
 ```rust
-use fishpi_sdk::{FishPi, api::user::User};
+use fishpi_sdk::{FishPi, api::chatroom::ChatRoom};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 登录获取认证用户客户端
-    let fishpi = FishPi::login(&login_data).await?;
-    
-    // 获取用户信息
-    let user_info = fishpi.info().await?;
-    println!("User: {:?}", user_info);
+    // 创建聊天室客户端
+    let mut chatroom = ChatRoom::new("your_api_key".to_string());
 
-    // 发送评论
-    let result = fishpi.comment.send(&comment_data).await?;
-    println!("Comment result: {:?}", result);
+    // 监听消息事件（直接传递具体类型，无需 match）
+    chatroom.on_msg(|msg| {
+        println!("Message: {}", msg.content);
+    }).await;
 
-    // 使用其他模块
-    let articles = fishpi.article.get_recent().await?;
-    let chat_result = fishpi.chatroom.send("Hello!").await?;
+    // 监听弹幕事件
+    chatroom.on_barrager(|barrager| {
+        println!("Barrage: {}", barrager.content);
+    }).await;
+
+    // 连接聊天室
+    chatroom.connect(false).await?;
+
+    // 发送消息
+    chatroom.send("Hello!".to_string()).await?;
 
     Ok(())
 }

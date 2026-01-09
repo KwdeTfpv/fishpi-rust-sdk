@@ -7,8 +7,8 @@
 //! # 主要组件
 //!
 //! - [`Article`] - 文章客户端结构体，负责所有文章相关的 API 调用和 WebSocket 连接。
-//! - [`ArticleMessageHandler`] - 文章消息处理器，实现 `MessageHandler` trait，处理 WebSocket 消息并调用回调。
-//! - [`ArticleListener`] - 文章监听器类型别名，定义监听器函数的签名，用于处理接收到的消息。
+//! - [`ArticleMessageHandler`] - 文章消息处理器，实现 `MessageHandler` trait，处理 WebSocket 消息并异步调用回调。
+//! - [`ArticleListener`] - 文章监听器类型别名，定义异步监听器函数的签名，用于处理接收到的消息，支持多线程共享。
 //!
 //! # 方法列表
 //!
@@ -31,6 +31,7 @@
 //! ```rust,no_run
 //! use crate::api::article::{Article, ArticlePost, ArticleListener};
 //! use serde_json::Value;
+//! use std::sync::Arc;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -57,11 +58,13 @@
 //!     let detail = article.detail(&article_id, 1).await?;
 //!     println!("Article title: {}", detail.title);
 //!
-//!     // 添加 WebSocket 监听器
-//!     let callback: ArticleListener = Box::new(|msg: Value| {
-//!         println!("Received message: {:?}", msg);
+//!     // 添加 WebSocket 监听器（支持共享回调）
+//!     let callback: ArticleListener = Arc::new(|msg: Value| {
+//!         Box::pin(async move {
+//!             println!("Received message: {:?}", msg);
+//!         })
 //!     });
-//!     let ws_client = article.add_listener(&article_id, 0, callback).await?;
+//!     let ws_client = article.add_listener(&article_id, ArticleType::Normal, Arc::clone(&callback)).await?;
 //!
 //!     // 点赞文章
 //!     let voted = article.vote(&article_id, true).await?;
@@ -70,16 +73,18 @@
 //!     Ok(())
 //! }
 //! ```
+use std::{pin::Pin, sync::Arc};
+
 use serde_json::{Value, json};
 
 use crate::{
     api::ws::{MessageHandler, WebSocketClient},
-    model::article::{ArticleDetail, ArticleList, ArticleListType, ArticlePost, Pagination},
+    model::article::{ArticleDetail, ArticleList, ArticleListType, ArticlePost, ArticleType, Pagination},
     utils::{ResponseResult, error::Error, get, post},
 };
 
 /// 文章监听器类型
-pub type ArticleListener = Box<dyn Fn(Value) + Send + Sync + 'static>;
+pub type ArticleListener = Arc<dyn Fn(Value) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync + 'static>;
 
 /// 文章消息处理器
 pub struct ArticleMessageHandler {
@@ -94,11 +99,15 @@ impl ArticleMessageHandler {
 
 impl MessageHandler for ArticleMessageHandler {
     fn handle_message(&self, msg: String) {
-        if let Ok(json) = serde_json::from_str::<Value>(&msg) {
-            (self.callback)(json);
-        } else {
-            (self.callback)(Value::String(msg));
-        }
+        let callback = Arc::clone(&self.callback);
+        let msg = msg.clone();
+        tokio::spawn(async move {
+            if let Ok(json) = serde_json::from_str::<Value>(&msg) {
+                callback(json).await;
+            } else {
+                callback(Value::String(msg)).await;
+            }
+        });
     }
 }
 
@@ -390,29 +399,18 @@ impl Article {
     pub async fn add_listener(
         &self,
         id: &str,
-        type_: u32,
+        type_: ArticleType,
         callback: ArticleListener,
     ) -> Result<WebSocketClient, Error> {
         let url = format!(
             "wss://fishpi.cn/article-channel?apiKey={}&articleId={}&articleType={}",
-            self.api_key, id, type_
+            self.api_key, id, type_ as u8
         );
 
         let handler = ArticleMessageHandler::new(callback);
         let ws = WebSocketClient::connect(&url, handler)
             .await
             .map_err(|e| Error::Api(format!("WebSocket connection failed: {}", e)))?;
-
-        // 添加默认 close 和 error 监听器
-        ws.on_close(|reason| {
-            println!("WebSocket is closed: {:?}", reason);
-        })
-        .await;
-
-        ws.on_error(|error| {
-            println!("WebSocket error: {}", error);
-        })
-        .await;
 
         Ok(ws)
     }

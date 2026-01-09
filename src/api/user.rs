@@ -84,7 +84,6 @@ pub struct User {
     pub notice: Notice,
     pub redpacket: Redpacket,
     pub comment: Comment,
-
 }
 
 impl User {
