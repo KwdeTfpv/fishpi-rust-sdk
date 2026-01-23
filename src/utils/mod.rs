@@ -7,6 +7,10 @@ use reqwest::{Client, Method, multipart};
 use serde_json::Value;
 use std::collections::HashMap;
 
+lazy_static::lazy_static! {
+    static ref CLIENT: Client = Client::new();
+}
+
 const DOMAIN: &str = "fishpi.cn";
 
 pub async fn get(url: &str) -> Result<Value, Error> {
@@ -18,10 +22,9 @@ pub async fn put(url: &str, data: Option<Value>) -> Result<Value, Error> {
 }
 
 pub async fn get_text(url: &str) -> Result<String, Error> {
-    let client = Client::new();
     let full_url = format!("https://{}/{}", DOMAIN, url.trim_start_matches('/'));
 
-    let resp = client
+    let resp = CLIENT
         .get(&full_url)
         .header(
             "User-Agent",
@@ -55,7 +58,6 @@ pub async fn delete(url: &str, data: Option<Value>) -> Result<Value, Error> {
 }
 
 pub async fn upload_files(url: &str, files: Vec<String>, api_key: &str) -> Result<Value, Error> {
-    let client = reqwest::Client::new();
     let mut form = multipart::Form::new();
 
     for file_path in files {
@@ -78,7 +80,7 @@ pub async fn upload_files(url: &str, files: Vec<String>, api_key: &str) -> Resul
 
     form = form.text("apiKey", api_key.to_string());
 
-    let response = client
+    let response = CLIENT
         .post(url)
         .multipart(form)
         .send()
@@ -99,14 +101,13 @@ async fn request(
     headers: Option<HashMap<String, String>>,
     data: Option<Value>,
 ) -> Result<Value, Error> {
-    let client = Client::new();
     let full_url = format!("https://{}/{}", DOMAIN, url.trim_start_matches('/'));
 
     let method = method
         .parse::<Method>()
         .map_err(|e| Error::Request(Box::new(e)))?;
 
-    let mut req = client
+    let mut req = CLIENT
         .request(method, &full_url)
         .header(
             "User-Agent",

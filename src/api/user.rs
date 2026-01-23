@@ -70,7 +70,7 @@ use crate::api::comment::Comment;
 use crate::api::notice::Notice;
 use crate::api::redpacket::Redpacket;
 use crate::model::misc::{Report, UploadResult};
-use crate::model::user::{UpdateUserInfoParams, UserInfo};
+use crate::model::user::{UpdateUserInfoParams, UserInfo, UserPoint};
 use crate::utils::error::Error;
 use crate::utils::{ResponseResult, get, post, upload_files};
 use serde_json::{Value, json};
@@ -143,7 +143,7 @@ impl User {
         }
 
         let data: Vec<Value> =
-            serde_json::from_value(resp["data"].take()).map_err(|e| Error::Api(e.to_string()))?;
+            serde_json::from_value(resp["data"].take()).map_err(|e| Error::Parse(format!("Failed to parse emotions: {}", e)))?;
         let emotions: Vec<String> = data
             .into_iter()
             .filter_map(|v| {
@@ -353,5 +353,21 @@ impl User {
         }
 
         UploadResult::from_value(&rsp["data"])
+    }
+
+    /// 获取用户积分
+    /// 
+    /// - `username` 用户名
+    ///   返回用户积分信息 [UserPoint]
+    pub async fn get_points(&self, username: &str) -> Result<UserPoint, Error> {
+        let resp = get(&format!("user/{}/point", username)).await?;
+
+        if resp.get("code").and_then(|c| c.as_i64()).unwrap_or(-1) != 0 {
+            return Err(Error::Api(
+                resp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
+
+        UserPoint::from_value(&resp)
     }
 }

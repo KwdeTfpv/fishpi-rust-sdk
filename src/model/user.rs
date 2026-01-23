@@ -370,3 +370,18 @@ pub fn analyze_metal_attr(attr_str: &str) -> MetalAttrOrString {
         })
     }
 }
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct UserPoint {
+    #[serde(rename = "userPoint")]
+    pub point: u32,
+    #[serde(rename = "userName")]
+    pub name: String,
+}
+
+impl UserPoint {
+    pub fn from_value(data: &Value) -> Result<Self, Error> {
+        serde_json::from_value(data["data"].clone())
+            .map_err(|e| Error::Parse(format!("Failed to parse UserPoint: {}", e)))
+    }
+}
