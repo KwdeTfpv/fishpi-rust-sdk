@@ -114,6 +114,71 @@ pub struct RedPacketInfo {
     pub who: Vec<RedPacketGot>,
 }
 
+fn parse_string_list(data: &Value, primary_key: &str, fallback_key: &str) -> Vec<String> {
+    data.get(primary_key)
+        .or_else(|| data.get(fallback_key))
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(ToString::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_gesture(
+    data: &Value,
+    primary_key: &str,
+    fallback_key: &str,
+    err_ctx: &str,
+) -> Result<Option<GestureType>, Error> {
+    let gesture = data
+        .get(primary_key)
+        .and_then(|v| v.as_str())
+        .or_else(|| data.get(fallback_key).and_then(|v| v.as_str()));
+
+    match gesture {
+        Some(gesture_str) => GestureType::from_str(gesture_str)
+            .map(Some)
+            .map_err(|_| Error::Parse(format!("Invalid gesture in {}", err_ctx))),
+        None => Ok(None),
+    }
+}
+
+fn parse_who_list(data: &Value) -> Result<Vec<RedPacketGot>, Error> {
+    let Some(who_array) = data.get("who").and_then(|v| v.as_array()) else {
+        return Ok(Vec::new());
+    };
+
+    let mut got_list = Vec::with_capacity(who_array.len());
+    for item in who_array {
+        got_list.push(RedPacketGot {
+            userId: item["userId"]
+                .as_str()
+                .ok_or_else(|| Error::Parse("Missing userId in who".to_string()))?
+                .to_string(),
+            userName: item["userName"]
+                .as_str()
+                .ok_or_else(|| Error::Parse("Missing userName in who".to_string()))?
+                .to_string(),
+            avatar: item["avatar"]
+                .as_str()
+                .ok_or_else(|| Error::Parse("Missing avatar in who".to_string()))?
+                .to_string(),
+            userMoney: item["userMoney"]
+                .as_u64()
+                .ok_or_else(|| Error::Parse("Missing or invalid userMoney in who".to_string()))?
+                as u32,
+            time: item["time"]
+                .as_str()
+                .ok_or_else(|| Error::Parse("Missing time in who".to_string()))?
+                .to_string(),
+        });
+    }
+
+    Ok(got_list)
+}
+
 /// 红包状态信息
 #[derive(Clone, Debug)]
 #[allow(non_snake_case)]
@@ -212,22 +277,8 @@ impl RedPacket {
                 .as_str()
                 .ok_or_else(|| Error::Parse("Missing msg in RedPacket".to_string()))?
                 .to_string(),
-            recivers: if let Some(recivers_array) = data["recivers"].as_array() {
-                recivers_array
-                    .iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            } else {
-                Vec::new()
-            },
-            gesture: if let Some(gesture_str) = data["gesture"].as_str() {
-                Some(
-                    GestureType::from_str(gesture_str)
-                        .map_err(|_| Error::Parse("Invalid gesture in RedPacket".to_string()))?,
-                )
-            } else {
-                None
-            },
+            recivers: parse_string_list(data, "recivers", "receivers"),
+            gesture: parse_gesture(data, "gesture", "GestureType", "RedPacket")?,
         })
     }
 }
@@ -256,52 +307,9 @@ impl RedPacketMessage {
                 .as_str()
                 .ok_or_else(|| Error::Parse("Missing senderId in RedPacketMessage".to_string()))?
                 .to_string(),
-            GestureType: if let Some(gesture_str) = data["gesture"].as_str() {
-                Some(
-                    GestureType::from_str(gesture_str).map_err(|_| {
-                        Error::Parse("Invalid gesture in RedPacketMessage".to_string())
-                    })?,
-                )
-            } else {
-                None
-            },
-            recivers: if let Some(recivers_array) = data["recivers"].as_array() {
-                recivers_array
-                    .iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            } else {
-                Vec::new()
-            },
-            who: if let Some(who_array) = data["who"].as_array() {
-                let mut got_list = Vec::new();
-                for item in who_array {
-                    got_list.push(RedPacketGot {
-                        userId: item["userId"]
-                            .as_str()
-                            .ok_or_else(|| Error::Parse("Missing userId in who".to_string()))?
-                            .to_string(),
-                        userName: item["userName"]
-                            .as_str()
-                            .ok_or_else(|| Error::Parse("Missing userName in who".to_string()))?
-                            .to_string(),
-                        avatar: item["avatar"]
-                            .as_str()
-                            .ok_or_else(|| Error::Parse("Missing avatar in who".to_string()))?
-                            .to_string(),
-                        userMoney: item["userMoney"].as_u64().ok_or_else(|| {
-                            Error::Parse("Missing or invalid userMoney in who".to_string())
-                        })? as u32,
-                        time: item["time"]
-                            .as_str()
-                            .ok_or_else(|| Error::Parse("Missing time in who".to_string()))?
-                            .to_string(),
-                    });
-                }
-                got_list
-            } else {
-                Vec::new()
-            },
+            GestureType: parse_gesture(data, "gesture", "GestureType", "RedPacketMessage")?,
+            recivers: parse_string_list(data, "recivers", "receivers"),
+            who: parse_who_list(data)?,
         })
     }
 }
@@ -312,15 +320,7 @@ impl RedPacketBase {
             count: data["count"].as_u64().ok_or_else(|| {
                 Error::Parse("Missing or invalid count in RedPacketBase".to_string())
             })? as u32,
-            gesture: if let Some(gesture_str) = data["gesture"].as_str() {
-                Some(
-                    GestureType::from_str(gesture_str).map_err(|_| {
-                        Error::Parse("Invalid gesture in RedPacketBase".to_string())
-                    })?,
-                )
-            } else {
-                None
-            },
+            gesture: parse_gesture(data, "gesture", "GestureType", "RedPacketBase")?,
             got: data["got"].as_u64().ok_or_else(|| {
                 Error::Parse("Missing or invalid got in RedPacketBase".to_string())
             })? as u32,
@@ -345,44 +345,8 @@ impl RedPacketInfo {
         let info_data = &data["info"];
         let info = RedPacketBase::from_value(info_data)?;
 
-        let recivers = if let Some(recivers_array) = data["recivers"].as_array() {
-            recivers_array
-                .iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect()
-        } else {
-            Vec::new()
-        };
-
-        let who = if let Some(who_array) = data["who"].as_array() {
-            let mut got_list = Vec::new();
-            for item in who_array {
-                got_list.push(RedPacketGot {
-                    userId: item["userId"]
-                        .as_str()
-                        .ok_or_else(|| Error::Parse("Missing userId in who".to_string()))?
-                        .to_string(),
-                    userName: item["userName"]
-                        .as_str()
-                        .ok_or_else(|| Error::Parse("Missing userName in who".to_string()))?
-                        .to_string(),
-                    avatar: item["avatar"]
-                        .as_str()
-                        .ok_or_else(|| Error::Parse("Missing avatar in who".to_string()))?
-                        .to_string(),
-                    userMoney: item["userMoney"].as_u64().ok_or_else(|| {
-                        Error::Parse("Missing or invalid userMoney in who".to_string())
-                    })? as u32,
-                    time: item["time"]
-                        .as_str()
-                        .ok_or_else(|| Error::Parse("Missing time in who".to_string()))?
-                        .to_string(),
-                });
-            }
-            got_list
-        } else {
-            Vec::new()
-        };
+        let recivers = parse_string_list(data, "recivers", "receivers");
+        let who = parse_who_list(data)?;
 
         Ok(RedPacketInfo {
             info,

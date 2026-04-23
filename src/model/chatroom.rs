@@ -379,14 +379,18 @@ impl BarragerCost {
             .get("data")
             .and_then(|v| v.as_str())
             .unwrap_or("5积分");
-        let parts: Vec<&str> = content
+        let mut parts = content
             .split(|c: char| !c.is_alphanumeric())
-            .filter(|s| !s.is_empty())
-            .collect();
+            .filter(|s| !s.is_empty());
+        let cost = parts
+            .next()
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+        let unit = parts.next().unwrap_or("积分").to_string();
 
         Self {
-            cost: parts[0].parse::<u32>().unwrap_or(0),
-            unit: parts[1].to_string(),
+            cost,
+            unit,
         }
     }
 }

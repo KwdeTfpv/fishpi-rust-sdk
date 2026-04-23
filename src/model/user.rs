@@ -248,7 +248,7 @@ trait MetalCommon {
         } else {
             "".to_string()
         };
-        format!("`https://{}/gen?txt={}&{}", domain, text_str, attr_str)
+        format!("https://{}/gen?txt={}&{}", domain, text_str, attr_str)
     }
 }
 

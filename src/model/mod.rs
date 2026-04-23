@@ -88,11 +88,8 @@ where
     let strs: Vec<String> = Deserialize::deserialize(deserializer)?;
     let mut metals = Vec::new();
     for s in strs {
-        match to_metal(&s) {
-            Ok(m) => metals.extend(m),
-            Err(e) => {
-                println!("Failed to parse sysMetal: {}", e);
-            }
+        if let Ok(m) = to_metal(&s) {
+            metals.extend(m);
         }
     }
     Ok(metals)
