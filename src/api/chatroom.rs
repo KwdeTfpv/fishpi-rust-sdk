@@ -48,7 +48,8 @@
 //! # 示例
 //!
 //! ```rust,no_run
-//! use crate::api::chatroom::{ChatRoom, ChatRoomMsg, BarragerMsg};
+//! use fishpi_sdk::api::chatroom::ChatRoom;
+//! use fishpi_sdk::model::chatroom::{BarragerMsg, ChatContentType, ChatRoomMsg, OnlineInfo};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -61,11 +62,11 @@
 //!
 //!     // 监听弹幕消息
 //!     chatroom.on_barrager(|barrager: BarragerMsg| {
-//!         println!("Barrage: {}", barrager.content);
+//!         println!("Barrage: {}", barrager.barragerContent);
 //!     }).await;
 //!
 //!     // 监听在线用户更新
-//!     chatroom.on_online(|users: Vec<crate::model::chatroom::OnlineInfo>| {
+//!     chatroom.on_online(|users: Vec<OnlineInfo>| {
 //!         println!("Online users: {}", users.len());
 //!     }).await;
 //!
@@ -76,7 +77,7 @@
 //!     chatroom.send("Hello, world!".to_string()).await?;
 //!
 //!     // 获取历史消息
-//!     let history = chatroom.history(1, crate::model::chatroom::ChatContentType::Html).await?;
+//!     let history = chatroom.history(1, ChatContentType::Html).await?;
 //!     for msg in history {
 //!         println!("History: {}", msg.content);
 //!     }
@@ -101,7 +102,9 @@
 //! - `Custom` - 进出场消息。
 //! - `All` - 所有事件（除了自身）。
 
-use crate::api::ws::{MessageHandler, WebSocketClient, WebSocketError};
+use crate::api::ws::{
+    ParsedMessageHandler, RetryPolicy, WebSocketError, WsConnection, WsLogHook, build_ws_url,
+};
 use crate::model::MuteItem;
 use crate::model::chatroom::{
     BarragerCost, BarragerMsg, ChatContentType, ChatRoomMessageMode, ChatRoomMessageType,
@@ -109,13 +112,11 @@ use crate::model::chatroom::{
 };
 use crate::model::redpacket::RedPacketStatusMsg;
 use crate::utils::get_text;
-use crate::utils::{delete, error::Error, get, post};
+use crate::utils::{build_http_path, delete, error::Error, get, post};
 use serde_json::{Value, json};
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio::sync::mpsc;
 use url::Url;
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -192,75 +193,7 @@ pub enum ChatRoomEventType {
 pub type ChatRoomListener = Arc<dyn Fn(ChatRoomEventData) + Send + Sync + 'static>;
 
 /// 聊天室消息处理器
-pub struct ChatRoomHandler {
-    emitter: Arc<Mutex<HashMap<ChatRoomEventType, Vec<ChatRoomListener>>>>,
-}
-
-impl Default for ChatRoomHandler {
-    fn default() -> Self {
-        Self {
-            emitter: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-}
-
-impl ChatRoomHandler {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn get_emitter(&self) -> Arc<Mutex<HashMap<ChatRoomEventType, Vec<ChatRoomListener>>>> {
-        self.emitter.clone()
-    }
-
-    /// 发射事件
-    async fn emit_event(
-        emitter: &Arc<Mutex<HashMap<ChatRoomEventType, Vec<ChatRoomListener>>>>,
-        event_type: ChatRoomEventType,
-        event: ChatRoomEventData,
-    ) {
-        let listeners: Vec<ChatRoomListener> = {
-            let guard = emitter.lock().await;
-            guard.get(&event_type).cloned().unwrap_or_default()
-        };
-        for listener in listeners {
-            let event = event.clone();
-            tokio::spawn(async move { listener(event) });
-        }
-        // 处理 "all" 事件
-        if event_type != ChatRoomEventType::All {
-            let all_listeners: Vec<ChatRoomListener> = {
-                let guard = emitter.lock().await;
-                guard
-                    .get(&ChatRoomEventType::All)
-                    .cloned()
-                    .unwrap_or_default()
-            };
-            for listener in all_listeners {
-                let event = event.clone();
-                tokio::spawn(async move { listener(event) });
-            }
-        }
-    }
-}
-
-impl MessageHandler for ChatRoomHandler {
-    fn handle_message(&self, text: String) {
-        if let Ok(json) = serde_json::from_str::<Value>(&text) {
-            let emitter = self.get_emitter();
-            tokio::spawn(async move {
-                match parse_chatroom_message(&json) {
-                    Ok((event_type, event)) => {
-                        Self::emit_event(&emitter, event_type, event).await;
-                    }
-                    Err(e) => {
-                        eprintln!("解析聊天室消息失败: {}", e);
-                    }
-                }
-            });
-        }
-    }
-}
+pub type ChatRoomHandler = ParsedMessageHandler<ChatRoomEventType, ChatRoomEventData>;
 
 /// 解析聊天室消息，返回 (事件类型, 事件数据)
 #[allow(non_snake_case)]
@@ -362,19 +295,10 @@ fn parse_chatroom_message(json: &Value) -> Result<(ChatRoomEventType, ChatRoomEv
     }
 }
 
-impl Clone for ChatRoomHandler {
-    fn clone(&self) -> Self {
-        Self {
-            emitter: self.emitter.clone(),
-        }
-    }
-}
-
 /// 聊天室客户端
 pub struct ChatRoom {
-    ws: Option<WebSocketClient>,
+    connection: WsConnection,
     handler: ChatRoomHandler,
-    sender: Option<mpsc::UnboundedSender<String>>,
     api_key: String,
     discuss: Arc<Mutex<String>>,
     onlines: Arc<Mutex<Vec<OnlineInfo>>>,
@@ -385,9 +309,12 @@ pub struct ChatRoom {
 impl ChatRoom {
     pub fn new(api_key: String) -> Self {
         Self {
-            ws: None,
-            handler: ChatRoomHandler::new(),
-            sender: None,
+            connection: WsConnection::new(),
+            handler: ChatRoomHandler::new(
+                parse_chatroom_message,
+                Some(ChatRoomEventType::All),
+                "chatroom",
+            ),
             api_key,
             discuss: Arc::new(Mutex::new(String::new())),
             onlines: Arc::new(Mutex::new(Vec::new())),
@@ -397,7 +324,7 @@ impl ChatRoom {
     }
 
     pub async fn get_node(&self) -> Result<ChatRoomNodeResponse, WebSocketError> {
-        let url = format!("chat-room/node/get?apiKey={}", self.api_key);
+        let url = build_http_path("chat-room/node/get", &[("apiKey", self.api_key.clone())]);
 
         let response: Value = get(&url)
             .await
@@ -425,10 +352,11 @@ impl ChatRoom {
                 }
                 Ok(parsed.to_string())
             }
-            Err(_) => Ok(format!(
-                "wss://fishpi.cn/chat-room-channel?apiKey={}",
-                self.api_key
-            )),
+            Err(_) => build_ws_url(
+                "fishpi.cn",
+                "chat-room-channel",
+                &[("apiKey", self.api_key.clone())],
+            ),
         }
     }
 
@@ -437,26 +365,29 @@ impl ChatRoom {
     /// # 参数
     /// * `reload` - 是否重新连接
     pub async fn connect(&mut self, reload: bool) -> Result<(), WebSocketError> {
-        if self.ws.is_some() && !reload {
-            return Ok(());
-        }
-
         let url = self.get_ws_url().await?;
-
-        // 创建发送通道
-        let (tx_send, _) = mpsc::unbounded_channel::<String>();
-        self.sender = Some(tx_send);
-
-        // 连接 WebSocket
-        let ws = WebSocketClient::connect(&url, self.handler.clone()).await?;
-
-        self.ws = Some(ws);
-        Ok(())
+        self.connection
+            .connect(reload, &url, self.handler.clone())
+            .await
     }
 
     /// 重连
     pub async fn reconnect(&mut self) -> Result<(), WebSocketError> {
-        self.connect(true).await
+        let url = self.get_ws_url().await?;
+        self.connection.reconnect(&url, self.handler.clone()).await
+    }
+
+    pub fn set_reconnect_policy(&mut self, policy: RetryPolicy) {
+        self.connection.set_retry_policy(policy);
+    }
+
+    pub fn on_ws_log<F>(&mut self, hook: F)
+    where
+        F: Fn(&str) + Send + Sync + 'static,
+    {
+        let hook = Arc::new(hook) as WsLogHook;
+        self.connection.set_log_hook_arc(hook.clone());
+        self.handler.set_log_hook_arc(hook);
     }
 
     /// 监听在线用户更新事件
@@ -474,11 +405,10 @@ impl ChatRoom {
                 listener(users);
             }
         });
-        let mut emitter = self.handler.emitter.lock().await;
-        emitter
-            .entry(ChatRoomEventType::Online)
-            .or_insert_with(Vec::new)
-            .push(wrapped_listener);
+        self.handler
+            .get_emitter()
+            .add_listener(ChatRoomEventType::Online, move |event| wrapped_listener(event))
+            .await;
     }
 
     /// 监听话题变更事件
@@ -496,11 +426,10 @@ impl ChatRoom {
                 listener(topic);
             }
         });
-        let mut emitter = self.handler.emitter.lock().await;
-        emitter
-            .entry(ChatRoomEventType::DiscussChanged)
-            .or_insert_with(Vec::new)
-            .push(wrapped_listener);
+        self.handler
+            .get_emitter()
+            .add_listener(ChatRoomEventType::DiscussChanged, move |event| wrapped_listener(event))
+            .await;
     }
 
     /// 监听消息撤回事件
@@ -636,27 +565,20 @@ impl ChatRoom {
     where
         F: Fn(ChatRoomEventData) + Send + Sync + 'static,
     {
-        let wrapped_listener: ChatRoomListener = Arc::new(listener);
-        let mut emitter = self.handler.emitter.lock().await;
-        emitter
-            .entry(event)
-            .or_insert_with(Vec::new)
-            .push(wrapped_listener);
+        self.handler.get_emitter().add_listener(event, listener).await;
     }
 
     /// 移除监听
     pub async fn off(&self, event: ChatRoomEventType) {
-        let mut emitter = self.handler.emitter.lock().await;
-        emitter.remove(&event);
+        self.handler
+            .get_emitter()
+            .remove_listener(Some(event))
+            .await;
     }
 
     /// 断开连接
     pub fn disconnect(&mut self) {
-        if let Some(ws) = &self.ws {
-            ws.disconnect();
-        }
-        self.ws = None;
-        self.sender = None;
+        self.connection.disconnect();
     }
 
     /// 发送消息
@@ -732,11 +654,13 @@ impl ChatRoom {
         page: u32,
         type_: ChatContentType,
     ) -> Result<Vec<ChatRoomMsg>, Error> {
-        let resp = get(&format!(
-            "chat-room/more?page={}&type={}&apiKey={}",
-            page,
-            type_.as_str(),
-            self.api_key
+        let resp = get(&build_http_path(
+            "chat-room/more",
+            &[
+                ("page", page.to_string()),
+                ("type", type_.as_str().to_string()),
+                ("apiKey", self.api_key.clone()),
+            ],
         ))
         .await?;
 
@@ -772,9 +696,15 @@ impl ChatRoom {
         size: u32,
         type_: ChatContentType,
     ) -> Result<Vec<ChatRoomMsg>, Error> {
-        let resp = get(&format!(
-            "chat-room/getMessage?oId={}&mode={}&size={}&type={}&apiKey={}",
-            o_id, mode, size, type_, self.api_key
+        let resp = get(&build_http_path(
+            "chat-room/getMessage",
+            &[
+                ("oId", o_id.to_string()),
+                ("mode", mode.to_string()),
+                ("size", size.to_string()),
+                ("type", type_.as_str().to_string()),
+                ("apiKey", self.api_key.clone()),
+            ],
         ))
         .await?;
 
@@ -849,7 +779,11 @@ impl ChatRoom {
     /// 获取弹幕花费
     /// #### 返回 [BarragerCost]
     pub async fn barrage_cost(&self) -> Result<BarragerCost, Error> {
-        let resp = get(&format!("chat-room/barrager/get?apiKey={}", self.api_key)).await?;
+        let resp = get(&build_http_path(
+            "chat-room/barrager/get",
+            &[("apiKey", self.api_key.clone())],
+        ))
+        .await?;
 
         if let Some(code) = resp["code"].as_i64()
             && code != 0
@@ -902,5 +836,34 @@ impl ChatRoom {
         let raw_message = resp.split("<!--").next().unwrap_or("").trim().to_string();
 
         Ok(raw_message)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ChatRoomEventData, ChatRoomEventType, parse_chatroom_message};
+    use serde_json::json;
+
+    #[test]
+    fn parse_chatroom_custom_message() {
+        let payload = json!({
+            "type": "customMessage",
+            "message": "user joined"
+        });
+
+        let (event_type, event) = parse_chatroom_message(&payload).expect("should parse");
+        assert!(matches!(event_type, ChatRoomEventType::Custom));
+        match event {
+            ChatRoomEventData::Custom(msg) => assert_eq!(msg.message, "user joined"),
+            _ => panic!("unexpected event variant"),
+        }
+    }
+
+    #[test]
+    fn parse_chatroom_unknown_type_fails() {
+        let payload = json!({
+            "type": "nope"
+        });
+        assert!(parse_chatroom_message(&payload).is_err());
     }
 }

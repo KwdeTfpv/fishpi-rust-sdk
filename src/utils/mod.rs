@@ -6,6 +6,7 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Client, Method, multipart};
 use serde_json::Value;
 use std::collections::HashMap;
+use url::form_urlencoded::Serializer;
 
 lazy_static::lazy_static! {
     static ref CLIENT: Client = Client::new();
@@ -45,7 +46,7 @@ pub async fn get_text(url: &str) -> Result<String, Error> {
 }
 
 pub async fn get_with_key(url: &str, api_key: &str) -> Result<Value, Error> {
-    let url_with_key = format!("{}?apiKey={}", url, api_key);
+    let url_with_key = build_http_path(url, &[("apiKey", api_key.to_string())]);
     request("GET", &url_with_key, None, None).await
 }
 
@@ -145,6 +146,21 @@ async fn request(
         .map_err(|e| Error::Request(Box::new(e)))
 }
 
+/// 构造带查询参数的相对 HTTP 路径，自动进行 query 编码
+pub fn build_http_path(path: &str, params: &[(&str, String)]) -> String {
+    if params.is_empty() {
+        return path.to_string();
+    }
+
+    let mut serializer = Serializer::new(String::new());
+    for (k, v) in params {
+        serializer.append_pair(k, v);
+    }
+    let query = serializer.finish();
+
+    format!("{}?{}", path, query)
+}
+
 #[derive(Clone, Debug)]
 #[allow(non_snake_case)]
 pub struct ResponseResult {
@@ -160,5 +176,23 @@ impl ResponseResult {
             success: data.get("code").and_then(|c| c.as_i64()).unwrap_or(0) == 0,
             msg: data["msg"].as_str().unwrap_or("").to_string(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_http_path;
+
+    #[test]
+    fn build_http_path_encodes_query() {
+        let p = build_http_path(
+            "chat/get-message",
+            &[
+                ("apiKey", "token a+b".to_string()),
+                ("toUser", "alice/bob".to_string()),
+            ],
+        );
+
+        assert_eq!(p, "chat/get-message?apiKey=token+a%2Bb&toUser=alice%2Fbob");
     }
 }

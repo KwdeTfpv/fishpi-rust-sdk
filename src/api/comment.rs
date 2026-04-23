@@ -19,8 +19,8 @@
 //! # 示例
 //!
 //! ```rust,no_run
-//! use crate::api::comment::Comment;
-//! use crate::model::article::CommentPost;
+//! use fishpi_sdk::api::comment::Comment;
+//! use fishpi_sdk::model::article::CommentPost;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -28,9 +28,11 @@
 //!
 //!     // 发布评论
 //!     let data = CommentPost {
-//!         article_id: "article_id".to_string(),
+//!         articleId: "article_id".to_string(),
+//!         isAnonymous: false,
+//!         isVisible: true,
 //!         content: "This is a comment.".to_string(),
-//!         reply_id: None,
+//!         replyId: "".to_string(),
 //!     };
 //!     let result = comment.send(&data).await?;
 //!     println!("Sent: {}", result.success);

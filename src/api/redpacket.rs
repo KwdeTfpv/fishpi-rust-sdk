@@ -17,8 +17,8 @@
 //! # 示例
 //!
 //! ```rust,no_run
-//! use crate::api::redpacket::Redpacket;
-//! use crate::model::redpacket::{RedPacket, RedPacketType, GestureType};
+//! use fishpi_sdk::api::redpacket::Redpacket;
+//! use fishpi_sdk::model::redpacket::{GestureType, RedPacket, RedPacketType};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -30,7 +30,7 @@
 //!         money: 32,
 //!         count: 5,
 //!         msg: "古德古德".to_string(),
-//!         recivers: None,
+//!         recivers: vec![],
 //!         gesture: Some(GestureType::Rock),
 //!     };
 //!     redpacket.send(&rp).await?;

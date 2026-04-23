@@ -27,7 +27,8 @@
 //! # 示例
 //!
 //! ```rust,no_run
-//! use crate::api::notice::{Notice, NoticeMsg};
+//! use fishpi_sdk::api::notice::Notice;
+//! use fishpi_sdk::model::notice::NoticeMsg;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -55,15 +56,16 @@
 //!
 //! - `Msg` - 通知消息接收。
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use serde_json::Value;
-use tokio::sync::{Mutex, mpsc};
 
 use crate::{
-    api::ws::{MessageHandler, WebSocketClient, WebSocketError},
+    api::ws::{
+        ParsedMessageHandler, RetryPolicy, WebSocketError, WsConnection, WsLogHook, build_ws_url,
+    },
     model::notice::{NoticeCount, NoticeItem, NoticeList, NoticeMsg, NoticeMsgType, NoticeType},
-    utils::{error::Error, get},
+    utils::{build_http_path, error::Error, get},
 };
 
 const DOMAIN: &str = "fishpi.cn";
@@ -83,60 +85,7 @@ pub enum NoticeEventType {
 pub type NoticeListener = Arc<dyn Fn(NoticeEventData) + Send + Sync + 'static>;
 
 /// 消息处理器
-pub struct NoticeHandler {
-    emitter: Arc<Mutex<HashMap<NoticeEventType, Vec<NoticeListener>>>>,
-}
-
-impl Default for NoticeHandler {
-    fn default() -> Self {
-        Self {
-            emitter: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-}
-
-impl NoticeHandler {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn get_emitter(&self) -> Arc<Mutex<HashMap<NoticeEventType, Vec<NoticeListener>>>> {
-        self.emitter.clone()
-    }
-
-    async fn emit_event(
-        emitter: &Arc<Mutex<HashMap<NoticeEventType, Vec<NoticeListener>>>>,
-        event_type: NoticeEventType,
-        event: NoticeEventData,
-    ) {
-        let listeners: Vec<NoticeListener> = {
-            let guard = emitter.lock().await;
-            guard.get(&event_type).cloned().unwrap_or_default()
-        };
-        for listener in listeners {
-            let event = event.clone();
-            tokio::spawn(async move { listener(event) });
-        }
-    }
-}
-
-impl MessageHandler for NoticeHandler {
-    fn handle_message(&self, text: String) {
-        if let Ok(json) = serde_json::from_str::<Value>(&text) {
-            let emitter = self.get_emitter();
-            tokio::spawn(async move {
-                match parse_notice_message(&json) {
-                    Ok((event_type, event)) => {
-                        Self::emit_event(&emitter, event_type, event).await;
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to parse chat message: {}", e);
-                    }
-                }
-            });
-        }
-    }
-}
+pub type NoticeHandler = ParsedMessageHandler<NoticeEventType, NoticeEventData>;
 
 /// 解析通知消息，返回(事件类型，事件数据)
 #[allow(non_snake_case)]
@@ -153,55 +102,62 @@ fn parse_notice_message(data: &Value) -> Result<(NoticeEventType, NoticeEventDat
     }
 }
 
-impl Clone for NoticeHandler {
-    fn clone(&self) -> Self {
-        Self {
-            emitter: self.emitter.clone(),
-        }
-    }
-}
-
 /// 通知客户端
 pub struct Notice {
-    ws: Option<WebSocketClient>,
+    connection: WsConnection,
     handler: NoticeHandler,
-    sender: Option<mpsc::UnboundedSender<String>>,
     api_key: String,
 }
 
 impl Notice {
     pub fn new(api_key: String) -> Self {
         Self {
-            ws: None,
-            handler: NoticeHandler::new(),
-            sender: None,
+            connection: WsConnection::new(),
+            handler: NoticeHandler::new(parse_notice_message, None, "notice"),
             api_key,
         }
     }
 
+    fn ws_url(&self) -> Result<String, WebSocketError> {
+        build_ws_url(
+            DOMAIN,
+            "user-channel",
+            &[("apiKey", self.api_key.clone())],
+        )
+    }
+
     pub async fn connect(&mut self, reload: bool) -> Result<(), WebSocketError> {
-        if self.ws.is_some() && !reload {
-            return Ok(());
-        }
-
-        let url = format!("wss://{}/user-channel?apiKey={}", DOMAIN, self.api_key);
-        let (tx_send, _) = mpsc::unbounded_channel::<String>();
-        self.sender = Some(tx_send);
-
-        let ws = WebSocketClient::connect(&url, self.handler.clone()).await?;
-        self.ws = Some(ws);
-        Ok(())
+        let url = self.ws_url()?;
+        self.connection
+            .connect(reload, &url, self.handler.clone())
+            .await
     }
 
     /// 重连
     pub async fn reconnect(&mut self) -> Result<(), WebSocketError> {
-        self.connect(true).await
+        let url = self.ws_url()?;
+        self.connection.reconnect(&url, self.handler.clone()).await
+    }
+
+    pub fn set_reconnect_policy(&mut self, policy: RetryPolicy) {
+        self.connection.set_retry_policy(policy);
+    }
+
+    pub fn on_ws_log<F>(&mut self, hook: F)
+    where
+        F: Fn(&str) + Send + Sync + 'static,
+    {
+        let hook = Arc::new(hook) as WsLogHook;
+        self.connection.set_log_hook_arc(hook.clone());
+        self.handler.set_log_hook_arc(hook);
     }
 
     /// 移除监听
     pub async fn off(&self, event_type: NoticeEventType) {
-        let mut listeners = self.handler.emitter.lock().await;
-        listeners.remove(&event_type);
+        self.handler
+            .get_emitter()
+            .remove_listener(Some(event_type))
+            .await;
     }
 
     /// 监听通知消息事件
@@ -219,28 +175,22 @@ impl Notice {
     where
         F: Fn(NoticeEventData) + Send + Sync + 'static,
     {
-        let wrapped_listener: NoticeListener = Arc::new(listener);
-        let mut emitter = self.handler.emitter.lock().await;
-        emitter
-            .entry(event)
-            .or_insert_with(Vec::new)
-            .push(wrapped_listener);
+        self.handler.get_emitter().add_listener(event, listener).await;
     }
 
     /// 断开连接
     pub fn disconnect(&mut self) {
-        if let Some(ws) = &mut self.ws {
-            ws.disconnect();
-        }
-        self.ws = None;
-        self.sender = None;
+        self.connection.disconnect();
     }
 
     /// 获取未读消息数
     ///
     /// 返回 [NoticeCount]
     pub async fn count(&self) -> Result<NoticeCount, Error> {
-        let url = format!("notifications/unread/count?apiKey={}", self.api_key);
+        let url = build_http_path(
+            "notifications/unread/count",
+            &[("apiKey", self.api_key.clone())],
+        );
         let resp = get(&url).await?;
         let count = NoticeCount::from_value(&resp)?;
 
@@ -253,10 +203,12 @@ impl Notice {
     ///
     /// 返回消息列表
     pub async fn list(&self, notice_type: NoticeType) -> Result<NoticeList, Error> {
-        let url = format!(
-            "api/getNotifications?apiKey={}&type={}",
-            self.api_key,
-            notice_type.as_str()
+        let url = build_http_path(
+            "api/getNotifications",
+            &[
+                ("apiKey", self.api_key.clone()),
+                ("type", notice_type.as_str().to_string()),
+            ],
         );
         let resp = get(&url).await?;
 
@@ -276,10 +228,9 @@ impl Notice {
     ///
     /// 返回执行结果
     pub async fn make_read(&self, notice_type: NoticeType) -> Result<bool, Error> {
-        let url = format!(
-            "notifications/make-read/{}?apiKey={}",
-            notice_type.as_str(),
-            self.api_key
+        let url = build_http_path(
+            &format!("notifications/make-read/{}", notice_type.as_str()),
+            &[("apiKey", self.api_key.clone())],
         );
         let resp = get(&url).await?;
 
@@ -296,7 +247,7 @@ impl Notice {
 
     /// 已读所有消息
     pub async fn read_all(&self) -> Result<bool, Error> {
-        let url = format!("notifications/all-read?apiKey={}", self.api_key);
+        let url = build_http_path("notifications/all-read", &[("apiKey", self.api_key.clone())]);
         let resp = get(&url).await?;
         if let Some(code) = resp["code"].as_i64()
             && code != 0
@@ -306,5 +257,37 @@ impl Notice {
             ));
         }
         Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{NoticeEventData, NoticeEventType, parse_notice_message};
+    use serde_json::json;
+
+    #[test]
+    fn parse_notice_warn_broadcast() {
+        let payload = json!({
+            "command": "warnBroadcast",
+            "userId": "u1",
+            "warnBroadcastText": "hello",
+            "who": "system"
+        });
+
+        let (event_type, event) = parse_notice_message(&payload).expect("should parse");
+        assert!(matches!(event_type, NoticeEventType::Msg));
+        match event {
+            NoticeEventData::Msg(msg) => assert_eq!(msg.content.as_deref(), Some("hello")),
+        }
+    }
+
+    #[test]
+    fn parse_notice_unsupported_command_fails() {
+        let payload = json!({
+            "command": "unknown",
+            "userId": "u1"
+        });
+
+        assert!(parse_notice_message(&payload).is_err());
     }
 }

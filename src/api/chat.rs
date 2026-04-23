@@ -31,7 +31,8 @@
 //! # 示例
 //!
 //! ```rust,no_run
-//! use crate::api::chat::{Chat, ChatData, ChatNotice, ChatRevoke};
+//! use fishpi_sdk::api::chat::Chat;
+//! use fishpi_sdk::model::chat::{ChatData, ChatNotice, ChatRevoke};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -39,7 +40,7 @@
 //!
 //!     // 监听通知消息（直接传递 ChatNotice，无需 match）
 //!     chat.on_notice(|notice: ChatNotice| {
-//!         println!("Notice: {}", notice.content);
+//!         println!("Notice: {}", notice.preview);
 //!     }).await;
 //!
 //!     // 监听普通消息
@@ -49,7 +50,7 @@
 //!
 //!     // 监听撤回消息
 //!     chat.on_revoke(|revoke: ChatRevoke| {
-//!         println!("Revoked: {}", revoke.oId);
+//!         println!("Revoked: {}", revoke.data);
 //!     }).await;
 //!
 //!     // 连接私聊
@@ -74,13 +75,14 @@
 //! - `Revoke` - 消息撤回。
 
 use crate::{
-    api::ws::{MessageHandler, WebSocketClient, WebSocketError},
+    api::ws::{
+        ParsedMessageHandler, RetryPolicy, WebSocketError, WsConnection, WsLogHook, build_ws_url,
+    },
     model::chat::{ChatData, ChatMsgType, ChatNotice, ChatRevoke},
-    utils::{error::Error, get},
+    utils::{build_http_path, error::Error, get},
 };
 use serde_json::Value;
-use std::{collections::HashMap, str::FromStr, sync::Arc};
-use tokio::sync::{Mutex, mpsc};
+use std::{str::FromStr, sync::Arc};
 
 const DOMAIN: &str = "fishpi.cn";
 
@@ -101,60 +103,7 @@ pub enum ChatEventType {
 pub type ChatListener = Arc<dyn Fn(ChatEventData) + Send + Sync + 'static>;
 
 /// 消息处理器
-pub struct ChatHandler {
-    emitter: Arc<Mutex<HashMap<ChatEventType, Vec<ChatListener>>>>,
-}
-
-impl Default for ChatHandler {
-    fn default() -> Self {
-        Self {
-            emitter: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-}
-
-impl ChatHandler {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn get_emitter(&self) -> Arc<Mutex<HashMap<ChatEventType, Vec<ChatListener>>>> {
-        self.emitter.clone()
-    }
-
-    async fn emit_event(
-        emitter: &Arc<Mutex<HashMap<ChatEventType, Vec<ChatListener>>>>,
-        event_type: ChatEventType,
-        event: ChatEventData,
-    ) {
-        let listeners: Vec<ChatListener> = {
-            let guard = emitter.lock().await;
-            guard.get(&event_type).cloned().unwrap_or_default()
-        };
-        for listener in listeners {
-            let event = event.clone();
-            tokio::spawn(async move { listener(event) });
-        }
-    }
-}
-
-impl MessageHandler for ChatHandler {
-    fn handle_message(&self, text: String) {
-        if let Ok(json) = serde_json::from_str::<Value>(&text) {
-            let emitter = self.get_emitter();
-            tokio::spawn(async move {
-                match parse_chat_message(&json) {
-                    Ok((event_type, event)) => {
-                        Self::emit_event(&emitter, event_type, event).await;
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to parse chat message: {}", e);
-                    }
-                }
-            });
-        }
-    }
-}
+pub type ChatHandler = ParsedMessageHandler<ChatEventType, ChatEventData>;
 
 /// 解析私聊消息，返回(事件类型，事件数据)
 #[allow(non_snake_case)]
@@ -181,30 +130,32 @@ fn parse_chat_message(json: &Value) -> Result<(ChatEventType, ChatEventData), Er
         }
 }
 
-impl Clone for ChatHandler {
-    fn clone(&self) -> Self {
-        Self {
-            emitter: self.emitter.clone(),
-        }
-    }
-}
-
 /// 私聊客户端
 pub struct Chat {
-    ws: Option<WebSocketClient>,
+    connection: WsConnection,
     handler: ChatHandler,
-    sender: Option<mpsc::UnboundedSender<String>>,
     api_key: String,
 }
 
 impl Chat {
     pub fn new(api_key: String) -> Self {
         Self {
-            ws: None,
-            handler: ChatHandler::new(),
-            sender: None,
+            connection: WsConnection::new(),
+            handler: ChatHandler::new(parse_chat_message, None, "chat"),
             api_key,
         }
+    }
+
+    fn ws_url(&self, user: Option<&str>) -> Result<String, WebSocketError> {
+        let mut params = vec![("apiKey", self.api_key.clone())];
+        let path = if let Some(user) = user {
+            params.push(("toUser", user.to_string()));
+            "chat-channel"
+        } else {
+            "user-channel"
+        };
+
+        build_ws_url(DOMAIN, path, &params)
     }
 
     pub async fn connect(
@@ -212,31 +163,31 @@ impl Chat {
         reload: bool,
         user: Option<String>,
     ) -> Result<(), WebSocketError> {
-        if self.ws.is_some() && !reload {
-            return Ok(());
-        }
+        let url = self.ws_url(user.as_deref())?;
 
-        let url = if let Some(user) = user {
-            format!(
-                "wss://{}/chat-channel?apiKey={}&toUser={}",
-                DOMAIN, self.api_key, user
-            )
-        } else {
-            format!("wss://{}/user-channel?apiKey={}", DOMAIN, self.api_key)
-        };
-
-        let (tx_send, _) = mpsc::unbounded_channel::<String>();
-        self.sender = Some(tx_send);
-
-        let ws = WebSocketClient::connect(&url, self.handler.clone()).await?;
-
-        self.ws = Some(ws);
-        Ok(())
+        self.connection
+            .connect(reload, &url, self.handler.clone())
+            .await
     }
 
     /// 重连
     pub async fn reconnect(&mut self, user: Option<String>) -> Result<(), WebSocketError> {
-        self.connect(true, user).await
+        let url = self.ws_url(user.as_deref())?;
+
+        self.connection.reconnect(&url, self.handler.clone()).await
+    }
+
+    pub fn set_reconnect_policy(&mut self, policy: RetryPolicy) {
+        self.connection.set_retry_policy(policy);
+    }
+
+    pub fn on_ws_log<F>(&mut self, hook: F)
+    where
+        F: Fn(&str) + Send + Sync + 'static,
+    {
+        let hook = Arc::new(hook) as WsLogHook;
+        self.connection.set_log_hook_arc(hook.clone());
+        self.handler.set_log_hook_arc(hook);
     }
 
     /// 监听通知消息事件
@@ -279,34 +230,27 @@ impl Chat {
     where
         F: Fn(ChatEventData) + Send + Sync + 'static,
     {
-        let wrapped_listener: ChatListener = Arc::new(listener);
-        let mut emitter = self.handler.emitter.lock().await;
-        emitter
-            .entry(event)
-            .or_insert_with(Vec::new)
-            .push(wrapped_listener);
+        self.handler.get_emitter().add_listener(event, listener).await;
     }
 
     /// 移除监听
     pub async fn off(&self, event: ChatEventType) {
-        let mut emitter = self.handler.emitter.lock().await;
-        emitter.remove(&event);
+        self.handler
+            .get_emitter()
+            .remove_listener(Some(event))
+            .await;
     }
 
     /// 断开连接
     pub fn disconnect(&mut self) {
-        if let Some(ws) = &mut self.ws {
-            ws.disconnect();
-        }
-        self.ws = None;
-        self.sender = None;
+        self.connection.disconnect();
     }
 
     /// 获取有私聊用户列表第一条消息
     ///
     /// 返回 私聊消息列表
     pub async fn list(&self) -> Result<Vec<ChatData>, Error> {
-        let url = format!("chat/get-list?apiKey={}", self.api_key);
+        let url = build_http_path("chat/get-list", &[("apiKey", self.api_key.clone())]);
 
         let resp = get(&url).await?;
 
@@ -343,10 +287,14 @@ impl Chat {
         size: u32,
         autoread: bool,
     ) -> Result<Vec<ChatData>, Error> {
-        // chat/get-message?apiKey=${this.apiKey}&toUser=${this.user}&page=${page}&pageSize=${size}
-        let url = format!(
-            "chat/get-message?apiKey={}&page={}&pageSize={}&toUser={}",
-            self.api_key, page, size, user
+        let url = build_http_path(
+            "chat/get-message",
+            &[
+                ("apiKey", self.api_key.clone()),
+                ("page", page.to_string()),
+                ("pageSize", size.to_string()),
+                ("toUser", user.clone()),
+            ],
         );
         let resp = get(&url).await?;
         if let Some(code) = resp.get("result").and_then(|c| c.as_i64())
@@ -375,7 +323,10 @@ impl Chat {
     ///
     /// 返回 执行结果
     pub async fn mark_as_read(&self, user: String) -> Result<bool, Error> {
-        let url = format!("chat/mark-as-read?toUser={}&apiKey={}", user, self.api_key);
+        let url = build_http_path(
+            "chat/mark-as-read",
+            &[("toUser", user), ("apiKey", self.api_key.clone())],
+        );
 
         let resp = get(&url).await?;
 
@@ -394,7 +345,7 @@ impl Chat {
     ///
     /// 返回 未读消息列表
     pub async fn unread(&self) -> Result<Vec<ChatData>, Error> {
-        let url = format!("chat/has-unread?apiKey={}", self.api_key);
+        let url = build_http_path("chat/has-unread", &[("apiKey", self.api_key.clone())]);
         let resp = get(&url).await?;
 
         let unread_len = resp["result"].as_i64().unwrap_or(0);
@@ -418,7 +369,10 @@ impl Chat {
     ///
     /// 返回 执行结果
     pub async fn revoke(&self, msg_id: &str) -> Result<bool, Error> {
-        let url = format!("chat/revoke?apiKey={}&oId={}", self.api_key, msg_id);
+        let url = build_http_path(
+            "chat/revoke",
+            &[("apiKey", self.api_key.clone()), ("oId", msg_id.to_string())],
+        );
         let resp = get(&url).await?;
 
         if let Some(code) = resp.get("result").and_then(|c| c.as_i64())
@@ -430,5 +384,42 @@ impl Chat {
         }
 
         Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ChatEventData, ChatEventType, parse_chat_message};
+    use serde_json::json;
+
+    #[test]
+    fn parse_chat_notice_message() {
+        let payload = json!({
+            "type": "notice",
+            "data": {
+                "command": "notice",
+                "userId": "u1",
+                "preview": "hi",
+                "senderAvatar": "a",
+                "senderUserName": "bob"
+            }
+        });
+
+        let (event_type, event) = parse_chat_message(&payload).expect("should parse");
+        assert!(matches!(event_type, ChatEventType::Notice));
+        match event {
+            ChatEventData::Notice(n) => assert_eq!(n.preview, "hi"),
+            _ => panic!("unexpected event variant"),
+        }
+    }
+
+    #[test]
+    fn parse_chat_invalid_type_fails() {
+        let payload = json!({
+            "type": "unknown",
+            "data": {}
+        });
+
+        assert!(parse_chat_message(&payload).is_err());
     }
 }

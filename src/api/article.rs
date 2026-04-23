@@ -29,7 +29,8 @@
 //! # 示例
 //!
 //! ```rust,no_run
-//! use crate::api::article::{Article, ArticlePost, ArticleListener};
+//! use fishpi_sdk::api::article::{Article, ArticleListener};
+//! use fishpi_sdk::model::article::{ArticlePost, ArticleType};
 //! use serde_json::Value;
 //! use std::sync::Arc;
 //!
@@ -37,38 +38,31 @@
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let article = Article::new("your_api_key".to_string());
 //!
-//!     // 发布文章
 //!     let data = ArticlePost {
 //!         title: "Test Title".to_string(),
 //!         content: "Test Content".to_string(),
 //!         tags: "test".to_string(),
 //!         commentable: true,
-//!         notify_followers: false,
-//!         type_: 0,
-//!         show_in_list: 1,
-//!         reward_content: None,
-//!         reward_point: None,
+//!         notifyFollowers: false,
+//!         type_: ArticleType::Normal,
+//!         showInList: 1,
+//!         rewardContent: None,
+//!         rewardPoint: None,
 //!         anonymous: None,
-//!         offer_point: None,
+//!         offerPoint: None,
 //!     };
 //!     let article_id = article.post_article(&data).await?;
-//!     println!("Published article ID: {}", article_id);
-//!
-//!     // 获取文章详情
 //!     let detail = article.detail(&article_id, 1).await?;
 //!     println!("Article title: {}", detail.title);
 //!
-//!     // 添加 WebSocket 监听器（支持共享回调）
 //!     let callback: ArticleListener = Arc::new(|msg: Value| {
 //!         Box::pin(async move {
 //!             println!("Received message: {:?}", msg);
 //!         })
 //!     });
-//!     let ws_client = article.add_listener(&article_id, ArticleType::Normal, Arc::clone(&callback)).await?;
-//!
-//!     // 点赞文章
-//!     let voted = article.vote(&article_id, true).await?;
-//!     println!("Voted: {}", voted);
+//!     let _ws_client = article
+//!         .add_listener(&article_id, ArticleType::Normal, Arc::clone(&callback))
+//!         .await?;
 //!
 //!     Ok(())
 //! }
@@ -78,9 +72,9 @@ use std::{pin::Pin, sync::Arc};
 use serde_json::{Value, json};
 
 use crate::{
-    api::ws::{MessageHandler, WebSocketClient},
+    api::ws::{MessageHandler, WebSocketClient, build_ws_url},
     model::article::{ArticleDetail, ArticleList, ArticleListType, ArticlePost, ArticleType, Pagination},
-    utils::{ResponseResult, error::Error, get, post},
+    utils::{ResponseResult, build_http_path, error::Error, get, post},
 };
 
 /// 文章监听器类型
@@ -196,13 +190,13 @@ impl Article {
             "recent".to_string()
         };
 
-        let url = format!(
-            "api/articles/{}{}?p={}&size={}&apiKey={}",
-            base,
-            type_.to_code(),
-            page,
-            size,
-            self.api_key
+        let url = build_http_path(
+            &format!("api/articles/{}{}", base, type_.to_code()),
+            &[
+                ("p", page.to_string()),
+                ("size", size.to_string()),
+                ("apiKey", self.api_key.clone()),
+            ],
         );
 
         let rsp = get(&url).await?;
@@ -229,9 +223,13 @@ impl Article {
         page: u32,
         size: u32,
     ) -> Result<ArticleList, Error> {
-        let url = format!(
-            "api/articles/user/{}?p={}&size={}&apiKey={}",
-            user, page, size, self.api_key
+        let url = build_http_path(
+            &format!("api/articles/user/{}", user),
+            &[
+                ("p", page.to_string()),
+                ("size", size.to_string()),
+                ("apiKey", self.api_key.clone()),
+            ],
         );
 
         let rsp = get(&url).await?;
@@ -252,7 +250,10 @@ impl Article {
     ///
     /// 返回文章详情 [ArticleDetail]
     pub async fn detail(&self, id: &str, p: u32) -> Result<ArticleDetail, Error> {
-        let url = format!("api/article/{}?p={}&apiKey={}", id, p, self.api_key);
+        let url = build_http_path(
+            &format!("api/article/{}", id),
+            &[("p", p.to_string()), ("apiKey", self.api_key.clone())],
+        );
 
         let rsp = get(&url).await?;
 
@@ -354,7 +355,7 @@ impl Article {
     ///
     /// 返回执行结果
     pub async fn reward(&self, id: &str) -> Result<ResponseResult, Error> {
-        let url = format!("article/reward?articleId={}", id);
+        let url = build_http_path("article/reward", &[("articleId", id.to_string())]);
 
         let data = json!({
             "apiKey": self.api_key,
@@ -371,7 +372,10 @@ impl Article {
     ///
     /// 返回在线人数
     pub async fn heat(&self, id: &str) -> Result<u32, Error> {
-        let url = format!("api/article/heat/{}?apiKey={}", id, self.api_key);
+        let url = build_http_path(
+            &format!("api/article/heat/{}", id),
+            &[("apiKey", self.api_key.clone())],
+        );
 
         let rsp = get(&url).await?;
 
@@ -402,10 +406,16 @@ impl Article {
         type_: ArticleType,
         callback: ArticleListener,
     ) -> Result<WebSocketClient, Error> {
-        let url = format!(
-            "wss://fishpi.cn/article-channel?apiKey={}&articleId={}&articleType={}",
-            self.api_key, id, type_ as u8
-        );
+        let url = build_ws_url(
+            "fishpi.cn",
+            "article-channel",
+            &[
+                ("apiKey", self.api_key.clone()),
+                ("articleId", id.to_string()),
+                ("articleType", (type_ as u8).to_string()),
+            ],
+        )
+        .map_err(|e| Error::Api(format!("WebSocket URL build failed: {}", e)))?;
 
         let handler = ArticleMessageHandler::new(callback);
         let ws = WebSocketClient::connect(&url, handler)

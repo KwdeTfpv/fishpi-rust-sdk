@@ -19,19 +19,14 @@
 //! ## 示例
 //!
 //! ```rust,no_run
-//! use fishpi_sdk::{FishPi, api::user::User};
+//! use fishpi_sdk::{FishPi, model::misc::LoginData};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // 登录获取用户实例
+//!     let login_data = LoginData::new("your_name_or_email", "your_password", None);
 //!     let user = FishPi::login(&login_data).await?;
-//!
-//!     // 获取用户信息
-//!     let user_info = user.info().await?;
-//!
-//!     // 发送评论
-//!     let result = user.comment.send(&comment_data).await?;
-//!
+//!     let points = user.get_points("target_user").await?;
+//!     println!("{}: {}", points.name, points.point);
 //!     Ok(())
 //! }
 //! ```
@@ -47,7 +42,7 @@ use crate::{
         misc::{Log, LoginData, PreRegisterInfo, RegisterInfo, UserLite, UserVipInfo},
         user::AtUser,
     },
-    utils::{ResponseResult, error::Error, get, post},
+    utils::{ResponseResult, build_http_path, error::Error, get, post},
 };
 
 /// 摸鱼派 Rust SDK 接口
@@ -99,7 +94,7 @@ impl FishPi {
     ///
     /// 返回用户 ID
     pub async fn verify(code: &str) -> Result<String, Error> {
-        let url = format!("verify?code={}", code);
+        let url = build_http_path("verify", &[("code", code.to_string())]);
 
         let rsp = get(&url).await?;
 
@@ -119,7 +114,7 @@ impl FishPi {
     /// 返回注册结果
     pub async fn register(data: &RegisterInfo) -> Result<ResponseResult, Error> {
         let url = if let Some(r) = &data.r {
-            format!("register2?r={}", r)
+            build_http_path("register2", &[("r", r.to_string())])
         } else {
             "register2".to_string()
         };
@@ -257,7 +252,13 @@ impl FishPi {
     ///
     /// 返回日志列表
     pub async fn log(page: u32, page_size: u32) -> Result<Vec<Log>, Error> {
-        let url = format!("logs/more?page={}&pageSize={}", page, page_size);
+        let url = build_http_path(
+            "logs/more",
+            &[
+                ("page", page.to_string()),
+                ("pageSize", page_size.to_string()),
+            ],
+        );
 
         let rsp = get(&url).await?;
 

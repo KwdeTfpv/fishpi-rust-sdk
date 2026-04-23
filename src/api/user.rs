@@ -27,21 +27,23 @@
 //! - [`User::get_user`] - 获取其他用户信息。
 //! - [`User::report`] - 举报。
 //! - [`User::upload`] - 上传文件。
+//! - [`User::get_points`] - 获取用户积分。
 //!
 //! ## 示例
 //!
 //! ```rust,no_run
-//! use fishpi_sdk::{FishPi, api::user::User};
+//! use fishpi_sdk::{FishPi, model::misc::LoginData};
 //! use fishpi_sdk::model::user::UpdateUserInfoParams;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     // 登录获取用户客户端
+//!     let login_data = LoginData::new("your_name_or_email", "your_password", None);
 //!     let user = FishPi::login(&login_data).await?;
 //!
 //!     // 获取用户信息
 //!     let info = user.info().await?;
-//!     println!("User name: {}", info.user_name);
+//!     println!("User name: {}", info.name());
 //!
 //!     // 查询表情
 //!     let emotions = user.emotions().await?;
@@ -56,6 +58,7 @@
 //!         userUrl: Some("https://example.com".to_string()),
 //!         userIntro: Some("New intro".to_string()),
 //!         userTag: Some("tag".to_string()),
+//!         mbti: None,
 //!     };
 //!     user.update_user_info(params).await?;
 //!
@@ -72,7 +75,7 @@ use crate::api::redpacket::Redpacket;
 use crate::model::misc::{Report, UploadResult};
 use crate::model::user::{UpdateUserInfoParams, UserInfo, UserPoint};
 use crate::utils::error::Error;
-use crate::utils::{ResponseResult, get, post, upload_files};
+use crate::utils::{ResponseResult, build_http_path, get, post, upload_files};
 use serde_json::{Value, json};
 
 pub struct User {
@@ -115,7 +118,7 @@ impl User {
 
     /// 返回登录账户信息，需要先登录或设置有效api_key
     pub async fn info(&self) -> Result<UserInfo, Error> {
-        let mut resp = get(&format!("api/user?apiKey={}", &self.api_key)).await?;
+        let mut resp = get(&build_http_path("api/user", &[("apiKey", self.api_key.clone())])).await?;
 
         if resp["code"] != 0 {
             return Err(Error::Api(
@@ -134,7 +137,7 @@ impl User {
 
     /// 查询登录用户常用表情
     pub async fn emotions(&self) -> Result<Vec<String>, Error> {
-        let mut resp = get(&format!("users/emotions?apiKey={}", &self.api_key)).await?;
+        let mut resp = get(&build_http_path("users/emotions", &[("apiKey", self.api_key.clone())])).await?;
 
         if resp["code"] != 0 {
             return Err(Error::Api(
@@ -158,7 +161,7 @@ impl User {
 
     /// 查询登录用户当前活跃度，请求频率请控制在 30 ~ 60 秒一次
     pub async fn liveness(&self) -> Result<u32, Error> {
-        let resp = get(&format!("user/liveness?apiKey={}", &self.api_key)).await?;
+        let resp = get(&build_http_path("user/liveness", &[("apiKey", self.api_key.clone())])).await?;
 
         let liveness = resp["liveness"].as_u64().unwrap_or(0) as u32;
         Ok(liveness)
@@ -166,7 +169,7 @@ impl User {
 
     /// 检查用户是否已经签到
     pub async fn is_checkin(&self) -> Result<bool, Error> {
-        let resp = get(&format!("user/isCheckin?apiKey={}", &self.api_key)).await?;
+        let resp = get(&build_http_path("user/isCheckin", &[("apiKey", self.api_key.clone())])).await?;
 
         let is_checkin: bool = resp["isCheckin"].as_bool().unwrap_or(false);
         Ok(is_checkin)
@@ -174,9 +177,9 @@ impl User {
 
     /// 检查用户是否领取昨日活跃奖励
     pub async fn is_collected_liveness(&self) -> Result<bool, Error> {
-        let resp = get(&format!(
-            "api/activity/is-collected-liveness?apiKey={}",
-            &self.api_key
+        let resp = get(&build_http_path(
+            "api/activity/is-collected-liveness",
+            &[("apiKey", self.api_key.clone())],
         ))
         .await?;
 
@@ -186,9 +189,9 @@ impl User {
 
     /// 领取昨日活跃度奖励
     pub async fn reward_liveness(&self) -> Result<u32, Error> {
-        let resp = get(&format!(
-            "activity/yesterday-liveness-reward-api?apiKey={}",
-            &self.api_key
+        let resp = get(&build_http_path(
+            "activity/yesterday-liveness-reward-api",
+            &[("apiKey", self.api_key.clone())],
         ))
         .await?;
 
@@ -300,7 +303,10 @@ impl User {
     ///
     /// 返回用户信息
     pub async fn get_user(&self, username: &str) -> Result<UserInfo, Error> {
-        let url = format!("user/{}?apiKey={}", username, self.api_key);
+        let url = build_http_path(
+            &format!("user/{}", username),
+            &[("apiKey", self.api_key.clone())],
+        );
 
         let rsp = get(&url).await?;
 

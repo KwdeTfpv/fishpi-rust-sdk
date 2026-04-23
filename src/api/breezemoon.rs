@@ -16,7 +16,7 @@
 //! # 示例
 //!
 //! ```rust,no_run
-//! use crate::api::breezemoon::BreezeMoon;
+//! use fishpi_sdk::api::breezemoon::BreezeMoon;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -39,7 +39,7 @@ use serde_json::json;
 
 use crate::{
     model::breezemoon::BreezemoonContent,
-    utils::{ResponseResult, error::Error, get, post},
+    utils::{ResponseResult, build_http_path, error::Error, get, post},
 };
 
 pub struct BreezeMoon {
@@ -69,9 +69,13 @@ impl BreezeMoon {
         } else {
             "".to_string()
         };
-        let url = format!(
-            "api/{}breezemoons?p={}&size={}&apiKey={}",
-            base, page, size, self.api_key
+        let url = build_http_path(
+            &format!("api/{}breezemoons", base),
+            &[
+                ("p", page.to_string()),
+                ("size", size.to_string()),
+                ("apiKey", self.api_key.clone()),
+            ],
         );
 
         let rsp = get(&url).await?;
