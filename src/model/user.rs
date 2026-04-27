@@ -217,6 +217,50 @@ impl UserInfo {
             &self.userNickname
         }
     }
+
+    pub fn username(&self) -> &str {
+        &self.userName
+    }
+
+    pub fn nickname(&self) -> &str {
+        &self.userNickname
+    }
+
+    pub fn intro(&self) -> &str {
+        &self.intro
+    }
+
+    pub fn city(&self) -> &str {
+        &self.city
+    }
+
+    pub fn url(&self) -> &str {
+        &self.URL
+    }
+
+    pub fn avatar(&self) -> &str {
+        &self.avatar
+    }
+
+    pub fn points(&self) -> i32 {
+        self.points
+    }
+
+    pub fn role(&self) -> &str {
+        &self.role
+    }
+
+    pub fn following(&self) -> i32 {
+        self.following
+    }
+
+    pub fn follower(&self) -> i32 {
+        self.follower
+    }
+
+    pub fn online_minutes(&self) -> i32 {
+        self.onlineMinutes
+    }
 }
 
 impl Default for MetalAttrOrString {

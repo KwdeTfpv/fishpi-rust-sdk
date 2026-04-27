@@ -6,6 +6,51 @@ use crate::model::user::Metal;
 use crate::model::{bool_from_int, bool_from_zero, deserialize_sys_metal};
 use crate::utils::error::Error;
 
+fn normalize_float_numbers(value: &mut Value) {
+    match value {
+        Value::Array(arr) => {
+            for item in arr {
+                normalize_float_numbers(item);
+            }
+        }
+        Value::Object(map) => {
+            for v in map.values_mut() {
+                normalize_float_numbers(v);
+            }
+        }
+        Value::Number(num) => {
+            if num.as_u64().is_none()
+                && num.as_i64().is_none()
+                && let Some(f) = num.as_f64()
+                && f.is_finite()
+            {
+                let n = if f <= 0.0 { 0 } else { f.trunc() as u64 };
+                *value = Value::Number(serde_json::Number::from(n));
+            }
+        }
+        _ => {}
+    }
+}
+
+fn parse_with_float_fallback<T>(data: &Value, type_name: &str) -> Result<T, Error>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    match serde_json::from_value::<T>(data.clone()) {
+        Ok(v) => Ok(v),
+        Err(first_err) => {
+            let mut normalized = data.clone();
+            normalize_float_numbers(&mut normalized);
+            serde_json::from_value::<T>(normalized).map_err(|second_err| {
+                Error::Parse(format!(
+                    "Failed to parse {}: {} (fallback after float-normalize also failed: {})",
+                    type_name, first_err, second_err
+                ))
+            })
+        }
+    }
+}
+
 /// 发帖信息
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[allow(non_snake_case)]
@@ -80,7 +125,7 @@ pub struct ArticleTag {
     pub diyCSS: String,
     /// 反对数
     #[serde(rename = "tagBadCnt")]
-    pub badCnt: u32,
+    pub badCnt: u64,
     /// 标签回帖计数
     #[serde(rename = "tagCommentCount")]
     pub commentCnt: u32,
@@ -89,7 +134,7 @@ pub struct ArticleTag {
     pub followerCnt: u32,
     /// 点赞数
     #[serde(rename = "tagGoodCnt")]
-    pub goodCnt: u32,
+    pub goodCnt: u64,
     /// 引用计数
     #[serde(rename = "tagReferenceCount")]
     pub referenceCnt: u32,
@@ -128,8 +173,10 @@ impl ArticleTag {
 
 /// 投票状态，点赞与否
 #[derive(Clone, Debug)]
+#[derive(Default)]
 pub enum VoteStatus {
     /// 未投票
+    #[default]
     Normal,
     /// 点赞
     Up,
@@ -146,6 +193,7 @@ impl VoteStatus {
         }
     }
 }
+
 
 /// 文章状态
 #[derive(Clone, Debug)]
@@ -167,6 +215,12 @@ impl ArticleStatus {
             1 => ArticleStatus::Ban,
             _ => ArticleStatus::Lock, // 默认值
         }
+    }
+}
+
+impl Default for ArticleStatus {
+    fn default() -> Self {
+        Self::Normal
     }
 }
 
@@ -194,13 +248,14 @@ where
     Ok(ArticleStatus::from_index(value as usize))
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default)]
 #[allow(non_snake_case)]
 pub struct ArticleAuthor {
     /// 用户是否在线
     pub isOnline: bool,
     /// 用户在线时长
-    pub onlineMinute: u32,
+    pub onlineMinute: u64,
     /// 是否公开积分列表
     #[serde(deserialize_with = "bool_from_zero")]
     pub pointStatus: bool,
@@ -208,12 +263,12 @@ pub struct ArticleAuthor {
     #[serde(deserialize_with = "bool_from_zero")]
     pub followerStatus: bool,
     /// 用户完成新手指引步数
-    pub guideStep: u32,
+    pub guideStep: u64,
     /// 是否公开在线状态
     #[serde(deserialize_with = "bool_from_zero")]
     pub onlineStatus: bool,
     /// 当前连续签到起始日
-    pub currentCheckinStreakStart: u32,
+    pub currentCheckinStreakStart: u64,
     /// 是否聊天室图片自动模糊
     #[serde(deserialize_with = "bool_from_int")] // == 1
     pub isAutoBlur: bool,
@@ -235,21 +290,21 @@ pub struct ArticleAuthor {
     /// 自定义首页跳转地址
     pub userIndexRedirectURL: String,
     /// 最近发帖时间
-    pub latestArticleTime: u32,
+    pub latestArticleTime: u64,
     /// 标签计数
-    pub tagCount: u32,
+    pub tagCount: u64,
     /// 昵称
     pub nickname: String,
     /// 回帖浏览模式
-    pub listViewMode: u32,
+    pub listViewMode: u64,
     /// 最长连续签到
-    pub longestCheckinStreak: u32,
+    pub longestCheckinStreak: u64,
     /// 用户头像类型
     pub avatarType: String,
     /// 用户确认邮件发送时间
-    pub subMailSendTime: u32,
+    pub subMailSendTime: u64,
     /// 用户最后更新时间
-    pub updateTime: u32,
+    pub updateTime: u64,
     /// userSubMailStatus
     #[serde(deserialize_with = "bool_from_zero")]
     pub subMailStatus: bool,
@@ -257,26 +312,26 @@ pub struct ArticleAuthor {
     #[serde(deserialize_with = "bool_from_zero")]
     pub isJoinPointRank: bool,
     /// 用户最后登录时间
-    pub latestLoginTime: u32,
+    pub latestLoginTime: u64,
     /// 应用角色
-    pub userAppRole: u32,
+    pub userAppRole: u64,
     /// 头像查看模式
-    pub userAvatarViewMode: u32,
+    pub userAvatarViewMode: u64,
     /// 用户状态
-    pub userStatus: u32,
+    pub userStatus: u64,
     /// 用户上次最长连续签到日期
-    pub longestCheckinStreakEnd: u32,
+    pub longestCheckinStreakEnd: u64,
     /// 是否公开关注帖子列表
     #[serde(deserialize_with = "bool_from_zero")]
     pub watchingArticleStatus: bool,
     /// 上次回帖时间
-    pub latestCmtTime: u32,
+    pub latestCmtTime: u64,
     /// 用户省份
     pub province: String,
     /// 用户当前连续签到计数
-    pub currentCheckinStreak: u32,
+    pub currentCheckinStreak: u64,
     /// 用户编号
-    pub userNo: u32,
+    pub userNo: u64,
     /// 用户头像
     pub avatarURL: String,
     /// 是否公开关注标签列表
@@ -288,7 +343,7 @@ pub struct ArticleAuthor {
     #[serde(deserialize_with = "bool_from_zero")]
     pub isJoinUsedPointRank: bool,
     /// 上次签到日期
-    pub currentCheckinStreakEnd: u32,
+    pub currentCheckinStreakEnd: u64,
     /// 是否公开收藏帖子列表
     #[serde(deserialize_with = "bool_from_zero")]
     pub followingArticleStatus: bool,
@@ -299,27 +354,27 @@ pub struct ArticleAuthor {
     #[serde(deserialize_with = "bool_from_zero")]
     pub replyWatchArticleStatus: bool,
     /// 回帖浏览模式
-    pub commentViewMode: u32,
+    pub commentViewMode: u64,
     /// 是否公开清风明月列表
     #[serde(deserialize_with = "bool_from_zero")]
     pub breezemoonStatus: bool,
     /// 用户上次签到时间
-    pub userCheckinTime: u32,
+    pub userCheckinTime: u64,
     /// 用户消费积分
-    pub usedPoint: u32,
+    pub usedPoint: u64,
     /// 是否公开发帖列表
     #[serde(deserialize_with = "bool_from_zero")]
     pub articleStatus: bool,
     /// 用户积分
-    pub userPoint: u32,
+    pub userPoint: u64,
     /// 用户回帖数
-    pub commentCount: u32,
+    pub commentCount: u64,
     /// 用户个性签名
     pub userIntro: String,
     /// 移动端主题
     pub userMobileSkin: String,
     /// 分页每页条目
-    pub listPageSize: u32,
+    pub listPageSize: u64,
     /// 文章 Id
     pub oId: String,
     /// 用户名
@@ -328,7 +383,7 @@ pub struct ArticleAuthor {
     #[serde(deserialize_with = "bool_from_zero")]
     pub geoStatus: bool,
     /// 最长连续签到起始日
-    pub longestCheckinStreakStart: u32,
+    pub longestCheckinStreakStart: u64,
     /// 用户主题
     pub userSkin: String,
     /// 是否启用 Web 通知
@@ -338,7 +393,7 @@ pub struct ArticleAuthor {
     #[serde(deserialize_with = "bool_from_zero")]
     pub followingUserStatus: bool,
     /// 文章数
-    pub articleCount: u32,
+    pub articleCount: u64,
     /// 用户角色
     pub userRole: String,
     /// 徽章
@@ -348,15 +403,15 @@ pub struct ArticleAuthor {
 
 impl ArticleAuthor {
     pub fn from_value(data: &Value) -> Result<Self, Error> {
-        serde_json::from_value(data.clone())
-            .map_err(|e| Error::Parse(format!("Failed to parse ArticleAuthor: {}", e)))
+        parse_with_float_fallback(data, "ArticleAuthor")
     }
 }
 
 /// 评论作者
 pub type CommentAuthor = ArticleAuthor;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default)]
 #[allow(non_snake_case)]
 pub struct ArticleComment {
     /// 是否优评
@@ -382,7 +437,7 @@ pub struct ArticleComment {
     pub vote: VoteStatus,
     /// 评论引用数
     #[serde(rename = "commentRevisionCount")]
-    pub revisionCount: u32,
+    pub revisionCount: u64,
     /// 评论经过时间
     #[serde(rename = "timeAgo")]
     pub timeAgo: String,
@@ -394,7 +449,7 @@ pub struct ArticleComment {
     pub sysMetal: Vec<Metal>,
     /// 点赞数
     #[serde(rename = "commentGoodCnt")]
-    pub goodCnt: u32,
+    pub goodCnt: u64,
     /// 评论是否可见
     #[serde(deserialize_with = "bool_from_zero")]
     pub visible: bool,
@@ -403,7 +458,7 @@ pub struct ArticleComment {
     pub articleId: String,
     /// 评论感谢数
     #[serde(rename = "rewardedCnt")]
-    pub rewardedCnt: u32,
+    pub rewardedCnt: u64,
     /// 评论地址
     #[serde(rename = "commentSharpURL")]
     pub sharpURL: String,
@@ -412,7 +467,7 @@ pub struct ArticleComment {
     pub isAnonymous: bool,
     /// 评论回复数
     #[serde(rename = "commentReplyCnt")]
-    pub replyCnt: u32,
+    pub replyCnt: u64,
     /// 评论 id
     #[serde(rename = "oId")]
     pub oId: String,
@@ -429,10 +484,10 @@ pub struct ArticleComment {
     pub author: String,
     /// 评论感谢数
     #[serde(rename = "commentThankCnt")]
-    pub thankCnt: u32,
+    pub thankCnt: u64,
     /// 评论点踩数
     #[serde(rename = "commentBadCnt")]
-    pub badCnt: u32,
+    pub badCnt: u64,
     /// 是否已感谢
     #[serde(rename = "rewarded")]
     pub rewarded: bool,
@@ -444,18 +499,17 @@ pub struct ArticleComment {
     pub audioURL: String,
     /// 评论是否采纳，1 表示采纳
     #[serde(rename = "commentQnAOffered")]
-    pub offered: u32,
+    pub offered: u64,
 }
 
 impl ArticleComment {
     pub fn from_value(data: &Value) -> Result<Self, Error> {
-        serde_json::from_value(data.clone())
-            .map_err(|e| Error::Parse(format!("Failed to parse ArticleComment: {}", e)))
+        parse_with_float_fallback(data, "ArticleComment")
     }
 }
 
 /// 分页信息
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[allow(non_snake_case)]
 pub struct Pagination {
     /// 总分页数
@@ -468,19 +522,20 @@ pub struct Pagination {
 
 impl Pagination {
     pub fn from_value(data: &Value) -> Result<Self, Error> {
-        serde_json::from_value(data.clone())
-            .map_err(|e| Error::Parse(format!("Failed to parse Pagination: {}", e)))
+        parse_with_float_fallback(data, "Pagination")
     }
 }
 
 /// 帖子类型
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]
+#[derive(Default)]
 pub enum ArticleType {
     Normal = 0,
     Private = 1,
     Broadcast = 2,
     Thought = 3,
+    #[default]
     Unknown = 4,
     Question = 5,
 }
@@ -496,6 +551,11 @@ impl ArticleType {
             _ => ArticleType::Unknown,
         }
     }
+}
+
+
+fn default_article_type() -> ArticleType {
+    ArticleType::Unknown
 }
 
 pub fn deserialize_type<'de, D>(deserializer: D) -> Result<ArticleType, D::Error>
@@ -558,7 +618,8 @@ where
 }
 
 /// 文章详情
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default)]
 #[allow(non_snake_case)]
 pub struct ArticleDetail {
     /// 是否在列表展示
@@ -581,13 +642,13 @@ pub struct ArticleDetail {
     pub goodCnt: u32,
     /// 悬赏积分
     #[serde(rename = "articleQnAOfferPoint")]
-    pub offerPoint: u32,
+    pub offerPoint: u64,
     /// 文章缩略图
     #[serde(rename = "articleThumbnailURL")]
     pub thumbnailURL: String,
     /// 置顶序号
     #[serde(rename = "articleStickRemains")]
-    pub stickRemains: u32,
+    pub stickRemains: u64,
     /// 发布时间简写
     #[serde(rename = "timeAgo")]
     pub timeAgo: String,
@@ -598,7 +659,11 @@ pub struct ArticleDetail {
     #[serde(rename = "articleAuthorName")]
     pub authorName: String,
     /// 文章类型
-    #[serde(deserialize_with = "deserialize_type")]
+    #[serde(
+        rename = "articleType",
+        default = "default_article_type",
+        deserialize_with = "deserialize_type"
+    )]
     pub type_: ArticleType,
     /// 是否悬赏
     #[serde(rename = "offered")]
@@ -608,13 +673,13 @@ pub struct ArticleDetail {
     pub createTimeStr: String,
     /// 文章浏览数
     #[serde(rename = "articleViewCount")]
-    pub viewCnt: u32,
+    pub viewCnt: u64,
     /// 作者头像缩略图
     #[serde(rename = "articleAuthorThumbnailURL20")]
     pub thumbnailURL20: String,
     /// 关注数
     #[serde(rename = "articleWatchCnt")]
-    pub watchCnt: u32,
+    pub watchCnt: u64,
     /// 文章预览内容
     #[serde(rename = "articlePreviewContent")]
     pub previewContent: String,
@@ -632,10 +697,10 @@ pub struct ArticleDetail {
     pub thumbnailURL48: String,
     /// 文章评论数
     #[serde(rename = "articleCommentCount")]
-    pub commentCnt: u32,
+    pub commentCnt: u64,
     /// 收藏数
     #[serde(rename = "articleCollectCnt")]
-    pub collectCnt: u32,
+    pub collectCnt: u64,
     /// 文章最后评论者
     #[serde(rename = "articleLatestCmterName")]
     pub latestCmterName: String,
@@ -650,9 +715,13 @@ pub struct ArticleDetail {
     pub cmtTimeAgo: String,
     /// 是否置顶
     #[serde(rename = "articleStick")]
-    pub stick: u32,
+    pub stick: u64,
     /// 文章标签信息
-    #[serde(deserialize_with = "deserialize_tag_objs")]
+    #[serde(
+        rename = "articleTagObjs",
+        default,
+        deserialize_with = "deserialize_tag_objs"
+    )]
     pub tagObjs: Vec<ArticleTag>,
     /// 文章最后评论时间
     #[serde(rename = "articleLatestCmtTimeStr")]
@@ -662,16 +731,16 @@ pub struct ArticleDetail {
     pub anonymous: bool,
     /// 文章感谢数
     #[serde(rename = "articleThankCnt")]
-    pub thankCnt: u32,
+    pub thankCnt: u64,
     /// 文章更新时间
     #[serde(rename = "articleUpdateTime")]
     pub updateTime: String,
     /// 文章状态
-    #[serde(deserialize_with = "deserialize_status")]
+    #[serde(rename = "articleStatus", deserialize_with = "deserialize_status")]
     pub status: ArticleStatus,
     /// 文章点击数
     #[serde(rename = "articleHeat")]
-    pub heat: u32,
+    pub heat: u64,
     /// 文章是否优选
     #[serde(rename = "articlePerfect", deserialize_with = "bool_from_int")]
     pub perfect: bool,
@@ -682,14 +751,18 @@ pub struct ArticleDetail {
     #[serde(rename = "articlePermalink")]
     pub permalink: String,
     /// 作者用户信息
-    #[serde(deserialize_with = "deserialize_author")]
+    #[serde(
+        rename = "articleAuthor",
+        default,
+        deserialize_with = "deserialize_author"
+    )]
     pub author: ArticleAuthor,
     /// 文章感谢数
     #[serde(rename = "thankedCnt")]
-    pub thankedCnt: u32,
+    pub thankedCnt: u64,
     /// 文章匿名浏览量
     #[serde(rename = "articleAnonymousView")]
-    pub anonymousView: u32,
+    pub anonymousView: u64,
     /// 文章浏览量简写
     #[serde(rename = "articleViewCntDisplayFormat")]
     pub viewCntFormat: String,
@@ -701,10 +774,10 @@ pub struct ArticleDetail {
     pub rewarded: bool,
     /// 打赏人数
     #[serde(rename = "rewardedCnt")]
-    pub rewardedCnt: u32,
+    pub rewardedCnt: u64,
     /// 文章打赏积分
     #[serde(rename = "articleRewardPoint")]
-    pub rewardPoint: u32,
+    pub rewardPoint: u64,
     /// 是否已收藏
     #[serde(rename = "isFollowing")]
     pub isFollowing: bool,
@@ -719,7 +792,7 @@ pub struct ArticleDetail {
     pub thanked: bool,
     /// 编辑器类型
     #[serde(rename = "articleEditorType")]
-    pub editorType: u32,
+    pub editorType: u64,
     /// 文章音频地址
     #[serde(rename = "articleAudioURL")]
     pub audioURL: String,
@@ -736,7 +809,7 @@ pub struct ArticleDetail {
     #[serde(rename = "articleImg1URL")]
     pub img1URL: String,
     /// 文章点赞状态
-    #[serde(deserialize_with = "deserialize_vote")]
+    #[serde(rename = "articleVote", deserialize_with = "deserialize_vote")]
     pub vote: VoteStatus,
     /// 文章随机数
     #[serde(rename = "articleRandomDouble")]
@@ -755,7 +828,7 @@ pub struct ArticleDetail {
     pub authorURL: String,
     /// 推送 Email 推送顺序
     #[serde(rename = "articlePushOrder")]
-    pub pushOrder: u32,
+    pub pushOrder: u64,
     /// 打赏内容
     #[serde(rename = "articleRewardContent")]
     pub rewardContent: String,
@@ -763,26 +836,33 @@ pub struct ArticleDetail {
     #[serde(deserialize_with = "deserialize_reddit_score")]
     pub redditScore: String,
     /// 评论分页信息
-    #[serde(deserialize_with = "deserialize_pagination")]
+    #[serde(default, deserialize_with = "deserialize_pagination")]
     pub pagination: Option<Pagination>,
     /// 评论是否可见
     #[serde(rename = "discussionViewable")]
     pub commentViewable: bool,
     /// 文章修改次数
     #[serde(rename = "articleRevisionCount")]
-    pub revisionCount: u32,
+    pub revisionCount: u64,
     /// 文章的评论
-    #[serde(deserialize_with = "deserialize_comments")]
+    #[serde(
+        rename = "articleComments",
+        default,
+        deserialize_with = "deserialize_comments"
+    )]
     pub comments: Vec<ArticleComment>,
     /// 文章最佳评论
-    #[serde(deserialize_with = "deserialize_comments")]
+    #[serde(
+        rename = "articleNiceComments",
+        default,
+        deserialize_with = "deserialize_comments"
+    )]
     pub niceComments: Vec<ArticleComment>,
 }
 
 impl ArticleDetail {
     pub fn from_value(data: &Value) -> Result<Self, Error> {
-        serde_json::from_value(data.clone())
-            .map_err(|e| Error::Parse(format!("Failed to parse ArticleDetail: {}", e)))
+        parse_with_float_fallback(data, "ArticleDetail")
     }
 }
 
@@ -812,8 +892,7 @@ pub struct ArticleList {
 
 impl ArticleList {
     pub fn from_value(data: &Value) -> Result<Self, Error> {
-        serde_json::from_value(data.clone())
-            .map_err(|e| Error::Parse(format!("Failed to parse ArticleList: {}", e)))
+        parse_with_float_fallback(data, "ArticleList")
     }
 }
 

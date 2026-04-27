@@ -85,12 +85,27 @@ pub fn deserialize_sys_metal<'de, D>(deserializer: D) -> Result<Vec<Metal>, D::E
 where
     D: Deserializer<'de>,
 {
-    let strs: Vec<String> = Deserialize::deserialize(deserializer)?;
+    let value: serde_json::Value = Deserialize::deserialize(deserializer)?;
     let mut metals = Vec::new();
-    for s in strs {
-        if let Ok(m) = to_metal(&s) {
-            metals.extend(m);
+
+    match value {
+        // 兼容旧格式：["{\"list\":[...]}"]
+        serde_json::Value::Array(arr) => {
+            for item in arr {
+                if let Some(s) = item.as_str() && let Ok(m) = to_metal(s) {
+                    metals.extend(m);
+                }
+            }
         }
+        // 兼容旧格式："{"list":[...]}"
+        serde_json::Value::String(s) => {
+            if let Ok(m) = to_metal(&s) {
+                metals.extend(m);
+            }
+        }
+        // 新格式（对象数组）当前 SDK 不消费勋章细节，这里忽略以避免影响主流程解析
+        _ => {}
     }
+
     Ok(metals)
 }

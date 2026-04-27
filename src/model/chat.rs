@@ -5,17 +5,29 @@ use serde_json::Value;
 #[derive(Clone, Debug, Deserialize)]
 #[allow(non_snake_case)]
 pub struct ChatData {
+    #[serde(default)]
     pub toId: String,
+    #[serde(default)]
     pub preview: String,
+    #[serde(default)]
     pub user_session: String,
+    #[serde(default)]
     pub senderAvatar: String,
+    #[serde(default)]
     pub markdown: String,
+    #[serde(default)]
     pub receiverAvatar: String,
+    #[serde(default)]
     pub oId: String,
+    #[serde(default)]
     pub time: String,
+    #[serde(default)]
     pub fromId: String,
+    #[serde(default)]
     pub senderUserName: String,
+    #[serde(default)]
     pub content: String,
+    #[serde(default)]
     pub receiverUserName: String,
 }
 impl ChatData {

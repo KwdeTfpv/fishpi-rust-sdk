@@ -71,7 +71,7 @@
 //! - 事件监听器支持 "open"、"close"、"error" 和 "all" 事件。
 //! - 错误处理使用 `WebSocketError`，连接失败或操作错误。
 
-use futures_util::StreamExt;
+use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -231,6 +231,7 @@ pub trait MessageHandler: Send + Sync {
 pub struct WebSocketClient {
     listeners: EventBus<WsEventType, WsBaseEvent>,
     cancel_token: CancellationToken,
+    outbound_tx: tokio::sync::mpsc::UnboundedSender<Message>,
     _handle: tokio::task::JoinHandle<()>,
 }
 
@@ -270,7 +271,8 @@ impl WebSocketClient {
             .await
             .map_err(|e| WebSocketError::ConnectionFailed(e.to_string()))?;
 
-        let (_write, mut read) = ws_stream.split();
+        let (mut write, mut read) = ws_stream.split();
+        let (outbound_tx, mut outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Message>();
 
         let listeners_clone = listeners.clone();
         let cancel = cancel_token.clone();
@@ -285,33 +287,57 @@ impl WebSocketClient {
                         .emit(&WsEventType::Open, WsBaseEvent::Open, Some(&WsEventType::All))
                         .await;
 
-                    while let Some(msg) = read.next().await {
-                        match msg {
-                            Ok(Message::Text(text)) => {
-                                message_handler.handle_message(text.to_string());
-                            }
-                            Ok(Message::Close(frame)) => {
-                                let reason = frame.map(|f| f.reason.to_string());
-                                listeners_clone
-                                    .emit(
-                                        &WsEventType::Close,
-                                        WsBaseEvent::Close(reason),
-                                        Some(&WsEventType::All),
-                                    )
-                                    .await;
+                    loop {
+                        tokio::select! {
+                            _ = cancel.cancelled() => {
                                 break;
                             }
-                            Err(e) => {
-                                listeners_clone
-                                    .emit(
-                                        &WsEventType::Error,
-                                        WsBaseEvent::Error(e.to_string()),
-                                        Some(&WsEventType::All),
-                                    )
-                                    .await;
-                                break;
+                            outbound = outbound_rx.recv() => {
+                                match outbound {
+                                    Some(msg) => {
+                                        if let Err(e) = write.send(msg).await {
+                                            listeners_clone
+                                                .emit(
+                                                    &WsEventType::Error,
+                                                    WsBaseEvent::Error(e.to_string()),
+                                                    Some(&WsEventType::All),
+                                                )
+                                                .await;
+                                            break;
+                                        }
+                                    }
+                                    None => break,
+                                }
                             }
-                            _ => {}
+                            incoming = read.next() => {
+                                match incoming {
+                                    Some(Ok(Message::Text(text))) => {
+                                        message_handler.handle_message(text.to_string());
+                                    }
+                                    Some(Ok(Message::Close(frame))) => {
+                                        let reason = frame.map(|f| f.reason.to_string());
+                                        listeners_clone
+                                            .emit(
+                                                &WsEventType::Close,
+                                                WsBaseEvent::Close(reason),
+                                                Some(&WsEventType::All),
+                                            )
+                                            .await;
+                                        break;
+                                    }
+                                    Some(Err(e)) => {
+                                        listeners_clone
+                                            .emit(
+                                                &WsEventType::Error,
+                                                WsBaseEvent::Error(e.to_string()),
+                                                Some(&WsEventType::All),
+                                            )
+                                            .await;
+                                        break;
+                                    }
+                                    _ => {}
+                                }
+                            }
                         }
                     }
                 } => {}
@@ -321,6 +347,7 @@ impl WebSocketClient {
         Ok(Self {
             listeners,
             cancel_token,
+            outbound_tx,
             _handle: handle,
         })
     }
@@ -376,6 +403,13 @@ impl WebSocketClient {
     /// 断开连接
     pub fn disconnect(&self) {
         self.cancel_token.cancel();
+    }
+
+    /// 发送文本消息
+    pub fn send_text(&self, text: &str) -> Result<(), WebSocketError> {
+        self.outbound_tx
+            .send(Message::Text(text.to_string().into()))
+            .map_err(|e| WebSocketError::Other(format!("send message failed: {}", e)))
     }
 }
 
@@ -493,6 +527,15 @@ impl WsConnection {
     pub fn disconnect(&mut self) {
         if let Some(ws) = self.client.take() {
             ws.disconnect();
+        }
+    }
+
+    pub fn send_text(&self, text: &str) -> Result<(), WebSocketError> {
+        match &self.client {
+            Some(ws) => ws.send_text(text),
+            None => Err(WebSocketError::Other(
+                "websocket is not connected".to_string(),
+            )),
         }
     }
 }

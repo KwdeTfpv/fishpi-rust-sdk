@@ -3,9 +3,11 @@ pub mod error;
 use crate::utils::error::Error;
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use reqwest::{Client, Method, multipart};
+use reqwest::{Client, Method, StatusCode, multipart};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::time::Duration;
+use tokio::time::sleep;
 use url::form_urlencoded::Serializer;
 
 lazy_static::lazy_static! {
@@ -107,43 +109,74 @@ async fn request(
     let method = method
         .parse::<Method>()
         .map_err(|e| Error::Request(Box::new(e)))?;
-
-    let mut req = CLIENT
-        .request(method, &full_url)
-        .header(
-            "User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36",
+    let extra_headers = if let Some(headers) = headers {
+        Some(
+            headers
+                .into_iter()
+                .map(|(k, v)| {
+                    let name = HeaderName::from_bytes(k.as_bytes())
+                        .map_err(|e| Error::Request(Box::new(e)))?;
+                    let value =
+                        HeaderValue::from_str(&v).map_err(|e| Error::Request(Box::new(e)))?;
+                    Ok((name, value))
+                })
+                .collect::<Result<HeaderMap, Error>>()?,
         )
-        .header("Referer", &format!("https://{}/", DOMAIN));
+    } else {
+        None
+    };
 
-    if let Some(headers) = headers {
-        let header_map: HeaderMap = headers
-            .into_iter()
-            .map(|(k, v)| {
-                let name = HeaderName::from_bytes(k.as_bytes())
-                    .map_err(|e| Error::Request(Box::new(e)))?;
-                let value = HeaderValue::from_str(&v).map_err(|e| Error::Request(Box::new(e)))?;
-                Ok((name, value))
-            })
-            .collect::<Result<HeaderMap, Error>>()?;
+    let max_retries = 2;
+    let mut attempt = 0;
 
-        req = req.headers(header_map);
-    }
+    loop {
+        let mut req = CLIENT
+            .request(method.clone(), &full_url)
+            .header(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36",
+            )
+            .header("Referer", &format!("https://{}/", DOMAIN));
 
-    if let Some(data) = data {
-        req = req.json(&data);
-    }
+        if let Some(map) = extra_headers.clone() {
+            req = req.headers(map);
+        }
 
-    let resp = req.send().await.map_err(|e| Error::Request(Box::new(e)))?;
-    if !resp.status().is_success() {
+        if let Some(body) = data.clone() {
+            req = req.json(&body);
+        }
+
+        let resp = match req.send().await {
+            Ok(resp) => resp,
+            Err(err) => {
+                if attempt < max_retries {
+                    let wait_ms = 300 * (attempt + 1);
+                    sleep(Duration::from_millis(wait_ms as u64)).await;
+                    attempt += 1;
+                    continue;
+                }
+                return Err(Error::Request(Box::new(err)));
+            }
+        };
+
+        if resp.status().is_success() {
+            return resp
+                .json::<Value>()
+                .await
+                .map_err(|e| Error::Request(Box::new(e)));
+        }
+
+        if resp.status() == StatusCode::SERVICE_UNAVAILABLE && attempt < max_retries {
+            let wait_ms = 300 * (attempt + 1);
+            sleep(Duration::from_millis(wait_ms as u64)).await;
+            attempt += 1;
+            continue;
+        }
+
         return Err(Error::Request(
             format!("HTTP error: {}", resp.status()).into(),
         ));
     }
-
-    resp.json::<Value>()
-        .await
-        .map_err(|e| Error::Request(Box::new(e)))
 }
 
 /// 构造带查询参数的相对 HTTP 路径，自动进行 query 编码

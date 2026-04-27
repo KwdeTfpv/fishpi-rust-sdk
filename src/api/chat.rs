@@ -108,26 +108,55 @@ pub type ChatHandler = ParsedMessageHandler<ChatEventType, ChatEventData>;
 /// 解析私聊消息，返回(事件类型，事件数据)
 #[allow(non_snake_case)]
 fn parse_chat_message(json: &Value) -> Result<(ChatEventType, ChatEventData), Error> {
-    let type_str = json["type"]
-        .as_str()
-        .ok_or_else(|| Error::Parse("Missing type field".to_string()))?;
-    let event_type = ChatMsgType::from_str(type_str)
-        .map_err(|e| Error::Parse(format!("Invalid type field: {}", e)))?;
+    let event_type = detect_chat_msg_type(json)?;
+    let payload = json.get("data").filter(|v| !v.is_null()).unwrap_or(json);
 
-        match event_type {
-            ChatMsgType::Notice => {
-                let notice = ChatNotice::from_value(&json["data"])?;
-                Ok((ChatEventType::Notice, ChatEventData::Notice(notice)))
-            }
-            ChatMsgType::Data => {
-                let data = ChatData::from_value(&json["data"])?;
-                Ok((ChatEventType::Data, ChatEventData::Data(data)))
-            }
-            ChatMsgType::Revoke => {
-                let revoke = ChatRevoke::from_value(&json["data"])?;
-                Ok((ChatEventType::Revoke, ChatEventData::Revoke(revoke)))
-            }
+    match event_type {
+        ChatMsgType::Notice => {
+            let notice = ChatNotice::from_value(payload).or_else(|_| ChatNotice::from_value(json))?;
+            Ok((ChatEventType::Notice, ChatEventData::Notice(notice)))
         }
+        ChatMsgType::Data => {
+            let data = ChatData::from_value(payload).or_else(|_| ChatData::from_value(json))?;
+            Ok((ChatEventType::Data, ChatEventData::Data(data)))
+        }
+        ChatMsgType::Revoke => {
+            let revoke = ChatRevoke::from_value(payload).or_else(|_| ChatRevoke::from_value(json))?;
+            Ok((ChatEventType::Revoke, ChatEventData::Revoke(revoke)))
+        }
+    }
+}
+
+fn detect_chat_msg_type(json: &Value) -> Result<ChatMsgType, Error> {
+    let candidates = [
+        json.get("type"),
+        json.get("command"),
+        json.get("data").and_then(|v| v.get("type")),
+        json.get("data").and_then(|v| v.get("command")),
+    ];
+
+    for candidate in candidates {
+        if let Some(raw) = candidate.and_then(|v| v.as_str())
+            && let Ok(t) = ChatMsgType::from_str(raw)
+        {
+            return Ok(t);
+        }
+    }
+
+    let payload = json.get("data").filter(|v| v.is_object()).unwrap_or(json);
+
+    // 兼容部分节点的无 type/command 推送格式
+    if payload.get("senderUserName").is_some() && payload.get("receiverUserName").is_some() {
+        return Ok(ChatMsgType::Data);
+    }
+    if payload.get("userId").is_some() && payload.get("preview").is_some() {
+        return Ok(ChatMsgType::Notice);
+    }
+    if payload.get("data").and_then(|v| v.as_str()).is_some() {
+        return Ok(ChatMsgType::Revoke);
+    }
+
+    Err(Error::Parse("Missing type/command field".to_string()))
 }
 
 /// 私聊客户端
@@ -246,6 +275,15 @@ impl Chat {
         self.connection.disconnect();
     }
 
+    /// 通过已连接的 chat-channel 发送私聊消息
+    ///
+    /// 该方法要求先调用 `connect(..., Some(to_user))` 建立目标会话连接。
+    pub fn send_ws(&self, content: &str) -> Result<(), Error> {
+        self.connection
+            .send_text(content)
+            .map_err(|e| Error::Api(format!("WS send failed: {}", e)))
+    }
+
     /// 获取有私聊用户列表第一条消息
     ///
     /// 返回 私聊消息列表
@@ -323,22 +361,63 @@ impl Chat {
     ///
     /// 返回 执行结果
     pub async fn mark_as_read(&self, user: String) -> Result<bool, Error> {
-        let url = build_http_path(
+        let to_user_url = build_http_path(
             "chat/mark-as-read",
-            &[("toUser", user), ("apiKey", self.api_key.clone())],
+            &[("toUser", user.clone()), ("apiKey", self.api_key.clone())],
         );
+        let first = get(&to_user_url).await;
+        match first {
+            Ok(resp) => {
+                if let Some(code) = resp.get("result").and_then(|c| c.as_i64()) {
+                    if code == 0 {
+                        return Ok(true);
+                    }
+                    let msg = resp["msg"].as_str().unwrap_or("API error").to_string();
+                    let need_from_user_retry =
+                        msg.contains("fromUserJSON") || msg.contains("Cannot invoke");
+                    if !need_from_user_retry {
+                        return Err(Error::Api(msg));
+                    }
 
-        let resp = get(&url).await?;
+                    // Some backend nodes require fromUser for mark-as-read.
+                    let from_user_url = build_http_path(
+                        "chat/mark-as-read",
+                        &[("fromUser", user), ("apiKey", self.api_key.clone())],
+                    );
+                    let resp = get(&from_user_url).await?;
+                    if let Some(code) = resp.get("result").and_then(|c| c.as_i64())
+                        && code != 0
+                    {
+                        return Err(Error::Api(
+                            resp["msg"].as_str().unwrap_or("API error").to_string(),
+                        ));
+                    }
+                    return Ok(true);
+                }
+                Ok(false)
+            }
+            Err(err) => {
+                let err_text = err.to_string();
+                if !(err_text.contains("fromUserJSON") || err_text.contains("Cannot invoke")) {
+                    return Err(err);
+                }
 
-        if let Some(code) = resp.get("result").and_then(|c| c.as_i64())
-            && code != 0
-        {
-            return Err(Error::Api(
-                resp["msg"].as_str().unwrap_or("API error").to_string(),
-            ));
+                // Some backend nodes require fromUser for mark-as-read.
+                let from_user_url = build_http_path(
+                    "chat/mark-as-read",
+                    &[("fromUser", user), ("apiKey", self.api_key.clone())],
+                );
+                let resp = get(&from_user_url).await?;
+                if let Some(code) = resp.get("result").and_then(|c| c.as_i64())
+                    && code != 0
+                {
+                    return Err(Error::Api(
+                        resp["msg"].as_str().unwrap_or("API error").to_string(),
+                    ));
+                }
+                Ok(true)
+            }
         }
-
-        Ok(true)
     }
 
     /// 获取未读消息
@@ -421,5 +500,26 @@ mod tests {
         });
 
         assert!(parse_chat_message(&payload).is_err());
+    }
+
+    #[test]
+    fn parse_chat_notice_without_type_field() {
+        let payload = json!({
+            "command": "notice",
+            "data": {
+                "command": "notice",
+                "userId": "u1",
+                "preview": "hello",
+                "senderAvatar": "a",
+                "senderUserName": "alice"
+            }
+        });
+
+        let (event_type, event) = parse_chat_message(&payload).expect("should parse");
+        assert!(matches!(event_type, ChatEventType::Notice));
+        match event {
+            ChatEventData::Notice(n) => assert_eq!(n.preview, "hello"),
+            _ => panic!("unexpected event variant"),
+        }
     }
 }

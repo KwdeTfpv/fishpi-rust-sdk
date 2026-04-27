@@ -90,12 +90,15 @@ pub type NoticeHandler = ParsedMessageHandler<NoticeEventType, NoticeEventData>;
 /// 解析通知消息，返回(事件类型，事件数据)
 #[allow(non_snake_case)]
 fn parse_notice_message(data: &Value) -> Result<(NoticeEventType, NoticeEventData), Error> {
-    let command = data["command"]
-        .as_str()
+    let command = data
+        .get("command")
+        .and_then(|v| v.as_str())
+        .or_else(|| data.get("data").and_then(|v| v.get("command")).and_then(|v| v.as_str()))
         .ok_or_else(|| Error::Parse("Missing command field".to_string()))?;
 
     if NoticeMsgType::values().contains(&command) {
-        let msg = NoticeMsg::from_value(data)?;
+        let msg = NoticeMsg::from_value(data)
+            .or_else(|_| data.get("data").ok_or_else(|| Error::Parse("Missing data field".to_string())).and_then(NoticeMsg::from_value))?;
         Ok((NoticeEventType::Msg, NoticeEventData::Msg(msg)))
     } else {
         Err(Error::Parse(format!("Unsupported command: {}", command)))

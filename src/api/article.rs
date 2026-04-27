@@ -73,7 +73,9 @@ use serde_json::{Value, json};
 
 use crate::{
     api::ws::{MessageHandler, WebSocketClient, build_ws_url},
-    model::article::{ArticleDetail, ArticleList, ArticleListType, ArticlePost, ArticleType, Pagination},
+    model::article::{
+        ArticleDetail, ArticleList, ArticleListType, ArticlePost, ArticleType, Pagination,
+    },
     utils::{ResponseResult, build_http_path, error::Error, get, post},
 };
 
@@ -264,7 +266,8 @@ impl Article {
         }
 
         let data = &rsp["data"];
-        let mut article_detail = ArticleDetail::from_value(&data["article"])?;
+        let article_node = &data["article"];
+        let mut article_detail = ArticleDetail::from_value(article_node)?;
         article_detail.pagination = Some(Pagination::from_value(&data["pagination"])?);
 
         Ok(article_detail)
@@ -292,7 +295,7 @@ impl Article {
             ));
         }
 
-        Ok(rsp["type"].as_i64().unwrap_or(0) == 0)
+        Ok(rsp.get("type").and_then(|v| v.as_i64()) == Some(-1))
     }
 
     /// 感谢文章
@@ -301,14 +304,15 @@ impl Article {
     ///
     /// 返回执行结果
     pub async fn thank(&self, id: &str) -> Result<ResponseResult, Error> {
-        let url = "article/thank".to_string();
+        let url = build_http_path(
+            "article/thank",
+            &[
+                ("articleId", id.to_string()),
+                ("apiKey", self.api_key.clone()),
+            ],
+        );
 
-        let data = json!({
-            "apiKey": self.api_key,
-            "articleId": id,
-        });
-
-        let rsp = post(&url, Some(data)).await?;
+        let rsp = post(&url, None).await?;
 
         ResponseResult::from_value(&rsp)
     }

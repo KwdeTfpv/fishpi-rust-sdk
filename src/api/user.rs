@@ -109,7 +109,14 @@ impl User {
 
     /// 重新设置请求token
     pub fn set_token(&mut self, token: String) {
-        self.api_key = token;
+        self.api_key = token.clone();
+        self.chatroom.set_api_key(token.clone());
+        self.chat = Chat::new(token.clone());
+        self.breezemoon = BreezeMoon::new(token.clone());
+        self.article = Article::new(token.clone());
+        self.notice = Notice::new(token.clone());
+        self.redpacket = Redpacket::new(token.clone());
+        self.comment = Comment::new(token);
     }
 
     pub fn is_logined(&self) -> bool {
@@ -159,12 +166,21 @@ impl User {
         Ok(emotions)
     }
 
-    /// 查询登录用户当前活跃度，请求频率请控制在 30 ~ 60 秒一次
+    /// 查询登录用户当前活跃度，请求频率请至少 10 分钟一次
     pub async fn liveness(&self) -> Result<u32, Error> {
         let resp = get(&build_http_path("user/liveness", &[("apiKey", self.api_key.clone())])).await?;
 
-        let liveness = resp["liveness"].as_u64().unwrap_or(0) as u32;
-        Ok(liveness)
+        let liveness_raw = resp
+            .get("liveness")
+            .and_then(|v| {
+                v.as_f64()
+                    .or_else(|| v.as_u64().map(|n| n as f64))
+                    .or_else(|| v.as_i64().map(|n| n as f64))
+                    .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok()))
+            })
+            .ok_or_else(|| Error::Api("Missing or invalid liveness".to_string()))?;
+
+        Ok(liveness_raw.max(0.0).round() as u32)
     }
 
     /// 检查用户是否已经签到

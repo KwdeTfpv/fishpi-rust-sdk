@@ -152,6 +152,15 @@ fn parse_who_list(data: &Value) -> Result<Vec<RedPacketGot>, Error> {
 
     let mut got_list = Vec::with_capacity(who_array.len());
     for item in who_array {
+        let user_money = item
+            .get("userMoney")
+            .or_else(|| item.get("money"))
+            .and_then(|v| {
+                v.as_u64()
+                    .or_else(|| v.as_i64().and_then(|n| if n >= 0 { Some(n as u64) } else { None }))
+                    .or_else(|| v.as_str().and_then(|s| s.parse::<u64>().ok()))
+            })
+            .unwrap_or(0) as u32;
         got_list.push(RedPacketGot {
             userId: item["userId"]
                 .as_str()
@@ -165,10 +174,7 @@ fn parse_who_list(data: &Value) -> Result<Vec<RedPacketGot>, Error> {
                 .as_str()
                 .ok_or_else(|| Error::Parse("Missing avatar in who".to_string()))?
                 .to_string(),
-            userMoney: item["userMoney"]
-                .as_u64()
-                .ok_or_else(|| Error::Parse("Missing or invalid userMoney in who".to_string()))?
-                as u32,
+            userMoney: user_money,
             time: item["time"]
                 .as_str()
                 .ok_or_else(|| Error::Parse("Missing time in who".to_string()))?
