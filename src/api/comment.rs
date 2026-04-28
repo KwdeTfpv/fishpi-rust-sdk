@@ -52,6 +52,7 @@ use serde_json::{Value, json};
 
 use crate::{
     model::article::CommentPost,
+    model::reaction::ReactionMutationResult,
     utils::{ResponseResult, error::Error, post, put},
 };
 
@@ -62,6 +63,19 @@ pub struct Comment {
 impl Comment {
     pub fn new(api_key: String) -> Self {
         Self { api_key }
+    }
+
+    /// 给评论添加/切换/取消 emoji reaction。
+    ///
+    /// 再次发送相同 value 表示取消；发送不同 value 表示切换。
+    pub async fn reaction(
+        &self,
+        comment_id: &str,
+        value: &str,
+    ) -> Result<ReactionMutationResult, Error> {
+        crate::api::reaction::Reaction::new(self.api_key.clone())
+            .comment(comment_id, value)
+            .await
     }
 
     /// 发布评论

@@ -352,6 +352,174 @@ impl WebSocketClient {
         })
     }
 
+    /// 创建带自动重连的 WebSocket 连接。
+    pub async fn connect_managed<H>(
+        url: String,
+        message_handler: H,
+        retry_policy: RetryPolicy,
+        log_hook: Option<WsLogHook>,
+    ) -> Result<Self, WebSocketError>
+    where
+        H: MessageHandler + Clone + 'static,
+    {
+        let listeners = EventBus::<WsEventType, WsBaseEvent>::new();
+        let cancel_token = CancellationToken::new();
+        let (outbound_tx, mut outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Message>();
+
+        let (initial_stream, _) = connect_async(&url)
+            .await
+            .map_err(|e| WebSocketError::ConnectionFailed(e.to_string()))?;
+
+        let listeners_for_initial = listeners.clone();
+        let cancel = cancel_token.clone();
+        let handle = tokio::spawn(async move {
+            let mut attempt: u32 = 0;
+            let mut delay = retry_policy.initial_delay;
+            let mut pending_stream = Some(initial_stream);
+
+            loop {
+                if cancel.is_cancelled() {
+                    break;
+                }
+
+                let connect_result = if let Some(ws_stream) = pending_stream.take() {
+                    Ok(ws_stream)
+                } else {
+                    connect_async(&url).await.map(|(stream, _)| stream)
+                };
+
+                match connect_result {
+                    Ok(ws_stream) => {
+                        attempt = 0;
+                        delay = retry_policy.initial_delay;
+                        listeners_for_initial
+                            .emit(
+                                &WsEventType::Open,
+                                WsBaseEvent::Open,
+                                Some(&WsEventType::All),
+                            )
+                            .await;
+
+                        let (mut write, mut read) = ws_stream.split();
+                        let mut disconnected_reason: Option<String> = None;
+
+                        loop {
+                            tokio::select! {
+                                _ = cancel.cancelled() => {
+                                    return;
+                                }
+                                outbound = outbound_rx.recv() => {
+                                    match outbound {
+                                        Some(msg) => {
+                                            if let Err(e) = write.send(msg).await {
+                                                disconnected_reason = Some(e.to_string());
+                                                listeners_for_initial
+                                                    .emit(
+                                                        &WsEventType::Error,
+                                                        WsBaseEvent::Error(e.to_string()),
+                                                        Some(&WsEventType::All),
+                                                    )
+                                                    .await;
+                                                break;
+                                            }
+                                        }
+                                        None => return,
+                                    }
+                                }
+                                incoming = read.next() => {
+                                    match incoming {
+                                        Some(Ok(Message::Text(text))) => {
+                                            message_handler.handle_message(text.to_string());
+                                        }
+                                        Some(Ok(Message::Close(frame))) => {
+                                            let reason = frame.map(|f| f.reason.to_string());
+                                            disconnected_reason = reason.clone();
+                                            listeners_for_initial
+                                                .emit(
+                                                    &WsEventType::Close,
+                                                    WsBaseEvent::Close(reason),
+                                                    Some(&WsEventType::All),
+                                                )
+                                                .await;
+                                            break;
+                                        }
+                                        Some(Ok(_)) => {}
+                                        Some(Err(e)) => {
+                                            disconnected_reason = Some(e.to_string());
+                                            listeners_for_initial
+                                                .emit(
+                                                    &WsEventType::Error,
+                                                    WsBaseEvent::Error(e.to_string()),
+                                                    Some(&WsEventType::All),
+                                                )
+                                                .await;
+                                            break;
+                                        }
+                                        None => {
+                                            listeners_for_initial
+                                                .emit(
+                                                    &WsEventType::Close,
+                                                    WsBaseEvent::Close(Some("stream ended".to_string())),
+                                                    Some(&WsEventType::All),
+                                                )
+                                                .await;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if let Some(hook) = &log_hook {
+                            hook(&format!(
+                                "WebSocket disconnected: {}",
+                                disconnected_reason.unwrap_or_else(|| "stream ended".to_string())
+                            ));
+                        }
+                    }
+                    Err(err) => {
+                        attempt = attempt.saturating_add(1);
+                        let message = err.to_string();
+                        listeners_for_initial
+                            .emit(
+                                &WsEventType::Error,
+                                WsBaseEvent::Error(message.clone()),
+                                Some(&WsEventType::All),
+                            )
+                            .await;
+                        if let Some(hook) = &log_hook {
+                            hook(&format!("WebSocket reconnect failed: {}", message));
+                        }
+                    }
+                }
+
+                if retry_policy.max_attempts > 0 && attempt >= retry_policy.max_attempts {
+                    attempt = 0;
+                }
+
+                if let Some(hook) = &log_hook {
+                    hook(&format!("WebSocket reconnecting in {:?}", delay));
+                }
+
+                tokio::select! {
+                    _ = cancel.cancelled() => break,
+                    _ = sleep(delay) => {}
+                }
+
+                let next = (delay.as_secs_f64() * retry_policy.backoff_factor)
+                    .max(retry_policy.initial_delay.as_secs_f64());
+                delay = Duration::from_secs_f64(next.min(retry_policy.max_delay.as_secs_f64()));
+            }
+        });
+
+        Ok(Self {
+            listeners,
+            cancel_token,
+            outbound_tx,
+            _handle: handle,
+        })
+    }
+
     /// 添加事件监听器
     pub async fn add_listener<F>(&self, event: WsEventType, listener: F)
     where
@@ -468,7 +636,7 @@ impl WsConnection {
         message_handler: H,
     ) -> Result<(), WebSocketError>
     where
-        H: MessageHandler + 'static,
+        H: MessageHandler + Clone + 'static,
     {
         if self.client.is_some() {
             if !reload {
@@ -477,12 +645,22 @@ impl WsConnection {
             self.disconnect();
         }
 
-        let ws = WebSocketClient::connect(url, message_handler).await?;
+        let ws = WebSocketClient::connect_managed(
+            url.to_string(),
+            message_handler,
+            self.retry_policy.clone(),
+            self.log_hook.clone(),
+        )
+        .await?;
         self.client = Some(ws);
         Ok(())
     }
 
-    pub async fn reconnect<H>(&mut self, url: &str, message_handler: H) -> Result<(), WebSocketError>
+    pub async fn reconnect<H>(
+        &mut self,
+        url: &str,
+        message_handler: H,
+    ) -> Result<(), WebSocketError>
     where
         H: MessageHandler + Clone + 'static,
     {
@@ -493,7 +671,14 @@ impl WsConnection {
         let mut last_err: Option<WebSocketError> = None;
 
         for attempt in 1..=attempts {
-            match WebSocketClient::connect(url, message_handler.clone()).await {
+            match WebSocketClient::connect_managed(
+                url.to_string(),
+                message_handler.clone(),
+                self.retry_policy.clone(),
+                self.log_hook.clone(),
+            )
+            .await
+            {
                 Ok(ws) => {
                     self.client = Some(ws);
                     self.log(&format!(
@@ -516,7 +701,9 @@ impl WsConnection {
 
                     let next = (delay.as_secs_f64() * self.retry_policy.backoff_factor)
                         .max(self.retry_policy.initial_delay.as_secs_f64());
-                    delay = Duration::from_secs_f64(next.min(self.retry_policy.max_delay.as_secs_f64()));
+                    delay = Duration::from_secs_f64(
+                        next.min(self.retry_policy.max_delay.as_secs_f64()),
+                    );
                 }
             }
         }
@@ -643,8 +830,12 @@ mod tests {
         })
         .await;
 
-        bus.emit(&WsEventType::Open, "hello".to_string(), Some(&WsEventType::All))
-            .await;
+        bus.emit(
+            &WsEventType::Open,
+            "hello".to_string(),
+            Some(&WsEventType::All),
+        )
+        .await;
 
         let first = timeout(Duration::from_secs(1), rx.recv())
             .await

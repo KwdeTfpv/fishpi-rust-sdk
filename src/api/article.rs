@@ -76,11 +76,13 @@ use crate::{
     model::article::{
         ArticleDetail, ArticleList, ArticleListType, ArticlePost, ArticleType, Pagination,
     },
+    model::reaction::ReactionMutationResult,
     utils::{ResponseResult, build_http_path, error::Error, get, post},
 };
 
 /// 文章监听器类型
-pub type ArticleListener = Arc<dyn Fn(Value) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync + 'static>;
+pub type ArticleListener =
+    Arc<dyn Fn(Value) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync + 'static>;
 
 /// 文章消息处理器
 pub struct ArticleMessageHandler {
@@ -114,6 +116,19 @@ pub struct Article {
 impl Article {
     pub fn new(api_key: String) -> Self {
         Self { api_key }
+    }
+
+    /// 给帖子添加/切换/取消 emoji reaction。
+    ///
+    /// 再次发送相同 value 表示取消；发送不同 value 表示切换。
+    pub async fn reaction(
+        &self,
+        article_id: &str,
+        value: &str,
+    ) -> Result<ReactionMutationResult, Error> {
+        crate::api::reaction::Reaction::new(self.api_key.clone())
+            .article(article_id, value)
+            .await
     }
 
     /// 发布文章

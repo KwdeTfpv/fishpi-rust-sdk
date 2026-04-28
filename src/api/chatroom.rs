@@ -66,8 +66,11 @@
 //!     }).await;
 //!
 //!     // 监听在线用户更新
-//!     chatroom.on_online(|users: Vec<OnlineInfo>| {
-//!         println!("Online users: {}", users.len());
+//!     chatroom.on_online(|users: Vec<OnlineInfo>, discussing, online_cnt| {
+//!         println!("Online users: {}", online_cnt.unwrap_or(users.len()));
+//!         if let Some(topic) = discussing {
+//!             println!("Topic: {}", topic);
+//!         }
 //!     }).await;
 //!
 //!     // 连接聊天室
@@ -107,9 +110,10 @@ use crate::api::ws::{
 };
 use crate::model::MuteItem;
 use crate::model::chatroom::{
-    BarragerCost, BarragerMsg, ChatContentType, ChatRoomMessageMode, ChatRoomMessageType,
-    ChatRoomMsg, ClientType, CustomMsg, OnlineInfo, RevokeMsg,
+    BarragerCost, BarragerMsg, ChatContentType, ChatReactionMsg, ChatRoomMessageMode,
+    ChatRoomMessageType, ChatRoomMsg, ClientType, CustomMsg, OnlineInfo, RevokeMsg,
 };
+use crate::model::reaction::ReactionMutationResult;
 use crate::model::redpacket::RedPacketStatusMsg;
 use crate::utils::get_text;
 use crate::utils::{build_http_path, delete, error::Error, get, post};
@@ -141,7 +145,11 @@ pub struct ChatRoomAvailableNode {
 #[derive(Debug, Clone)]
 pub enum ChatRoomEventData {
     /// 在线用户
-    Online(Vec<OnlineInfo>),
+    Online {
+        users: Vec<OnlineInfo>,
+        discussing: Option<String>,
+        online_chat_cnt: Option<usize>,
+    },
     /// 话题修改
     DiscussChanged(String),
     /// 消息撤回
@@ -160,6 +168,8 @@ pub enum ChatRoomEventData {
     Weather(ChatRoomMsg<Value>),
     /// 进出场消息
     Custom(CustomMsg),
+    /// 聊天室表态/反应
+    ChatReaction(ChatReactionMsg),
 }
 
 /// 聊天室事件类型枚举
@@ -185,6 +195,8 @@ pub enum ChatRoomEventType {
     Weather,
     /// 进出场消息
     Custom,
+    /// 聊天室表态/反应
+    ChatReaction,
     /// 所有事件（除了自身）
     All,
 }
@@ -206,24 +218,37 @@ fn parse_chatroom_message(json: &Value) -> Result<(ChatRoomEventType, ChatRoomEv
 
     match r#type {
         ChatRoomMessageType::Online => {
-            if let Some(users) = json["users"].as_array() {
-                let online_info: Vec<OnlineInfo> = users
-                    .iter()
-                    .filter_map(|u| {
-                        Some(OnlineInfo {
-                            homePage: u["homePage"].as_str()?.to_string(),
-                            userAvatarURL: u["userAvatarURL"].as_str()?.to_string(),
-                            userName: u["userName"].as_str()?.to_string(),
+            let online_info: Vec<OnlineInfo> = json["users"]
+                .as_array()
+                .map(|users| {
+                    users
+                        .iter()
+                        .filter_map(|u| {
+                            Some(OnlineInfo {
+                                homePage: u["homePage"].as_str()?.to_string(),
+                                userAvatarURL: u["userAvatarURL"].as_str()?.to_string(),
+                                userName: u["userName"].as_str()?.to_string(),
+                            })
                         })
-                    })
-                    .collect();
-                Ok((
-                    ChatRoomEventType::Online,
-                    ChatRoomEventData::Online(online_info),
-                ))
-            } else {
-                Err(Error::Parse("Missing users in online message".to_string()))
-            }
+                        .collect()
+                })
+                .unwrap_or_default();
+            let discussing = json["discussing"]
+                .as_str()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
+            let online_chat_cnt = json["onlineChatCnt"]
+                .as_u64()
+                .or_else(|| json["onlineCnt"].as_u64())
+                .map(|n| n as usize);
+            Ok((
+                ChatRoomEventType::Online,
+                ChatRoomEventData::Online {
+                    users: online_info,
+                    discussing,
+                    online_chat_cnt,
+                },
+            ))
         }
         ChatRoomMessageType::DiscussChanged => {
             let new_discuss = json["newDiscuss"]
@@ -292,6 +317,10 @@ fn parse_chatroom_message(json: &Value) -> Result<(ChatRoomEventType, ChatRoomEv
                 ChatRoomEventData::RedPacketStatus(redpacket_status),
             ))
         }
+        ChatRoomMessageType::ChatReaction => Ok((
+            ChatRoomEventType::ChatReaction,
+            ChatRoomEventData::ChatReaction(ChatReactionMsg::from_value(json)?),
+        )),
     }
 }
 
@@ -390,24 +419,39 @@ impl ChatRoom {
         self.handler.set_log_hook_arc(hook);
     }
 
-    /// 监听在线用户更新事件
+    /// 监听在线用户更新事件（同时可获取 discussing / onlineChatCnt）
     pub async fn on_online<F>(&self, listener: F)
     where
-        F: Fn(Vec<OnlineInfo>) + Send + Sync + 'static,
+        F: Fn(Vec<OnlineInfo>, Option<String>, Option<usize>) + Send + Sync + 'static,
     {
         let onlines = Arc::clone(&self.onlines);
+        let discuss = Arc::clone(&self.discuss);
         let wrapped_listener: ChatRoomListener = Arc::new(move |event: ChatRoomEventData| {
-            if let ChatRoomEventData::Online(users) = event {
+            if let ChatRoomEventData::Online {
+                users,
+                discussing,
+                online_chat_cnt,
+            } = event
+            {
                 // 更新状态
-                if let Ok(mut onlines_guard) = onlines.try_lock() {
+                if !users.is_empty()
+                    && let Ok(mut onlines_guard) = onlines.try_lock()
+                {
                     *onlines_guard = users.clone();
                 }
-                listener(users);
+                if let Some(topic) = discussing.as_ref()
+                    && let Ok(mut discuss_guard) = discuss.try_lock()
+                {
+                    *discuss_guard = topic.to_string();
+                }
+                listener(users, discussing, online_chat_cnt);
             }
         });
         self.handler
             .get_emitter()
-            .add_listener(ChatRoomEventType::Online, move |event| wrapped_listener(event))
+            .add_listener(ChatRoomEventType::Online, move |event| {
+                wrapped_listener(event)
+            })
             .await;
     }
 
@@ -428,7 +472,9 @@ impl ChatRoom {
         });
         self.handler
             .get_emitter()
-            .add_listener(ChatRoomEventType::DiscussChanged, move |event| wrapped_listener(event))
+            .add_listener(ChatRoomEventType::DiscussChanged, move |event| {
+                wrapped_listener(event)
+            })
             .await;
     }
 
@@ -565,7 +611,10 @@ impl ChatRoom {
     where
         F: Fn(ChatRoomEventData) + Send + Sync + 'static,
     {
-        self.handler.get_emitter().add_listener(event, listener).await;
+        self.handler
+            .get_emitter()
+            .add_listener(event, listener)
+            .await;
     }
 
     /// 移除监听
@@ -750,6 +799,15 @@ impl ChatRoom {
         })
     }
 
+    /// 给聊天室消息添加/切换/取消 emoji reaction。
+    ///
+    /// 再次发送相同 value 表示取消；发送不同 value 表示切换。
+    pub async fn reaction(&self, o_id: &str, value: &str) -> Result<ReactionMutationResult, Error> {
+        crate::api::reaction::Reaction::new(self.api_key.clone())
+            .chat_room(o_id, value)
+            .await
+    }
+
     /// 发送弹幕
     ///
     /// #### 参数
@@ -855,6 +913,27 @@ mod tests {
         assert!(matches!(event_type, ChatRoomEventType::Custom));
         match event {
             ChatRoomEventData::Custom(msg) => assert_eq!(msg.message, "user joined"),
+            _ => panic!("unexpected event variant"),
+        }
+    }
+
+    #[test]
+    fn parse_chatroom_reaction_message() {
+        let payload = json!({
+            "type": "chatreaction",
+            "oId": "reaction-id",
+            "data": {
+                "target": "message-id"
+            }
+        });
+
+        let (event_type, event) = parse_chatroom_message(&payload).expect("should parse");
+        assert!(matches!(event_type, ChatRoomEventType::ChatReaction));
+        match event {
+            ChatRoomEventData::ChatReaction(reaction) => {
+                assert_eq!(reaction.raw["type"], "chatreaction");
+                assert_eq!(reaction.oId, "reaction-id");
+            }
             _ => panic!("unexpected event variant"),
         }
     }

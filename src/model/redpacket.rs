@@ -157,7 +157,10 @@ fn parse_who_list(data: &Value) -> Result<Vec<RedPacketGot>, Error> {
             .or_else(|| item.get("money"))
             .and_then(|v| {
                 v.as_u64()
-                    .or_else(|| v.as_i64().and_then(|n| if n >= 0 { Some(n as u64) } else { None }))
+                    .or_else(|| {
+                        v.as_i64()
+                            .and_then(|n| if n >= 0 { Some(n as u64) } else { None })
+                    })
                     .or_else(|| v.as_str().and_then(|s| s.parse::<u64>().ok()))
             })
             .unwrap_or(0) as u32;

@@ -125,7 +125,11 @@ impl User {
 
     /// 返回登录账户信息，需要先登录或设置有效api_key
     pub async fn info(&self) -> Result<UserInfo, Error> {
-        let mut resp = get(&build_http_path("api/user", &[("apiKey", self.api_key.clone())])).await?;
+        let mut resp = get(&build_http_path(
+            "api/user",
+            &[("apiKey", self.api_key.clone())],
+        ))
+        .await?;
 
         if resp["code"] != 0 {
             return Err(Error::Api(
@@ -144,7 +148,11 @@ impl User {
 
     /// 查询登录用户常用表情
     pub async fn emotions(&self) -> Result<Vec<String>, Error> {
-        let mut resp = get(&build_http_path("users/emotions", &[("apiKey", self.api_key.clone())])).await?;
+        let mut resp = get(&build_http_path(
+            "users/emotions",
+            &[("apiKey", self.api_key.clone())],
+        ))
+        .await?;
 
         if resp["code"] != 0 {
             return Err(Error::Api(
@@ -152,8 +160,8 @@ impl User {
             ));
         }
 
-        let data: Vec<Value> =
-            serde_json::from_value(resp["data"].take()).map_err(|e| Error::Parse(format!("Failed to parse emotions: {}", e)))?;
+        let data: Vec<Value> = serde_json::from_value(resp["data"].take())
+            .map_err(|e| Error::Parse(format!("Failed to parse emotions: {}", e)))?;
         let emotions: Vec<String> = data
             .into_iter()
             .filter_map(|v| {
@@ -168,7 +176,11 @@ impl User {
 
     /// 查询登录用户当前活跃度，请求频率请至少 10 分钟一次
     pub async fn liveness(&self) -> Result<u32, Error> {
-        let resp = get(&build_http_path("user/liveness", &[("apiKey", self.api_key.clone())])).await?;
+        let resp = get(&build_http_path(
+            "user/liveness",
+            &[("apiKey", self.api_key.clone())],
+        ))
+        .await?;
 
         let liveness_raw = resp
             .get("liveness")
@@ -185,7 +197,11 @@ impl User {
 
     /// 检查用户是否已经签到
     pub async fn is_checkin(&self) -> Result<bool, Error> {
-        let resp = get(&build_http_path("user/isCheckin", &[("apiKey", self.api_key.clone())])).await?;
+        let resp = get(&build_http_path(
+            "user/isCheckin",
+            &[("apiKey", self.api_key.clone())],
+        ))
+        .await?;
 
         let is_checkin: bool = resp["isCheckin"].as_bool().unwrap_or(false);
         Ok(is_checkin)
@@ -378,7 +394,7 @@ impl User {
     }
 
     /// 获取用户积分
-    /// 
+    ///
     /// - `username` 用户名
     ///   返回用户积分信息 [UserPoint]
     pub async fn get_points(&self, username: &str) -> Result<UserPoint, Error> {

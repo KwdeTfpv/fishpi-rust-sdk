@@ -113,7 +113,8 @@ fn parse_chat_message(json: &Value) -> Result<(ChatEventType, ChatEventData), Er
 
     match event_type {
         ChatMsgType::Notice => {
-            let notice = ChatNotice::from_value(payload).or_else(|_| ChatNotice::from_value(json))?;
+            let notice =
+                ChatNotice::from_value(payload).or_else(|_| ChatNotice::from_value(json))?;
             Ok((ChatEventType::Notice, ChatEventData::Notice(notice)))
         }
         ChatMsgType::Data => {
@@ -121,7 +122,8 @@ fn parse_chat_message(json: &Value) -> Result<(ChatEventType, ChatEventData), Er
             Ok((ChatEventType::Data, ChatEventData::Data(data)))
         }
         ChatMsgType::Revoke => {
-            let revoke = ChatRevoke::from_value(payload).or_else(|_| ChatRevoke::from_value(json))?;
+            let revoke =
+                ChatRevoke::from_value(payload).or_else(|_| ChatRevoke::from_value(json))?;
             Ok((ChatEventType::Revoke, ChatEventData::Revoke(revoke)))
         }
     }
@@ -228,7 +230,8 @@ impl Chat {
             if let ChatEventData::Notice(notice) = event {
                 listener(notice);
             }
-        }).await;
+        })
+        .await;
     }
 
     /// 监听普通消息事件
@@ -240,7 +243,8 @@ impl Chat {
             if let ChatEventData::Data(data) = event {
                 listener(data);
             }
-        }).await;
+        })
+        .await;
     }
 
     /// 监听消息撤回事件
@@ -252,14 +256,18 @@ impl Chat {
             if let ChatEventData::Revoke(revoke) = event {
                 listener(revoke);
             }
-        }).await;
+        })
+        .await;
     }
 
     async fn add_listener<F>(&self, event: ChatEventType, listener: F)
     where
         F: Fn(ChatEventData) + Send + Sync + 'static,
     {
-        self.handler.get_emitter().add_listener(event, listener).await;
+        self.handler
+            .get_emitter()
+            .add_listener(event, listener)
+            .await;
     }
 
     /// 移除监听
@@ -450,7 +458,10 @@ impl Chat {
     pub async fn revoke(&self, msg_id: &str) -> Result<bool, Error> {
         let url = build_http_path(
             "chat/revoke",
-            &[("apiKey", self.api_key.clone()), ("oId", msg_id.to_string())],
+            &[
+                ("apiKey", self.api_key.clone()),
+                ("oId", msg_id.to_string()),
+            ],
         );
         let resp = get(&url).await?;
 

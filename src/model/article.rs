@@ -172,8 +172,7 @@ impl ArticleTag {
 }
 
 /// 投票状态，点赞与否
-#[derive(Clone, Debug)]
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub enum VoteStatus {
     /// 未投票
     #[default]
@@ -193,7 +192,6 @@ impl VoteStatus {
         }
     }
 }
-
 
 /// 文章状态
 #[derive(Clone, Debug)]
@@ -552,7 +550,6 @@ impl ArticleType {
         }
     }
 }
-
 
 fn default_article_type() -> ArticleType {
     ArticleType::Unknown

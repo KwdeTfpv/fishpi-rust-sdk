@@ -1,4 +1,5 @@
 use crate::impl_str_enum;
+use crate::model::reaction::ReactionSummaryItem;
 use crate::model::user::{Metal, to_metal};
 use crate::utils::error::Error;
 use serde::{Deserialize, Deserializer};
@@ -85,6 +86,8 @@ pub enum ChatRoomMessageType {
     Barrager,
     /// 进出场消息
     Custom,
+    /// 聊天室表态/反应
+    ChatReaction,
 }
 
 #[derive(Clone, Debug)]
@@ -96,6 +99,41 @@ pub struct DiscussMsg;
 #[derive(Clone, Debug)]
 pub struct RevokeMsg {
     pub msg: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[allow(non_snake_case)]
+pub struct ChatReactionMsg {
+    /// 目标聊天室消息 ID。
+    #[serde(default)]
+    pub oId: String,
+    /// 目标类型。
+    #[serde(default)]
+    pub targetType: String,
+    /// Reaction 分组。
+    #[serde(default)]
+    pub groupType: String,
+    /// 该聊天消息最新的表情汇总。
+    #[serde(default)]
+    pub summary: Vec<ReactionSummaryItem>,
+    /// 本次触发操作的用户 id。
+    #[serde(default)]
+    pub actorUserId: String,
+    /// 该用户本次操作后最终选中的表情值。
+    #[serde(default)]
+    pub actorReaction: String,
+    /// 保留原始数据，方便服务端字段扩展时客户端不丢信息。
+    #[serde(skip)]
+    pub raw: Value,
+}
+
+impl ChatReactionMsg {
+    pub fn from_value(value: &Value) -> Result<Self, Error> {
+        let mut msg: Self = serde_json::from_value(value.clone())
+            .map_err(|e| Error::Parse(format!("Failed to parse ChatReactionMsg: {}", e)))?;
+        msg.raw = value.clone();
+        Ok(msg)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -165,6 +203,8 @@ pub struct ChatRoomMsg<T = Value> {
     pub md: String,
     pub client: String,
     pub via: ClientType,
+    pub reactionSummary: Vec<ReactionSummaryItem>,
+    pub currentUserReaction: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -238,6 +278,7 @@ impl_str_enum!(ChatRoomMessageType {
     RedPacketStatus => "redPacketStatus",
     Barrager => "barrager",
     Custom => "customMessage",
+    ChatReaction => "chatreaction",
 });
 
 impl_str_enum!(WeatherCode {
@@ -335,6 +376,10 @@ impl<'de> Deserialize<'de> for ChatRoomMsg<Value> {
             content: String,
             md: Option<String>,
             client: Option<String>,
+            #[serde(default)]
+            reactionSummary: Option<Vec<ReactionSummaryItem>>,
+            #[serde(default)]
+            currentUserReaction: Option<String>,
         }
 
         let raw = Raw::deserialize(deserializer)?;
@@ -369,6 +414,8 @@ impl<'de> Deserialize<'de> for ChatRoomMsg<Value> {
             md: raw.md.unwrap_or("".to_string()),
             client,
             via,
+            reactionSummary: raw.reactionSummary.unwrap_or_default(),
+            currentUserReaction: raw.currentUserReaction.unwrap_or_default(),
         })
     }
 }
@@ -388,9 +435,6 @@ impl BarragerCost {
             .unwrap_or(0);
         let unit = parts.next().unwrap_or("积分").to_string();
 
-        Self {
-            cost,
-            unit,
-        }
+        Self { cost, unit }
     }
 }

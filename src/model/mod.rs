@@ -5,6 +5,7 @@ pub mod chatroom;
 pub mod finger;
 pub mod misc;
 pub mod notice;
+pub mod reaction;
 pub mod redpacket;
 pub mod user;
 
@@ -48,10 +49,12 @@ macro_rules! impl_str_enum {
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 let candidate = s.split('/').next().unwrap_or(s);
-                match candidate {
-                    $($str => Ok($enum_name::$variant),)*
-                    _ => Err(format!("Unknown {}: {}", stringify!($enum_name), s)),
-                }
+                $(
+                    if candidate == $str || candidate.eq_ignore_ascii_case($str) {
+                        return Ok($enum_name::$variant);
+                    }
+                )*
+                Err(format!("Unknown {}: {}", stringify!($enum_name), s))
             }
         }
 
@@ -92,7 +95,9 @@ where
         // 兼容旧格式：["{\"list\":[...]}"]
         serde_json::Value::Array(arr) => {
             for item in arr {
-                if let Some(s) = item.as_str() && let Ok(m) = to_metal(s) {
+                if let Some(s) = item.as_str()
+                    && let Ok(m) = to_metal(s)
+                {
                     metals.extend(m);
                 }
             }

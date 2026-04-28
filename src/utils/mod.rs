@@ -3,18 +3,92 @@ pub mod error;
 use crate::utils::error::Error;
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use reqwest::{Client, Method, StatusCode, multipart};
+use reqwest::{Client, Method, Proxy, StatusCode, multipart};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::RwLock;
 use std::time::Duration;
 use tokio::time::sleep;
 use url::form_urlencoded::Serializer;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HttpProxyMode {
+    NoProxy,
+    System,
+    Custom,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HttpProxyConfig {
+    pub mode: HttpProxyMode,
+    pub proxy_url: Option<String>,
+}
+
+impl HttpProxyConfig {
+    pub fn no_proxy() -> Self {
+        Self {
+            mode: HttpProxyMode::NoProxy,
+            proxy_url: None,
+        }
+    }
+}
+
 lazy_static::lazy_static! {
-    static ref CLIENT: Client = Client::new();
+    static ref CLIENT: RwLock<Client> = RwLock::new(build_client(&HttpProxyConfig::no_proxy()).expect("default http client init failed"));
+    static ref HTTP_PROXY_CONFIG: RwLock<HttpProxyConfig> = RwLock::new(HttpProxyConfig::no_proxy());
 }
 
 const DOMAIN: &str = "fishpi.cn";
+
+fn build_client(config: &HttpProxyConfig) -> Result<Client, Error> {
+    let builder = Client::builder();
+    let builder = match config.mode {
+        HttpProxyMode::NoProxy => builder.no_proxy(),
+        HttpProxyMode::System => builder,
+        HttpProxyMode::Custom => {
+            let proxy_url = config
+                .proxy_url
+                .as_deref()
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .ok_or_else(|| Error::Api("proxy url is empty".to_string()))?;
+            builder
+                .no_proxy()
+                .proxy(Proxy::all(proxy_url).map_err(|e| Error::Request(Box::new(e)))?)
+        }
+    };
+
+    builder
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|e| Error::Request(Box::new(e)))
+}
+
+fn http_client() -> Client {
+    CLIENT
+        .read()
+        .map(|client| client.clone())
+        .unwrap_or_else(|_| Client::new())
+}
+
+pub fn configure_http_proxy(config: HttpProxyConfig) -> Result<(), Error> {
+    let client = build_client(&config)?;
+    if let Ok(mut guard) = HTTP_PROXY_CONFIG.write() {
+        *guard = config;
+    }
+    if let Ok(mut guard) = CLIENT.write() {
+        *guard = client;
+    }
+    Ok(())
+}
+
+pub fn current_http_proxy_config() -> HttpProxyConfig {
+    HTTP_PROXY_CONFIG
+        .read()
+        .map(|guard| guard.clone())
+        .unwrap_or_else(|_| HttpProxyConfig::no_proxy())
+}
 
 pub async fn get(url: &str) -> Result<Value, Error> {
     request("GET", url, None, None).await
@@ -27,7 +101,7 @@ pub async fn put(url: &str, data: Option<Value>) -> Result<Value, Error> {
 pub async fn get_text(url: &str) -> Result<String, Error> {
     let full_url = format!("https://{}/{}", DOMAIN, url.trim_start_matches('/'));
 
-    let resp = CLIENT
+    let resp = http_client()
         .get(&full_url)
         .header(
             "User-Agent",
@@ -61,6 +135,7 @@ pub async fn delete(url: &str, data: Option<Value>) -> Result<Value, Error> {
 }
 
 pub async fn upload_files(url: &str, files: Vec<String>, api_key: &str) -> Result<Value, Error> {
+    let full_url = format!("https://{}/{}", DOMAIN, url.trim_start_matches('/'));
     let mut form = multipart::Form::new();
 
     for file_path in files {
@@ -83,8 +158,13 @@ pub async fn upload_files(url: &str, files: Vec<String>, api_key: &str) -> Resul
 
     form = form.text("apiKey", api_key.to_string());
 
-    let response = CLIENT
-        .post(url)
+    let response = http_client()
+        .post(&full_url)
+        .header(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36",
+        )
+        .header("Referer", &format!("https://{}/", DOMAIN))
         .multipart(form)
         .send()
         .await
@@ -130,7 +210,7 @@ async fn request(
     let mut attempt = 0;
 
     loop {
-        let mut req = CLIENT
+        let mut req = http_client()
             .request(method.clone(), &full_url)
             .header(
                 "User-Agent",

@@ -93,12 +93,19 @@ fn parse_notice_message(data: &Value) -> Result<(NoticeEventType, NoticeEventDat
     let command = data
         .get("command")
         .and_then(|v| v.as_str())
-        .or_else(|| data.get("data").and_then(|v| v.get("command")).and_then(|v| v.as_str()))
+        .or_else(|| {
+            data.get("data")
+                .and_then(|v| v.get("command"))
+                .and_then(|v| v.as_str())
+        })
         .ok_or_else(|| Error::Parse("Missing command field".to_string()))?;
 
     if NoticeMsgType::values().contains(&command) {
-        let msg = NoticeMsg::from_value(data)
-            .or_else(|_| data.get("data").ok_or_else(|| Error::Parse("Missing data field".to_string())).and_then(NoticeMsg::from_value))?;
+        let msg = NoticeMsg::from_value(data).or_else(|_| {
+            data.get("data")
+                .ok_or_else(|| Error::Parse("Missing data field".to_string()))
+                .and_then(NoticeMsg::from_value)
+        })?;
         Ok((NoticeEventType::Msg, NoticeEventData::Msg(msg)))
     } else {
         Err(Error::Parse(format!("Unsupported command: {}", command)))
@@ -122,11 +129,7 @@ impl Notice {
     }
 
     fn ws_url(&self) -> Result<String, WebSocketError> {
-        build_ws_url(
-            DOMAIN,
-            "user-channel",
-            &[("apiKey", self.api_key.clone())],
-        )
+        build_ws_url(DOMAIN, "user-channel", &[("apiKey", self.api_key.clone())])
     }
 
     pub async fn connect(&mut self, reload: bool) -> Result<(), WebSocketError> {
@@ -171,14 +174,18 @@ impl Notice {
         self.add_listener(NoticeEventType::Msg, move |event: NoticeEventData| {
             let NoticeEventData::Msg(msg) = event;
             listener(msg);
-        }).await;
+        })
+        .await;
     }
 
     async fn add_listener<F>(&self, event: NoticeEventType, listener: F)
     where
         F: Fn(NoticeEventData) + Send + Sync + 'static,
     {
-        self.handler.get_emitter().add_listener(event, listener).await;
+        self.handler
+            .get_emitter()
+            .add_listener(event, listener)
+            .await;
     }
 
     /// 断开连接
@@ -250,7 +257,10 @@ impl Notice {
 
     /// 已读所有消息
     pub async fn read_all(&self) -> Result<bool, Error> {
-        let url = build_http_path("notifications/all-read", &[("apiKey", self.api_key.clone())]);
+        let url = build_http_path(
+            "notifications/all-read",
+            &[("apiKey", self.api_key.clone())],
+        );
         let resp = get(&url).await?;
         if let Some(code) = resp["code"].as_i64()
             && code != 0
