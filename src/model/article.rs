@@ -904,6 +904,8 @@ pub enum ArticleListType {
     Good,
     /// 最近回复
     Reply,
+    /// 最新长篇
+    Long,
     /// 优选，需包含标签
     Perfect,
 }
@@ -914,6 +916,7 @@ impl_str_enum! {
         Hot => "hot",
         Good => "good",
         Reply => "reply",
+        Long => "long",
         Perfect => "perfect",
     }
 }
@@ -925,6 +928,7 @@ impl ArticleListType {
             ArticleListType::Hot => "/hot",
             ArticleListType::Good => "/good",
             ArticleListType::Reply => "/reply",
+            ArticleListType::Long => "/long",
             ArticleListType::Perfect => "/perfect",
         }
     }
@@ -935,6 +939,7 @@ impl ArticleListType {
             ArticleListType::Hot,
             ArticleListType::Good,
             ArticleListType::Reply,
+            ArticleListType::Long,
             ArticleListType::Perfect,
         ]
     }

@@ -222,6 +222,10 @@ impl UserInfo {
         &self.userName
     }
 
+    pub fn user_no(&self) -> &str {
+        &self.userNo
+    }
+
     pub fn nickname(&self) -> &str {
         &self.userNickname
     }

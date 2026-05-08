@@ -94,6 +94,10 @@ pub async fn get(url: &str) -> Result<Value, Error> {
     request("GET", url, None, None).await
 }
 
+pub async fn get_with_body(url: &str, data: Option<Value>) -> Result<Value, Error> {
+    request("GET", url, None, data).await
+}
+
 pub async fn put(url: &str, data: Option<Value>) -> Result<Value, Error> {
     request("PUT", url, None, data).await
 }

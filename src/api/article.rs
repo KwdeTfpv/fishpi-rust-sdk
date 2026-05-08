@@ -201,14 +201,19 @@ impl Article {
         size: u32,
         tag: Option<&str>,
     ) -> Result<ArticleList, Error> {
-        let base = if let Some(tag) = tag {
-            format!("tag/{}", tag)
-        } else {
-            "recent".to_string()
+        let path = match (tag.map(str::trim).filter(|value| !value.is_empty()), &type_) {
+            (Some(tag), ArticleListType::Long) => format!("api/articles/tag/{}", tag),
+            (Some(tag), _) => format!("api/articles/tag/{}{}", tag, type_.to_code()),
+            (None, ArticleListType::Perfect) => {
+                return Err(Error::Api(
+                    "优选帖子列表需要指定标签，请使用 /api/articles/tag/<标签URI>/perfect".to_string(),
+                ));
+            }
+            (None, _) => format!("api/articles/recent{}", type_.to_code()),
         };
 
         let url = build_http_path(
-            &format!("api/articles/{}{}", base, type_.to_code()),
+            &path,
             &[
                 ("p", page.to_string()),
                 ("size", size.to_string()),
@@ -241,7 +246,7 @@ impl Article {
         size: u32,
     ) -> Result<ArticleList, Error> {
         let url = build_http_path(
-            &format!("api/articles/user/{}", user),
+            &format!("api/user/{}/articles", user),
             &[
                 ("p", page.to_string()),
                 ("size", size.to_string()),

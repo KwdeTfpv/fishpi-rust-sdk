@@ -2,6 +2,7 @@ pub mod article;
 pub mod breezemoon;
 pub mod chat;
 pub mod chatroom;
+pub mod emoji;
 pub mod finger;
 pub mod misc;
 pub mod notice;
