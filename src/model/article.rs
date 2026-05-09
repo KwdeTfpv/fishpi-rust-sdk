@@ -58,7 +58,10 @@ pub struct ArticlePost {
     /// 帖子标题
     #[serde(rename = "articleTitle")]
     pub title: String,
-    /// 帖子内容
+    /// 帖子内容（Markdown 源文本）
+    ///
+    /// 服务端会将该 Markdown 渲染为 HTML，并在帖子详情里通过
+    /// `articleContent` 返回渲染结果。
     #[serde(rename = "articleContent")]
     pub content: String,
     /// 帖子标签
@@ -860,6 +863,35 @@ pub struct ArticleDetail {
 impl ArticleDetail {
     pub fn from_value(data: &Value) -> Result<Self, Error> {
         parse_with_float_fallback(data, "ArticleDetail")
+    }
+
+    /// 返回帖子 Markdown 源文本。
+    ///
+    /// 优先使用 `articleOriginalContent`，若为空则回退到 `articleContent`。
+    /// 这样在部分接口没有返回原始内容时仍可得到可展示文本。
+    pub fn markdown_content(&self) -> &str {
+        if self.source.trim().is_empty() {
+            &self.content
+        } else {
+            &self.source
+        }
+    }
+
+    /// 返回帖子 HTML 内容（服务端渲染结果）。
+    pub fn html_content(&self) -> &str {
+        &self.content
+    }
+
+    /// 返回推荐用于展示的正文：
+    /// - 若有 Markdown 原文，返回 Markdown；
+    /// - 否则返回 HTML。
+    pub fn display_content(&self) -> &str {
+        self.markdown_content()
+    }
+
+    /// 是否存在 Markdown 原文。
+    pub fn has_markdown_source(&self) -> bool {
+        !self.source.trim().is_empty()
     }
 }
 

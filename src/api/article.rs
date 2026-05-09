@@ -206,7 +206,8 @@ impl Article {
             (Some(tag), _) => format!("api/articles/tag/{}{}", tag, type_.to_code()),
             (None, ArticleListType::Perfect) => {
                 return Err(Error::Api(
-                    "优选帖子列表需要指定标签，请使用 /api/articles/tag/<标签URI>/perfect".to_string(),
+                    "优选帖子列表需要指定标签，请使用 /api/articles/tag/<标签URI>/perfect"
+                        .to_string(),
                 ));
             }
             (None, _) => format!("api/articles/recent{}", type_.to_code()),

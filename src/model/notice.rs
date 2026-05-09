@@ -1,14 +1,42 @@
 use serde::Deserialize;
+use serde::Deserializer;
 use serde_json::Value;
 
 use crate::model::article::ArticleTag;
 use crate::model::bool_from_int;
 use crate::{impl_str_enum, utils::error::Error};
 
+fn bool_from_int_or_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value: Value = Deserialize::deserialize(deserializer)?;
+    if let Some(v) = value.as_bool() {
+        return Ok(v);
+    }
+    if let Some(v) = value.as_i64() {
+        return Ok(v != 0);
+    }
+    if let Some(v) = value.as_u64() {
+        return Ok(v != 0);
+    }
+    if let Some(v) = value.as_str() {
+        let normalized = v.trim().to_ascii_lowercase();
+        if matches!(normalized.as_str(), "1" | "true" | "yes") {
+            return Ok(true);
+        }
+        if matches!(normalized.as_str(), "0" | "false" | "no") {
+            return Ok(false);
+        }
+    }
+
+    Err(serde::de::Error::custom("invalid bool value"))
+}
+
 /// 数据类型
 #[derive(Debug, Clone)]
 #[repr(u8)]
-pub enum Notice {
+pub enum NoticeDataType {
     /// 文章
     Article = 0,
     /// 评论
@@ -103,7 +131,10 @@ impl_str_enum!(NoticeType {
 #[allow(non_snake_case)]
 pub struct NoticeCount {
     /// 用户是否启用 Web 通知
-    #[serde(rename = "userNotifyStatus", deserialize_with = "bool_from_int")]
+    #[serde(
+        rename = "userNotifyStatus",
+        deserialize_with = "bool_from_int_or_bool"
+    )]
     pub notifyStatus: bool,
     /// 未读通知数
     #[serde(rename = "unreadNotificationCnt")]
@@ -169,7 +200,8 @@ impl NoticePoint {
 }
 
 /// 评论/回帖通知
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default)]
 #[allow(non_snake_case)]
 pub struct NoticeComment {
     /// 通知 id
@@ -198,6 +230,7 @@ pub struct NoticeComment {
     /// 是否已读
     pub hasRead: bool,
     /// 评论时间
+    #[serde(rename = "commentCreateTime")]
     pub createTime: String,
 }
 
@@ -208,8 +241,50 @@ impl NoticeComment {
     }
 }
 
-/// 提到我通知
 #[derive(Clone, Debug, Deserialize)]
+#[allow(non_snake_case)]
+pub struct NoticeReply {
+    /// 通知 id
+    pub oId: String,
+    /// 文章标题
+    #[serde(rename = "commentArticleTitle")]
+    pub title: String,
+    /// 文章作者
+    #[serde(rename = "commentAuthorName")]
+    pub author: String,
+    /// 作者头像
+    #[serde(rename = "commentAuthorThumbnailURL")]
+    pub thumbnailURL: String,
+    /// 文章类型
+    #[serde(rename = "commentArticleType",)]
+    pub type_: u32,
+    /// 是否精选
+    #[serde(rename = "commentArticlePerfect",deserialize_with = "bool_from_int")]
+    pub perfect: bool,
+    /// 回复内容
+    #[serde(rename = "commentContent")]
+    pub content: String,
+    /// 回复地址
+    #[serde(rename = "commentSharpURL")]
+    pub sharpURL: String,
+    /// 是否已读
+    pub hasRead: bool,
+    /// 回复时间
+    #[serde(rename = "commentCreateTime",)]
+    pub createTime: String,
+    pub dataType: u32,
+}
+
+impl NoticeReply {
+    pub fn from_value(data: &Value) -> Result<Self, Error> {
+        serde_json::from_value(data.clone())
+            .map_err(|e| Error::Parse(format!("Failed to parse NoticeReply: {}", e)))
+    }
+}
+
+/// 提到我通知（包含 @消息、文章/评论点赞、红包等）
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default)]
 #[allow(non_snake_case)]
 pub struct NoticeAt {
     /// 通知 id
@@ -218,15 +293,25 @@ pub struct NoticeAt {
     pub dataType: u32,
     /// 用户名
     pub userName: String,
-    /// 用户头像
-    #[serde(rename = "userAvatarURL")]
+    /// 用户头像（点赞类消息用 thumbnailURL）
+    #[serde(rename = "thumbnailURL")]
     pub avatarURL: String,
-    /// 通知内容
+    /// 用户头像（@消息/红包用 userAvatarURL）
+    #[serde(default)]
+    pub userAvatarURL: String,
+    /// 通知内容（@消息/红包）
     pub content: String,
+    /// 通知描述（点赞类消息）
+    #[serde(default)]
+    pub description: String,
     /// 是否已读
     pub hasRead: bool,
     /// 创建时间
     pub createTime: String,
+    pub dataId: String,
+    /// 是否已删除
+    #[serde(default)]
+    pub deleted: bool,
 }
 
 impl NoticeAt {
@@ -362,6 +447,8 @@ pub enum NoticeItem {
     Point(NoticePoint),
     /// 评论/回帖通知
     Comment(NoticeComment),
+    /// 回复通知
+    Reply(NoticeReply),
     /// 提到我通知
     At(NoticeAt),
     /// 关注通知
@@ -377,6 +464,7 @@ impl NoticeItem {
         match notice_type {
             NoticeType::Point => Ok(NoticeItem::Point(NoticePoint::from_value(data)?)),
             NoticeType::Commented => Ok(NoticeItem::Comment(NoticeComment::from_value(data)?)),
+            NoticeType::Reply => Ok(NoticeItem::Reply(NoticeReply::from_value(data)?)),
             NoticeType::At => Ok(NoticeItem::At(NoticeAt::from_value(data)?)),
             NoticeType::Following => Ok(NoticeItem::Follow(NoticeFollow::from_value(data)?)),
             NoticeType::System => Ok(NoticeItem::System(NoticeSystem::from_value(data)?)),

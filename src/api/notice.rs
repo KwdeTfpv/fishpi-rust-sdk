@@ -202,7 +202,19 @@ impl Notice {
             &[("apiKey", self.api_key.clone())],
         );
         let resp = get(&url).await?;
-        let count = NoticeCount::from_value(&resp)?;
+        if let Some(code) = resp["code"].as_i64()
+            && code != 0
+        {
+            return Err(Error::Api(
+                resp["msg"].as_str().unwrap_or("Api error").to_string(),
+            ));
+        }
+        let payload = if resp.get("data").is_some() {
+            &resp["data"]
+        } else {
+            &resp
+        };
+        let count = NoticeCount::from_value(payload)?;
 
         Ok(count)
     }
