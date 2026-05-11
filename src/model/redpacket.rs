@@ -167,20 +167,20 @@ fn parse_who_list(data: &Value) -> Result<Vec<RedPacketGot>, Error> {
         got_list.push(RedPacketGot {
             userId: item["userId"]
                 .as_str()
-                .ok_or_else(|| Error::Parse("Missing userId in who".to_string()))?
+                .unwrap_or("")
                 .to_string(),
             userName: item["userName"]
                 .as_str()
-                .ok_or_else(|| Error::Parse("Missing userName in who".to_string()))?
+                .unwrap_or("")
                 .to_string(),
             avatar: item["avatar"]
                 .as_str()
-                .ok_or_else(|| Error::Parse("Missing avatar in who".to_string()))?
+                .unwrap_or("")
                 .to_string(),
             userMoney: user_money,
             time: item["time"]
                 .as_str()
-                .ok_or_else(|| Error::Parse("Missing time in who".to_string()))?
+                .unwrap_or("")
                 .to_string(),
         });
     }

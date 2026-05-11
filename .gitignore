@@ -1,27 +1,19 @@
-/target
-Cargo.lock
-src/main.rs
-/fishpi-client
+*
+!.gitignore
+!src/
+!Cargo.toml
 
-# Local Android app / desktop client workspaces
-/android/
-/fishpi-client/
-/src/android_bridge.rs
+# docs — VitePress source only
+!docs/
+docs/*
+!docs/index.md
+!docs/.vitepress/
+docs/.vitepress/*
+!docs/.vitepress/config.js
 
-# Android/Gradle wrapper files used by the local app workspace
-/build.gradle.kts
-/settings.gradle.kts
-/gradle.properties
-/gradle/
-/gradlew
-/gradlew.bat
-/.github/
-/scripts/
-
-.gradle/
-.kotlin/
-build/
-**/build/
-local.properties
-.idea/
-*.iml
+# .github — workflow only
+!.github/
+.github/*
+!.github/workflows/
+.github/workflows/*
+!.github/workflows/deploy-docs.yml
