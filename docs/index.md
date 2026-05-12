@@ -103,6 +103,27 @@ off('message', fn);
 
 `redPacket.type` 可选值：`random`（拼手气）、`average`（普通）、`specify`（专属）、`rockPaperScissors`（猜拳）、`gesture`（手势）
 
+### fishpi.hook(name, fn)
+
+注册消息钩子，在 `on('message')` 之前调用，可以拦截和修改消息：
+
+```javascript
+fishpi.hook('message', function(msg) {
+    // 过滤广告
+    if (msg.content.indexOf('广告') >= 0) {
+        msg.filtered = true;   // 阻止该消息显示
+    }
+    // 修改消息
+    if (msg.content.indexOf('关键词') >= 0) {
+        msg.content = msg.content.replace('关键词', '***');
+    }
+});
+```
+
+- `msg.filtered = true`：拦截消息，后续 `on('message')` 不会触发
+- hook 中修改的字段在 `on('message')` 中可见
+- 与 `on` 的区别：`hook` 先执行，可以拦截；`on` 后执行，只能监听
+
 ### fishpi.call(method, params)
 
 调用任意 SDK API。`method` 对应下方方法列表，参数名必须与表格一致。返回 `Promise<ResponseData>`：
@@ -204,6 +225,27 @@ log('调试信息');        // adb logcat -s FishPiPlugin:D
 | `followArticle` | `articleId: String` | `{}` |
 | `unfollowArticle` | `articleId: String` | `{}` |
 | `watchArticle` | `articleId: String` | `{}` |
+
+评论相关说明：
+- 读取评论：通过 `getArticleDetail(articleId, page)` 返回的详情结构获取评论列表（当前没有独立 `getArticleComments` 方法）。
+- 发送评论：`sendArticleComment(articleId, content, replyId)`。
+- `replyId` 传空字符串 `""` 表示发顶级评论；传具体评论 ID 表示回复该评论。
+
+```javascript
+// 顶级评论
+fishpi.call('sendArticleComment', {
+  articleId: '123456',
+  content: '这篇写得很好',
+  replyId: ''
+});
+
+// 回复某条评论
+fishpi.call('sendArticleComment', {
+  articleId: '123456',
+  content: '同意你的观点',
+  replyId: '987654321'
+});
+```
 
 ### 表情
 
