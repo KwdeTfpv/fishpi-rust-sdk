@@ -105,7 +105,11 @@ off('message', fn);
 
 ### fishpi.hook(name, fn)
 
-注册消息钩子，在 `on('message')` 之前调用，可以拦截和修改消息：
+注册消息钩子，在 `on('message')` 之前调用。支持两种钩子：
+
+#### message
+
+拦截/修改接收到的消息：
 
 ```javascript
 fishpi.hook('message', function(msg) {
@@ -122,7 +126,22 @@ fishpi.hook('message', function(msg) {
 
 - `msg.filtered = true`：拦截消息，后续 `on('message')` 不会触发
 - hook 中修改的字段在 `on('message')` 中可见
-- 与 `on` 的区别：`hook` 先执行，可以拦截；`on` 后执行，只能监听
+- `msg` 结构与消息事件的 `ChatRoomMessage` 一致
+
+#### sendMessage
+
+修改即将发送的消息文本：
+
+```javascript
+fishpi.hook('sendMessage', function(text) {
+    return text + '\n\n来自 [安卓客户端](https://github.com/KwdeTfpv/fishpi-rust-sdk/releases/latest)';
+});
+```
+
+- `text` 为当前输入框待发送的原始文本
+- 返回值会替换原始文本发送
+- 如果返回 `null` 或 `undefined`，则取消发送
+- 与 `message` 钩子的区别：`sendMessage` 处理**发出的**消息，`message` 处理**收到的**消息
 
 ### fishpi.call(method, params)
 
