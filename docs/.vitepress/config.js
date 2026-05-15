@@ -4,7 +4,7 @@ export default {
     description: 'FishPi Android 插件系统文档',
     themeConfig: {
         outline: {
-            level: [2, 3],
+            level: 'deep',
             label: '本页目录',
         },
         nav: [
