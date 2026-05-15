@@ -411,9 +411,35 @@ log('调试信息');
 | 方法 | 参数 | 返回 |
 |------|------|------|
 | `openRedPacket` | `messageId: string, gesture: number` | `RedPacketOpenResult` |
-| `sendRedPacket` | `type: string, money: number, count: number, message: string` | `null` |
+| `sendRedPacket` | `type: string, money: number, count: number, message: string, receivers?: string[] \| string, gesture?: number` | `null` |
 
-`sendRedPacket` 当前插件桥只暴露了 `type/money/count/message`，不支持从插件侧传专属接收者和猜拳手势。
+红包类型：`random`、`average`、`specify`、`heartbeat`、`rockPaperScissors`。
+
+猜拳手势：`0` 石头，`1` 剪刀，`2` 布；普通红包或非猜拳红包可以不传或传 `-1`。
+
+专属红包示例：
+
+```javascript
+fishpi.call('sendRedPacket', {
+  type: 'specify',
+  money: 32,
+  count: 1,
+  message: '专属摸鱼快乐',
+  receivers: ['Kirito']
+});
+```
+
+猜拳红包示例：
+
+```javascript
+fishpi.call('sendRedPacket', {
+  type: 'rockPaperScissors',
+  money: 256,
+  count: 1,
+  message: '猜拳见真章',
+  gesture: 0
+});
+```
 
 `openRedPacket`：
 
