@@ -68,7 +68,7 @@ on('message', function(msg) {
 注意：
 
 - 插件可以读取 `apiKey`，因此只安装可信插件。
-- 插件禁用、卸载、重载或沙箱销毁时，其快捷工具栏入口会被清理。
+- 插件禁用、卸载、重载或沙箱销毁时，其快捷工具栏入口和聊天室发送身份配置会被清理。
 - `fishpi.call()` 内部有约 10 秒等待限制，超时会返回错误。
 
 ## 事件系统
@@ -229,6 +229,35 @@ fishpi.call('openRedPacket', { messageId: msg.oId, gesture: -1 }).then(function(
 - 发送/撤回等无返回数据的接口成功时通常返回 `null` 或 `{}`，插件不要依赖固定空对象。
 - 文档中的结构是当前 Android native 层整理后的结构，服务端未来新增字段时可能额外出现更多字段。
 
+## 聊天室发送身份
+
+插件默认使用 App 的聊天室发送身份。插件也可以为自己声明独立的 client type，只影响当前插件后续调用 `sendChatRoomMessage`，不影响 App 正常发送，也不影响其它插件。
+
+```javascript
+fishpi.chat.setClientType('Rust', 'my-plugin-1.0.0');
+
+fishpi.call('sendChatRoomMessage', {
+    content: '来自插件的消息'
+});
+```
+
+清除当前插件的发送身份配置：
+
+```javascript
+fishpi.chat.clearClientType();
+```
+
+规则：
+
+- `client` 和 `version` 都不能为空。
+- 配置只保存在当前插件沙箱生命周期内，不会持久化。
+- 插件重载前会先清理旧配置；删除 `setClientType` 代码并重载后，不会继续使用旧值。
+- 未调用 `setClientType` 或调用 `clearClientType` 后，`sendChatRoomMessage` 会回到默认兼容行为。
+
+可用 `client` 枚举值：
+
+`Web`、`PC`、`Mobile`、`Windows`、`macOS`、`Linux`、`iOS`、`Android`、`IDEA`、`Chrome`、`Edge`、`VSCode`、`Python`、`Golang`、`Rust`、`Harmony`、`CLI`、`Bird`、`IceNet`、`ElvesOnline`、`Other`
+
 ## 快捷动作工具栏
 
 插件可以在聊天室输入框上方注册轻量入口。宿主只展示入口和动作，点击动作后把事件发回插件，具体动作完全由插件决定。
@@ -356,6 +385,8 @@ log('调试信息');
 | `getChatRoomHistory` | `page: number, selfUsername: string` | `ChatRoomMessage[]` |
 | `uploadChatFile` | `filePath: string` | `UploadedChatFile` |
 | `searchAtUsers` | `query: string` | `string[]` |
+
+`sendChatRoomMessage` 会自动使用当前插件通过 `fishpi.chat.setClientType` 设置的发送身份；未设置时使用 App 默认发送身份。
 
 `revokeChatRoomMessage`：
 
