@@ -78,6 +78,7 @@ use crate::utils::error::Error;
 use crate::utils::{ResponseResult, build_http_path, get, post, upload_files};
 use serde_json::{Value, json};
 
+#[derive(Clone)]
 pub struct User {
     api_key: String,
     pub chatroom: ChatRoom,
@@ -192,18 +193,23 @@ impl User {
             })
             .ok_or_else(|| Error::Api("Missing or invalid liveness".to_string()))?;
 
-        Ok(liveness_raw.max(0.0).round() as u32)
+        let percent = if liveness_raw > 0.0 && liveness_raw <= 1.0 {
+            liveness_raw * 100.0
+        } else {
+            liveness_raw
+        };
+        Ok(percent.max(0.0).round() as u32)
     }
 
     /// 检查用户是否已经签到
     pub async fn is_checkin(&self) -> Result<bool, Error> {
         let resp = get(&build_http_path(
-            "user/isCheckin",
+            "user/checkedIn",
             &[("apiKey", self.api_key.clone())],
         ))
         .await?;
 
-        let is_checkin: bool = resp["isCheckin"].as_bool().unwrap_or(false);
+        let is_checkin: bool = resp["checkedIn"].as_bool().unwrap_or(false);
         Ok(is_checkin)
     }
 
@@ -215,26 +221,28 @@ impl User {
         ))
         .await?;
 
-        let is_rewarded: bool = resp["isLivenessRewarded"].as_bool().unwrap_or(false);
+        let is_rewarded: bool = resp["isCollectedYesterdayLivenessReward"]
+            .as_bool()
+            .unwrap_or(false);
         Ok(is_rewarded)
     }
 
     /// 领取昨日活跃度奖励
-    pub async fn reward_liveness(&self) -> Result<u32, Error> {
+    pub async fn reward_liveness(&self) -> Result<i32, Error> {
         let resp = get(&build_http_path(
             "activity/yesterday-liveness-reward-api",
             &[("apiKey", self.api_key.clone())],
         ))
         .await?;
 
-        let success: u32 = resp["sum"].as_u64().unwrap_or(0) as u32;
+        let success: i32 = resp["sum"].as_i64().unwrap_or(0) as i32;
         Ok(success)
     }
 
     /// 转账
     pub async fn transfer(&self, username: &str, amount: u32, memo: &str) -> Result<bool, Error> {
         let data = json!({
-            "username": username,
+            "userName": username,
             "amount": amount,
             "memo": memo,
             "apiKey": self.api_key,
@@ -285,6 +293,24 @@ impl User {
         }
 
         Ok(true)
+    }
+
+    /// 获取用户勋章列表。
+    pub async fn medals(&self, user_name: &str) -> Result<Value, Error> {
+        let data = json!({
+            "apiKey": self.api_key,
+            "userName": user_name,
+        });
+
+        let rsp = post("api/medal/user/list", Some(data)).await?;
+
+        if rsp.get("code").and_then(|c| c.as_i64()).unwrap_or(-1) != 0 {
+            return Err(Error::Api(
+                rsp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
+
+        Ok(rsp.get("data").cloned().unwrap_or(Value::Array(Vec::new())))
     }
 
     /// 修改用户头像

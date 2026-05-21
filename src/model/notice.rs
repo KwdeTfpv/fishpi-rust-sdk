@@ -256,10 +256,10 @@ pub struct NoticeReply {
     #[serde(rename = "commentAuthorThumbnailURL")]
     pub thumbnailURL: String,
     /// 文章类型
-    #[serde(rename = "commentArticleType",)]
+    #[serde(rename = "commentArticleType")]
     pub type_: u32,
     /// 是否精选
-    #[serde(rename = "commentArticlePerfect",deserialize_with = "bool_from_int")]
+    #[serde(rename = "commentArticlePerfect", deserialize_with = "bool_from_int")]
     pub perfect: bool,
     /// 回复内容
     #[serde(rename = "commentContent")]
@@ -270,7 +270,7 @@ pub struct NoticeReply {
     /// 是否已读
     pub hasRead: bool,
     /// 回复时间
-    #[serde(rename = "commentCreateTime",)]
+    #[serde(rename = "commentCreateTime")]
     pub createTime: String,
     pub dataType: u32,
 }

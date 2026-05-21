@@ -42,6 +42,7 @@ use crate::{
     utils::{ResponseResult, build_http_path, error::Error, get, post},
 };
 
+#[derive(Clone)]
 pub struct BreezeMoon {
     api_key: String,
 }

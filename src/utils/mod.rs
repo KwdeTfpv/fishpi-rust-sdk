@@ -39,6 +39,7 @@ lazy_static::lazy_static! {
 }
 
 const DOMAIN: &str = "fishpi.cn";
+const MAX_UPLOAD_FILE_BYTES: u64 = 20 * 1024 * 1024;
 
 fn build_client(config: &HttpProxyConfig) -> Result<Client, Error> {
     let builder = Client::builder();
@@ -143,20 +144,35 @@ pub async fn upload_files(url: &str, files: Vec<String>, api_key: &str) -> Resul
     let mut form = multipart::Form::new();
 
     for file_path in files {
-        if !std::path::Path::new(&file_path).exists() {
+        let path = std::path::Path::new(&file_path);
+        if !path.exists() {
             return Err(Error::Api(format!("File not exist: {}", file_path)));
+        }
+        let metadata = tokio::fs::metadata(path).await.map_err(|e| {
+            Error::Api(format!("Failed to read file metadata {}: {}", file_path, e))
+        })?;
+        if metadata.len() > MAX_UPLOAD_FILE_BYTES {
+            return Err(Error::Api(format!(
+                "File too large: {} ({} bytes), max {} bytes",
+                file_path,
+                metadata.len(),
+                MAX_UPLOAD_FILE_BYTES
+            )));
         }
         let file_content = tokio::fs::read(&file_path)
             .await
             .map_err(|e| Error::Api(format!("Failed to read file {}: {}", file_path, e)))?;
-        let file_name = std::path::Path::new(&file_path)
+        let file_name = path
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("file")
             .to_string();
         form = form.part(
             "file[]",
-            multipart::Part::stream(file_content).file_name(file_name),
+            multipart::Part::stream(file_content)
+                .file_name(file_name)
+                .mime_str(upload_mime_from_path(path))
+                .map_err(|e| Error::Api(format!("Invalid upload mime type: {}", e)))?,
         );
     }
 
@@ -180,6 +196,27 @@ pub async fn upload_files(url: &str, files: Vec<String>, api_key: &str) -> Resul
         .map_err(|e| Error::Api(format!("Failed to parse response: {}", e)))?;
 
     Ok(rsp)
+}
+
+fn upload_mime_from_path(path: &std::path::Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
+        "mov" => "video/quicktime",
+        "m4v" => "video/x-m4v",
+        "m3u8" => "application/vnd.apple.mpegurl",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "jpg" | "jpeg" => "image/jpeg",
+        _ => "application/octet-stream",
+    }
 }
 
 async fn request(

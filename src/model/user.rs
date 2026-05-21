@@ -50,8 +50,9 @@ pub struct UserInfo {
     /// 在线时长(分钟)
     #[serde(rename = "onlineMinute")]
     onlineMinutes: i32,
-    // / 是否已经关注，未登录则为 `hide`
-    // canFollow: String,
+    /// 是否可以关注，`no` 表示已关注，未登录可能为 `hide`
+    #[serde(default)]
+    canFollow: String,
     // / 用户所有勋章列表，包含未佩戴
     // ownedMetal: Vec<Metal>,
     /// 用户勋章列表
@@ -210,6 +211,10 @@ impl TryFrom<String> for UserAppRole {
 }
 
 impl UserInfo {
+    pub fn oid(&self) -> &str {
+        &self.oId
+    }
+
     pub fn name(&self) -> &str {
         if self.userNickname.is_empty() {
             &self.userName
@@ -246,6 +251,10 @@ impl UserInfo {
         &self.avatar
     }
 
+    pub fn card_bg(&self) -> &str {
+        &self.cardBg
+    }
+
     pub fn points(&self) -> i32 {
         self.points
     }
@@ -264,6 +273,10 @@ impl UserInfo {
 
     pub fn online_minutes(&self) -> i32 {
         self.onlineMinutes
+    }
+
+    pub fn can_follow(&self) -> &str {
+        &self.canFollow
     }
 }
 

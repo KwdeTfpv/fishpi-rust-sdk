@@ -49,6 +49,7 @@ use crate::model::redpacket::{GestureType, RedPacket, RedPacketInfo};
 use crate::utils::error::Error;
 use crate::utils::post;
 
+#[derive(Clone)]
 pub struct Redpacket {
     api_key: String,
     chatroom: ChatRoom,

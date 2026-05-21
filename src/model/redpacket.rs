@@ -132,12 +132,23 @@ fn parse_gesture(
     fallback_key: &str,
     err_ctx: &str,
 ) -> Result<Option<GestureType>, Error> {
-    let gesture = data
-        .get(primary_key)
-        .and_then(|v| v.as_str())
-        .or_else(|| data.get(fallback_key).and_then(|v| v.as_str()));
+    let gesture = data.get(primary_key).or_else(|| data.get(fallback_key));
+
+    if let Some(gesture_index) = gesture.and_then(|v| v.as_u64()) {
+        return match gesture_index {
+            0 => Ok(Some(GestureType::Rock)),
+            1 => Ok(Some(GestureType::Scissors)),
+            2 => Ok(Some(GestureType::Paper)),
+            _ => Err(Error::Parse(format!("Invalid gesture in {}", err_ctx))),
+        };
+    }
+
+    let gesture = gesture.and_then(|v| v.as_str());
 
     match gesture {
+        Some("0") => Ok(Some(GestureType::Rock)),
+        Some("1") => Ok(Some(GestureType::Scissors)),
+        Some("2") => Ok(Some(GestureType::Paper)),
         Some(gesture_str) => GestureType::from_str(gesture_str)
             .map(Some)
             .map_err(|_| Error::Parse(format!("Invalid gesture in {}", err_ctx))),
@@ -165,23 +176,11 @@ fn parse_who_list(data: &Value) -> Result<Vec<RedPacketGot>, Error> {
             })
             .unwrap_or(0) as u32;
         got_list.push(RedPacketGot {
-            userId: item["userId"]
-                .as_str()
-                .unwrap_or("")
-                .to_string(),
-            userName: item["userName"]
-                .as_str()
-                .unwrap_or("")
-                .to_string(),
-            avatar: item["avatar"]
-                .as_str()
-                .unwrap_or("")
-                .to_string(),
+            userId: item["userId"].as_str().unwrap_or("").to_string(),
+            userName: item["userName"].as_str().unwrap_or("").to_string(),
+            avatar: item["avatar"].as_str().unwrap_or("").to_string(),
             userMoney: user_money,
-            time: item["time"]
-                .as_str()
-                .unwrap_or("")
-                .to_string(),
+            time: item["time"].as_str().unwrap_or("").to_string(),
         });
     }
 

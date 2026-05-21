@@ -1,4 +1,4 @@
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
 use crate::impl_str_enum;
@@ -51,6 +51,35 @@ where
     }
 }
 
+fn non_negative_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value: Value = Deserialize::deserialize(deserializer)?;
+    match value {
+        Value::Number(number) => {
+            if let Some(value) = number.as_u64() {
+                Ok(value)
+            } else if let Some(value) = number.as_i64() {
+                Ok(value.max(0) as u64)
+            } else if let Some(value) = number.as_f64() {
+                Ok(if value.is_finite() && value > 0.0 {
+                    value.trunc() as u64
+                } else {
+                    0
+                })
+            } else {
+                Ok(0)
+            }
+        }
+        Value::String(text) => Ok(text.trim().parse::<i64>().unwrap_or(0).max(0) as u64),
+        Value::Null => Ok(0),
+        other => Err(serde::de::Error::custom(format!(
+            "expected non-negative integer-compatible value, got {other}"
+        ))),
+    }
+}
+
 /// 发帖信息
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[allow(non_snake_case)]
@@ -91,6 +120,9 @@ pub struct ArticlePost {
     /// 提问悬赏积分
     #[serde(rename = "articleQnAOfferPoint")]
     pub offerPoint: Option<u32>,
+    /// 是否作为好帖领取奖励，传入 yes 时服务端按好帖处理。
+    #[serde(rename = "isGoodArticle", skip_serializing_if = "Option::is_none")]
+    pub is_good_article: Option<String>,
 }
 
 impl ArticlePost {
@@ -102,6 +134,127 @@ impl ArticlePost {
     pub fn to_json(&self) -> Result<Value, Error> {
         serde_json::to_value(self)
             .map_err(|e| Error::Parse(format!("Failed to serialize ArticlePost: {}", e)))
+    }
+}
+
+/// 文章草稿保存参数。
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[allow(non_snake_case)]
+pub struct ArticleDraftSave {
+    #[serde(rename = "articleDraftId", skip_serializing_if = "Option::is_none")]
+    pub draft_id: Option<String>,
+    #[serde(rename = "articleTitle")]
+    pub title: String,
+    #[serde(rename = "articleContent")]
+    pub content: String,
+    #[serde(rename = "articleDraftThoughtContent")]
+    pub thought_content: String,
+    #[serde(rename = "articleTags")]
+    pub tags: String,
+    #[serde(rename = "articleType")]
+    pub article_type: u32,
+    #[serde(rename = "columnId")]
+    pub column_id: String,
+    #[serde(rename = "columnTitle")]
+    pub column_title: String,
+    #[serde(rename = "chapterNo")]
+    pub chapter_no: String,
+    #[serde(rename = "articleRewardContent")]
+    pub reward_content: String,
+    #[serde(rename = "articleRewardPoint")]
+    pub reward_point: String,
+    #[serde(rename = "articleQnAOfferPoint")]
+    pub qna_offer_point: Option<u32>,
+    #[serde(rename = "articleCommentable")]
+    pub commentable: bool,
+    #[serde(rename = "articleAnonymous")]
+    pub anonymous: bool,
+    #[serde(rename = "articleNotifyFollowers")]
+    pub notify_followers: bool,
+    #[serde(rename = "articleShowInList")]
+    pub show_in_list: u32,
+    #[serde(rename = "articleStatement")]
+    pub statement: u32,
+}
+
+impl ArticleDraftSave {
+    pub fn to_json(&self) -> Result<Value, Error> {
+        serde_json::to_value(self)
+            .map_err(|e| Error::Parse(format!("Failed to serialize ArticleDraftSave: {}", e)))
+    }
+}
+
+/// 文章草稿列表项。
+#[derive(Clone, Debug, Deserialize)]
+#[allow(non_snake_case)]
+pub struct ArticleDraftSummary {
+    pub oId: String,
+    pub articleDraftTitle: String,
+    #[serde(default)]
+    pub articleDraftSummary: String,
+    #[serde(default)]
+    pub articleDraftTags: String,
+    #[serde(default)]
+    pub articleDraftType: u32,
+    #[serde(default)]
+    pub articleDraftColumnId: String,
+    #[serde(default)]
+    pub articleDraftColumnTitle: String,
+    #[serde(default)]
+    pub articleDraftChapterNo: String,
+    #[serde(default)]
+    pub articleDraftUpdatedTime: u64,
+}
+
+impl ArticleDraftSummary {
+    pub fn from_value(data: &Value) -> Result<Self, Error> {
+        parse_with_float_fallback(data, "ArticleDraftSummary")
+    }
+}
+
+/// 文章草稿详情。
+#[derive(Clone, Debug, Deserialize)]
+#[allow(non_snake_case)]
+pub struct ArticleDraftDetail {
+    pub oId: String,
+    pub articleDraftTitle: String,
+    #[serde(default)]
+    pub articleDraftContent: String,
+    #[serde(default)]
+    pub articleDraftThoughtContent: String,
+    #[serde(default)]
+    pub articleDraftTags: String,
+    #[serde(default)]
+    pub articleDraftType: u32,
+    #[serde(default)]
+    pub articleDraftColumnId: String,
+    #[serde(default)]
+    pub articleDraftColumnTitle: String,
+    #[serde(default)]
+    pub articleDraftChapterNo: String,
+    #[serde(default)]
+    pub articleDraftRewardContent: String,
+    #[serde(default)]
+    pub articleDraftRewardPoint: String,
+    #[serde(default)]
+    pub articleDraftQnAOfferPoint: u32,
+    #[serde(default)]
+    pub articleDraftCommentable: bool,
+    #[serde(default)]
+    pub articleDraftAnonymous: bool,
+    #[serde(default)]
+    pub articleDraftNotifyFollowers: bool,
+    #[serde(default)]
+    pub articleDraftShowInList: u32,
+    #[serde(default)]
+    pub articleDraftStatement: u32,
+    #[serde(default)]
+    pub articleDraftUpdatedTime: u64,
+}
+
+impl ArticleDraftDetail {
+    pub fn from_value(data: &Value) -> Result<Self, Error> {
+        parse_with_float_fallback(data, "ArticleDraftDetail")
     }
 }
 
@@ -256,6 +409,7 @@ pub struct ArticleAuthor {
     /// 用户是否在线
     pub isOnline: bool,
     /// 用户在线时长
+    #[serde(deserialize_with = "non_negative_u64")]
     pub onlineMinute: u64,
     /// 是否公开积分列表
     #[serde(deserialize_with = "bool_from_zero")]
@@ -528,7 +682,7 @@ impl Pagination {
 }
 
 /// 帖子类型
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 #[repr(u8)]
 #[derive(Default)]
 pub enum ArticleType {
@@ -551,6 +705,43 @@ impl ArticleType {
             5 => ArticleType::Question,
             _ => ArticleType::Unknown,
         }
+    }
+}
+
+impl Serialize for ArticleType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u8(match self {
+            ArticleType::Normal => 0,
+            ArticleType::Private => 1,
+            ArticleType::Broadcast => 2,
+            ArticleType::Thought => 3,
+            ArticleType::Unknown => 4,
+            ArticleType::Question => 5,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for ArticleType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        Ok(match value {
+            Value::Number(n) => ArticleType::from_index(n.as_u64().unwrap_or(4) as usize),
+            Value::String(s) => match s.as_str() {
+                "Normal" | "normal" => ArticleType::Normal,
+                "Private" | "private" => ArticleType::Private,
+                "Broadcast" | "broadcast" => ArticleType::Broadcast,
+                "Thought" | "thought" => ArticleType::Thought,
+                "Question" | "question" => ArticleType::Question,
+                _ => ArticleType::Unknown,
+            },
+            _ => ArticleType::Unknown,
+        })
     }
 }
 
@@ -1006,5 +1197,21 @@ impl CommentPost {
     pub fn to_value(&self) -> Result<Value, Error> {
         serde_json::to_value(self)
             .map_err(|e| Error::Parse(format!("Failed to serialize CommentPost: {}", e)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn article_author_clamps_negative_online_minute() {
+        let author = ArticleAuthor::from_value(&json!({
+            "onlineMinute": -27231
+        }))
+        .expect("negative onlineMinute should not fail ArticleAuthor parsing");
+
+        assert_eq!(author.onlineMinute, 0);
     }
 }

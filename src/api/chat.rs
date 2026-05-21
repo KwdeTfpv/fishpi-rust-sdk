@@ -168,6 +168,16 @@ pub struct Chat {
     api_key: String,
 }
 
+impl Clone for Chat {
+    fn clone(&self) -> Self {
+        Self {
+            connection: WsConnection::new(),
+            handler: ChatHandler::new(parse_chat_message, None, "chat"),
+            api_key: self.api_key.clone(),
+        }
+    }
+}
+
 impl Chat {
     pub fn new(api_key: String) -> Self {
         Self {

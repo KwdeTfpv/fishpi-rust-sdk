@@ -331,8 +331,28 @@ pub struct ChatRoom {
     api_key: String,
     discuss: Arc<Mutex<String>>,
     onlines: Arc<Mutex<Vec<OnlineInfo>>>,
+    current_node: Arc<Mutex<Option<ChatRoomNodeResponse>>>,
     client: ClientType,
     version: String,
+}
+
+impl Clone for ChatRoom {
+    fn clone(&self) -> Self {
+        Self {
+            connection: WsConnection::new(),
+            handler: ChatRoomHandler::new(
+                parse_chatroom_message,
+                Some(ChatRoomEventType::All),
+                "chatroom",
+            ),
+            api_key: self.api_key.clone(),
+            discuss: Arc::clone(&self.discuss),
+            onlines: Arc::clone(&self.onlines),
+            current_node: Arc::clone(&self.current_node),
+            client: self.client.clone(),
+            version: self.version.clone(),
+        }
+    }
 }
 
 impl ChatRoom {
@@ -347,6 +367,7 @@ impl ChatRoom {
             api_key,
             discuss: Arc::new(Mutex::new(String::new())),
             onlines: Arc::new(Mutex::new(Vec::new())),
+            current_node: Arc::new(Mutex::new(None)),
             client: ClientType::Rust,
             version: env!("CARGO_PKG_VERSION").to_string(),
         }
@@ -367,7 +388,18 @@ impl ChatRoom {
 
         let node_response: ChatRoomNodeResponse = serde_json::from_value(response)
             .map_err(|e| WebSocketError::Other(format!("解析节点信息失败：{}", e)))?;
+        *self.current_node.lock().await = Some(node_response.clone());
         Ok(node_response)
+    }
+
+    /// 获取当前聊天室节点中文名称。
+    pub async fn current_node_name(&self) -> Option<String> {
+        self.current_node
+            .lock()
+            .await
+            .as_ref()
+            .map(|node| node.msg.trim().to_string())
+            .filter(|name| !name.is_empty())
     }
 
     /// 获取 WebSocket URL
@@ -381,11 +413,14 @@ impl ChatRoom {
                 }
                 Ok(parsed.to_string())
             }
-            Err(_) => build_ws_url(
-                "fishpi.cn",
-                "chat-room-channel",
-                &[("apiKey", self.api_key.clone())],
-            ),
+            Err(_) => {
+                *self.current_node.lock().await = None;
+                build_ws_url(
+                    "fishpi.cn",
+                    "chat-room-channel",
+                    &[("apiKey", self.api_key.clone())],
+                )
+            }
         }
     }
 

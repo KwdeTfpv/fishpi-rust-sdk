@@ -18,6 +18,7 @@
 //! - [`Article::list`] - 查询文章列表（支持类型、标签、分页）。
 //! - [`Article::list_by_user`] - 查询指定用户的文章列表。
 //! - [`Article::detail`] - 获取文章详情（包括评论分页）。
+//! - [`Article::markdown_source`] - 获取文章 Markdown 原文。
 //! - [`Article::vote`] - 点赞或点踩文章。
 //! - [`Article::thank`] - 感谢文章。
 //! - [`Article::follow`] - 收藏或取消收藏文章。
@@ -74,10 +75,11 @@ use serde_json::{Value, json};
 use crate::{
     api::ws::{MessageHandler, WebSocketClient, build_ws_url},
     model::article::{
-        ArticleDetail, ArticleList, ArticleListType, ArticlePost, ArticleType, Pagination,
+        ArticleDetail, ArticleDraftDetail, ArticleDraftSave, ArticleDraftSummary, ArticleList,
+        ArticleListType, ArticlePost, ArticleType, Pagination,
     },
     model::reaction::ReactionMutationResult,
-    utils::{ResponseResult, build_http_path, error::Error, get, post},
+    utils::{ResponseResult, build_http_path, delete, error::Error, get, get_text, post},
 };
 
 /// 文章监听器类型
@@ -109,6 +111,7 @@ impl MessageHandler for ArticleMessageHandler {
     }
 }
 
+#[derive(Clone)]
 pub struct Article {
     api_key: String,
 }
@@ -184,6 +187,74 @@ impl Article {
             .to_string();
 
         Ok(article_id)
+    }
+
+    /// 查询当前用户的文章草稿列表。
+    pub async fn list_drafts(&self) -> Result<Vec<ArticleDraftSummary>, Error> {
+        let url = build_http_path("api/article-drafts", &[("apiKey", self.api_key.clone())]);
+        let rsp = get(&url).await?;
+
+        if rsp.get("code").and_then(|c| c.as_i64()).unwrap_or(-1) != 0 {
+            return Err(Error::Api(
+                rsp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
+
+        rsp["data"]["drafts"]
+            .as_array()
+            .ok_or_else(|| Error::Parse("Missing drafts in response".to_string()))?
+            .iter()
+            .map(ArticleDraftSummary::from_value)
+            .collect()
+    }
+
+    /// 新建或更新当前用户的文章草稿。
+    pub async fn save_draft(&self, data: &ArticleDraftSave) -> Result<ArticleDraftSummary, Error> {
+        let mut data_json = data.to_json()?;
+        data_json["apiKey"] = Value::String(self.api_key.clone());
+        let rsp = post("api/article-drafts", Some(data_json)).await?;
+
+        if rsp.get("code").and_then(|c| c.as_i64()).unwrap_or(-1) != 0 {
+            return Err(Error::Api(
+                rsp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
+
+        ArticleDraftSummary::from_value(&rsp["data"]["draft"])
+    }
+
+    /// 查询指定文章草稿详情。
+    pub async fn draft_detail(&self, id: &str) -> Result<ArticleDraftDetail, Error> {
+        let url = build_http_path(
+            &format!("api/article-drafts/{}", id),
+            &[("apiKey", self.api_key.clone())],
+        );
+        let rsp = get(&url).await?;
+
+        if rsp.get("code").and_then(|c| c.as_i64()).unwrap_or(-1) != 0 {
+            return Err(Error::Api(
+                rsp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
+
+        ArticleDraftDetail::from_value(&rsp["data"]["draft"])
+    }
+
+    /// 删除指定文章草稿。
+    pub async fn delete_draft(&self, id: &str) -> Result<String, Error> {
+        let url = build_http_path(
+            &format!("api/article-drafts/{}", id),
+            &[("apiKey", self.api_key.clone())],
+        );
+        let rsp = delete(&url, None).await?;
+
+        if rsp.get("code").and_then(|c| c.as_i64()).unwrap_or(-1) != 0 {
+            return Err(Error::Api(
+                rsp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
+
+        Ok(rsp["data"]["id"].as_str().unwrap_or(id).to_string())
     }
 
     /// 查询文章列表
@@ -294,6 +365,20 @@ impl Article {
         Ok(article_detail)
     }
 
+    /// 获取文章 Markdown 原文。
+    ///
+    /// - `id` 文章 id
+    ///
+    /// 返回 `/api/article/md/{articleId}` 提供的 Markdown 源文本。
+    pub async fn markdown_source(&self, id: &str) -> Result<String, Error> {
+        let url = build_http_path(
+            &format!("api/article/md/{}", id),
+            &[("apiKey", self.api_key.clone())],
+        );
+
+        get_text(&url).await
+    }
+
     /// 点赞/取消点赞文章
     ///
     /// - `id` 文章id
@@ -356,6 +441,22 @@ impl Article {
         ResponseResult::from_value(&rsp)
     }
 
+    /// 取消收藏文章
+    ///
+    /// - `id` 文章 id
+    ///
+    /// 返回执行结果
+    pub async fn unfollow(&self, id: &str) -> Result<ResponseResult, Error> {
+        let data = json!({
+            "apiKey": self.api_key,
+            "followingId": id,
+        });
+
+        let rsp = post("unfollow/article", Some(data)).await?;
+
+        ResponseResult::from_value(&rsp)
+    }
+
     /// 关注/取消关注文章
     ///
     /// - `followingId` 文章id
@@ -397,12 +498,11 @@ impl Article {
     ///
     /// 返回在线人数
     pub async fn heat(&self, id: &str) -> Result<u32, Error> {
-        let url = build_http_path(
+        let rsp = post(
             &format!("api/article/heat/{}", id),
-            &[("apiKey", self.api_key.clone())],
-        );
-
-        let rsp = get(&url).await?;
+            Some(json!({ "apiKey": self.api_key })),
+        )
+        .await?;
 
         if rsp.get("code").and_then(|c| c.as_i64()).unwrap_or(-1) != 0 {
             return Err(Error::Api(
@@ -410,8 +510,10 @@ impl Article {
             ));
         }
 
-        let heat = rsp["articleHeat"]
-            .as_u64()
+        let heat = rsp
+            .get("articleHeat")
+            .or_else(|| rsp.get("data").and_then(|data| data.get("articleHeat")))
+            .and_then(Value::as_u64)
             .ok_or_else(|| Error::Api("Missing heat data in response".to_string()))?
             as u32;
 
@@ -435,7 +537,6 @@ impl Article {
             "fishpi.cn",
             "article-channel",
             &[
-                ("apiKey", self.api_key.clone()),
                 ("articleId", id.to_string()),
                 ("articleType", (type_ as u8).to_string()),
             ],

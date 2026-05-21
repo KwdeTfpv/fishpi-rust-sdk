@@ -399,6 +399,9 @@ impl WebSocketClient {
                                 Some(&WsEventType::All),
                             )
                             .await;
+                        if let Some(hook) = &log_hook {
+                            hook("WebSocket connected");
+                        }
 
                         let (mut write, mut read) = ws_stream.split();
                         let mut disconnected_reason: Option<String> = None;

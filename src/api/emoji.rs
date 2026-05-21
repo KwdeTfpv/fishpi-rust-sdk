@@ -7,6 +7,7 @@ use crate::model::emoji::{EmojiGroup, EmojiItem};
 use crate::utils::{build_http_path, error::Error, get_with_body, post};
 use serde_json::{Value, json};
 
+#[derive(Clone)]
 pub struct Emoji {
     api_key: String,
 }

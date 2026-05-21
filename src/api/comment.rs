@@ -56,6 +56,7 @@ use crate::{
     utils::{ResponseResult, error::Error, post, put},
 };
 
+#[derive(Clone)]
 pub struct Comment {
     api_key: String,
 }

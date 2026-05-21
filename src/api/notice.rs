@@ -119,6 +119,16 @@ pub struct Notice {
     api_key: String,
 }
 
+impl Clone for Notice {
+    fn clone(&self) -> Self {
+        Self {
+            connection: WsConnection::new(),
+            handler: NoticeHandler::new(parse_notice_message, None, "notice"),
+            api_key: self.api_key.clone(),
+        }
+    }
+}
+
 impl Notice {
     pub fn new(api_key: String) -> Self {
         Self {
