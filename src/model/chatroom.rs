@@ -221,7 +221,7 @@ pub struct BarragerMsg {
     /// 用户头像地址
     pub userAvatarURL: String,
     /// 头像地址20x20
-    pub userAvatarURL200: String,
+    pub userAvatarURL20: String,
     /// 头像地址48x48
     pub userAvatarURL48: String,
     /// 头像地址100x100
@@ -422,19 +422,11 @@ impl<'de> Deserialize<'de> for ChatRoomMsg<Value> {
 
 impl BarragerCost {
     pub fn from_value(value: &Value) -> Self {
-        let content = value
-            .get("data")
-            .and_then(|v| v.as_str())
-            .unwrap_or("5积分");
-        let mut parts = content
-            .split(|c: char| !c.is_alphanumeric())
-            .filter(|s| !s.is_empty());
-        let cost = parts
-            .next()
-            .and_then(|s| s.parse::<u32>().ok())
-            .unwrap_or(0);
-        let unit = parts.next().unwrap_or("积分").to_string();
-
-        Self { cost, unit }
+        let content = value.as_str().unwrap_or("5积分").trim();
+        let cost = content.trim_end_matches("积分").parse::<u32>().unwrap_or(0);
+        Self {
+            cost,
+            unit: "积分".to_string(),
+        }
     }
 }

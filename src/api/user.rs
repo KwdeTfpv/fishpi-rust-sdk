@@ -176,7 +176,7 @@ impl User {
     }
 
     /// 查询登录用户当前活跃度，请求频率请至少 10 分钟一次
-    pub async fn liveness(&self) -> Result<u32, Error> {
+    pub async fn liveness(&self) -> Result<f64, Error> {
         let resp = get(&build_http_path(
             "user/liveness",
             &[("apiKey", self.api_key.clone())],
@@ -193,12 +193,7 @@ impl User {
             })
             .ok_or_else(|| Error::Api("Missing or invalid liveness".to_string()))?;
 
-        let percent = if liveness_raw > 0.0 && liveness_raw <= 1.0 {
-            liveness_raw * 100.0
-        } else {
-            liveness_raw
-        };
-        Ok(percent.max(0.0).round() as u32)
+        Ok(liveness_raw.max(0.0))
     }
 
     /// 检查用户是否已经签到
@@ -221,9 +216,12 @@ impl User {
         ))
         .await?;
 
-        let is_rewarded: bool = resp["isCollectedYesterdayLivenessReward"]
-            .as_bool()
-            .unwrap_or(false);
+        let is_rewarded = resp
+            .get("isCollectedYesterdayLivenessReward")
+            .and_then(|value| value.as_bool())
+            .ok_or_else(|| {
+                Error::Api("Missing or invalid isCollectedYesterdayLivenessReward".to_string())
+            })?;
         Ok(is_rewarded)
     }
 
@@ -235,7 +233,11 @@ impl User {
         ))
         .await?;
 
-        let success: i32 = resp["sum"].as_i64().unwrap_or(0) as i32;
+        let success = resp
+            .get("sum")
+            .and_then(|value| value.as_i64())
+            .ok_or_else(|| Error::Api("Missing or invalid liveness reward sum".to_string()))?
+            as i32;
         Ok(success)
     }
 

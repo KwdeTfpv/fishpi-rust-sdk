@@ -521,6 +521,7 @@ pub struct ArticleAuthor {
     #[serde(deserialize_with = "bool_from_zero")]
     pub articleStatus: bool,
     /// 用户积分
+    #[serde(deserialize_with = "non_negative_u64")]
     pub userPoint: u64,
     /// 用户回帖数
     pub commentCount: u64,

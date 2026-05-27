@@ -5,7 +5,7 @@ description: FishPi Android 插件系统开发文档
 
 # FishPi 插件开发指南
 
-FishPi Android 插件是放在手机本地的 JavaScript 文件，运行在 App 内置 WebView 沙箱中。插件可以监听聊天室消息、修改待发送文本、调用已暴露的 SDK API、保存配置、发送系统提示，并在聊天室输入框上方注册快捷动作。
+FishPi Android 插件是放在手机本地的 JavaScript 文件，运行在 App 内置 WebView 沙箱中。插件可以监听聊天室消息、修改待发送文本、调用已暴露的 SDK API、保存配置、发送系统提示，注册聊天室快捷动作，并生成原生插件页面、对话框和表单 UI。
 
 ## 快速开始
 
@@ -24,7 +24,7 @@ on('message', function(msg) {
 });
 ```
 
-进入聊天室点击顶栏右侧拼图图标即可管理插件。插件文件名是插件主键，例如 `my-plugin.js`，重命名文件会被视为新插件。
+进入聊天室点击输入区 `+` 菜单中的“插件”即可管理插件。插件文件名是插件主键，例如 `my-plugin.js`，重命名文件会被视为新插件。
 
 ## 文件头
 
@@ -360,7 +360,188 @@ log('调试信息');
 | API | 说明 |
 |-----|------|
 | `ui.toast(text)` | 在聊天室插入一条系统消息 |
+| `ui.dialog(title)` | 创建一个原生插件对话框 |
+| `ui.page(title)` | 创建一个原生插件页面 |
 | `log(text)` | 输出到 `adb logcat -s FishPiPlugin:D` |
+
+## 插件生成原生 UI
+
+插件可以用 `ui.dialog()` 或 `ui.page()` 生成 App 内原生 UI。宿主会使用统一的 FishPi 视觉组件渲染，不是 WebView 页面；插件只声明节点结构，点击和表单值会通过 `uiAction` 回到插件。
+
+### 打开一个对话框
+
+```javascript
+var panel = ui.dialog('快捷面板')
+    .text('今天想做什么？', { style: 'title' })
+    .markdown('可以用 **Markdown** 展示说明。')
+    .stat('当前积分', 1024, '来自 getUser')
+    .button('刷新资料', function(values) {
+        fishpi.call('getUser', {}).then(function(user) {
+            if (user.ok === false) return ui.toast(user.error);
+            panel.clear();
+            panel.text(user.userNickname || user.userName, { style: 'title' })
+                .stat('积分', user.points, '在线 ' + user.onlineMinutes + ' 分钟')
+                .update();
+        });
+    });
+
+panel.open();
+```
+
+### 打开一个页面
+
+```javascript
+var page = ui.page('插件工具箱')
+    .section('常用操作', [
+        { type: 'button', label: '发一条消息', actionId: 'send-hello' },
+        { type: 'button', label: '关闭页面', actionId: 'close-page' }
+    ]);
+
+on('uiAction', function(e) {
+    if (e.actionId === 'send-hello') {
+        fishpi.call('sendChatRoomMessage', { content: '来自插件页面' });
+    }
+    if (e.actionId === 'close-page') {
+        page.close();
+    }
+});
+
+page.open();
+```
+
+### 表单与回调
+
+表单节点的值会在按钮、`actionBar` 或带 `actionId` 的节点触发时，一起传给回调。`button(label, fn)` 的第一个参数就是当前表单值。
+
+```javascript
+ui.dialog('发送清风明月')
+    .textarea('content', '内容', {
+        placeholder: '写一点轻轻的东西'
+    })
+    .switch('alsoChat', '同时发到聊天室', { checked: false })
+    .button('发送', function(values) {
+        var content = (values.content || '').trim();
+        if (!content) return ui.toast('内容不能为空');
+
+        fishpi.call('sendBreezemoon', { content: content }).then(function(r) {
+            if (r && r.ok === false) return ui.toast(r.error);
+            if (values.alsoChat) {
+                fishpi.call('sendChatRoomMessage', { content: content });
+            }
+            ui.toast('已发送');
+            ui.dialog('完成').text('清风明月已发布').open();
+        });
+    })
+    .open();
+```
+
+`uiAction` 事件结构：
+
+```json
+{
+  "actionId": "send",
+  "nodeId": "node-id",
+  "values": {
+    "content": "输入内容",
+    "alsoChat": true
+  }
+}
+```
+
+### 动态更新
+
+`open()` 用于首次打开，`update()` 用于替换当前插件 UI 的节点，`clear()` 清空当前节点，`close()` 关闭当前插件 UI。
+
+```javascript
+var page = ui.page('加载用户资料').loading('正在读取...');
+page.open();
+
+fishpi.call('getUserProfile', { userName: 'Kirito' }).then(function(user) {
+    if (user.ok === false) {
+        page.clear();
+        page.error(user.error).update();
+        return;
+    }
+    page.clear();
+    page.userCard({
+        username: user.userName,
+        displayName: user.userNickname,
+        avatar: user.userAvatarURL,
+        actionId: 'open-user'
+    }).markdown(user.intro || '这个人很神秘。').update();
+});
+```
+
+### 支持的节点
+
+| 节点 | Builder | 主要字段 |
+|------|---------|----------|
+| `text` | `.text(text, opts)` | `text`, `style: "body" \| "title"` |
+| `markdown` | `.markdown(text)` | `text` |
+| `image` | `.image(url, opts)` | `url`, `caption` |
+| `divider` | `.divider()` | 无 |
+| `space` | `.space(height)` | `height` |
+| `json` | `.json(data)` | `data` |
+| `card` | `.card(opts)` | `title`, `subtitle`, `children`, `actionId` |
+| `section` | `.section(title, children)` | `title`, `children` |
+| `row` | `.row(children)` | `children` |
+| `columns` | `.columns(children)` | `children` |
+| `tabs` | `.tabs(tabs)` | `tabs: [{ id, label, children }]` |
+| `input` | `.input(name, label, opts)` | `name`, `label`, `value`, `placeholder` |
+| `textarea` | `.textarea(name, label, opts)` | 同 `input`，多行 |
+| `number` | `.number(name, label, opts)` | `value`, `min`, `max` |
+| `switch` | `.switch(name, label, opts)` | `checked` |
+| `select` | `.select(name, label, options, opts)` | `value`, `options` |
+| `chips` | `.chips(name, options, opts)` | `values`, `options` |
+| `slider` | `.slider(name, label, opts)` | `value`, `min`, `max` |
+| `loading` | `.loading(text)` | `text` |
+| `error` | `.error(text)` | `text` |
+| `empty` | `.empty(text)` | `text` |
+| `list` | `.list(items)` | `items: [{ id, title, subtitle, actionId }]` |
+| `table` | `.table(headers, rows)` | `headers`, `rows` |
+| `stat` | `.stat(label, value, detail)` | `label`, `value`, `detail` |
+| `userCard` | `.userCard(opts)` | `username`, `displayName`, `avatar`, `actionId` |
+| `articleCard` | `.articleCard(opts)` | `articleId`, `title`, `preview`, `actionId` |
+| `actionBar` | `.actionBar(actions)` | `actions: [{ id, label, enabled, onClick }]` |
+| `button` | `.button(label, fn, opts)` | `label`, `enabled`, `actionId` |
+
+`options` 可以写字符串数组，也可以写对象数组：
+
+```javascript
+[
+  'recent',
+  { value: 'good', label: '优选' }
+]
+```
+
+### 原始 ui.open
+
+如果不使用 builder，也可以直接调用底层接口。`container` 支持 `dialog`、`page`、`sheet`。
+
+```javascript
+fishpi.call('ui.open', {
+    id: 'raw-demo',
+    container: 'sheet',
+    title: '原始节点示例',
+    nodes: [
+        { type: 'text', text: '这是一个 sheet', style: 'title' },
+        { type: 'button', label: '关闭', actionId: 'close' }
+    ]
+});
+
+on('uiAction', function(e) {
+    if (e.actionId === 'close') fishpi.call('ui.close', {});
+});
+```
+
+规则：
+
+- 插件 UI 是原生 Compose UI，插件不要写 HTML/CSS 布局。
+- `dialog` 适合轻量确认、表单和结果；`page` 适合信息较多的工具页；`sheet` 目前需要通过 `fishpi.call('ui.open', ...)` 使用。
+- `update()` 会替换当前 UI 的节点；如果当前插件没有打开 UI，会自动打开。
+- 表单值按 `name` 聚合，按钮点击时会带上当前所有表单值。
+- `button(label, fn)` 和 `actionBar([{ onClick }])` 会自动绑定回调；原始 `actionId` 可通过 `on('uiAction')` 处理。
+- 插件 UI 会跟随 App 主题和 UE 层级，不要把 JSON 当成主要展示方式，`json` 只适合作为调试兜底。
 
 ## SDK API 参考
 
@@ -902,7 +1083,7 @@ on('message', function(msg) {
 
 ## 插件管理
 
-聊天室顶栏右侧拼图图标进入插件管理。
+聊天室输入区 `+` 菜单中的“插件”进入插件管理；聊天室右上角“更多”里可以显示或隐藏插件快捷浮窗。
 
 | 操作 | 说明 |
 |------|------|
