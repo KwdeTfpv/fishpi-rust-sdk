@@ -19,3 +19,18 @@ docs/.vitepress/*
 !.github/workflows/
 .github/workflows/*
 !.github/workflows/deploy-docs.yml
+
+# android app source
+!android/
+android/*
+!android/app/
+android/app/*
+!android/app/build.gradle.kts
+!android/app/src/
+!android/app/src/**
+!android/native/
+android/native/*
+!android/native/Cargo.toml
+!android/native/src/
+!android/native/src/**
+!android/version.properties

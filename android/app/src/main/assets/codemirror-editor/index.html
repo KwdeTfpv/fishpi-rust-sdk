@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <style>
+    html, body {
+      width: 100%;
+      height: 100vh;
+      min-height: 100vh;
+      margin: 0;
+      overflow: hidden;
+      background: #FAFBF8;
+    }
+
+    #editor {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      min-height: 100vh;
+      overflow: hidden;
+      background: #FAFBF8;
+    }
+
+    #status {
+      position: fixed;
+      left: 14px;
+      top: 14px;
+      right: 14px;
+      z-index: 2;
+      color: #24352C;
+      font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre-wrap;
+    }
+
+    .cm-editor {
+      outline: none;
+      height: 100vh !important;
+    }
+
+    .cm-scroller {
+      height: 100vh !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">CodeMirror loading...</div>
+  <div id="editor"></div>
+  <script src="./editor.js"></script>
+  <script>
+    window.fishpiSetEditorHeight = function(height) {
+      if (!height || height < 1) return;
+      var value = height + "px";
+      document.documentElement.style.height = value;
+      document.body.style.height = value;
+      var editor = document.getElementById("editor");
+      if (editor) editor.style.height = value;
+      var cm = document.querySelector(".cm-editor");
+      if (cm) cm.style.height = value;
+      var scroller = document.querySelector(".cm-scroller");
+      if (scroller) scroller.style.height = value;
+      if (window.fishpiEditorView) window.fishpiEditorView.requestMeasure();
+    };
+
+    window.addEventListener("DOMContentLoaded", function() {
+      setTimeout(function() {
+        var status = document.getElementById("status");
+        if (status && window.fishpiSetSource) status.style.display = "none";
+        if (window.FishPiCodeMirror && window.FishPiCodeMirror.onEditorReady) {
+          window.FishPiCodeMirror.onEditorReady();
+        }
+      }, 0);
+    });
+  </script>
+</body>
+</html>
