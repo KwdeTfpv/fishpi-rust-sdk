@@ -439,10 +439,7 @@ private fun BreezemoonCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.44f))
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), RoundedCornerShape(18.dp))
-                    .padding(horizontal = 11.dp, vertical = 10.dp),
+                    .padding(top = 1.dp),
             ) {
                 BreezemoonHtmlContent(item.content, accent, onOpenUser)
             }
