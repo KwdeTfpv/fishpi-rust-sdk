@@ -67,9 +67,6 @@
       setTimeout(function() {
         var status = document.getElementById("status");
         if (status && window.fishpiSetSource) status.style.display = "none";
-        if (window.FishPiCodeMirror && window.FishPiCodeMirror.onEditorReady) {
-          window.FishPiCodeMirror.onEditorReady();
-        }
       }, 0);
     });
   </script>

@@ -386,8 +386,12 @@ class PluginManager private constructor(context: Context) {
         val disabled = disabledFileNames().toMutableSet()
         if (enable) disabled.remove(fileName) else disabled.add(fileName)
         prefs.edit().putStringSet("disabled", disabled).apply()
-        if (enable) reloadPlugin(fileName) else destroyPlugin(fileName)
-        getState(fileName).status = if (enable) PluginStatus.Stopped else PluginStatus.Disabled
+        if (enable) {
+            reloadPlugin(fileName)
+        } else {
+            destroyPlugin(fileName)
+            getState(fileName).status = PluginStatus.Disabled
+        }
     }
 
     fun uninstallPlugin(fileName: String) {

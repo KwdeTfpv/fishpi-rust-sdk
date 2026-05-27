@@ -1,13 +1,7 @@
 package dev.fishpi.mobile.plugin
 
 import android.annotation.SuppressLint
-import android.os.Handler
-import android.os.Looper
-import android.util.Log
 import android.view.ViewGroup
-import android.webkit.ConsoleMessage
-import android.webkit.JavascriptInterface
-import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.TextView
@@ -21,23 +15,21 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -68,6 +60,7 @@ import dev.fishpi.mobile.chatui.MarkwonContentStyle
 import dev.fishpi.mobile.ui.components.FishPiIconButton
 import kotlinx.coroutines.Job
 import org.json.JSONObject
+import org.json.JSONTokener
 
 @Composable
 internal fun PluginSourceEditorScreen(
@@ -80,14 +73,23 @@ internal fun PluginSourceEditorScreen(
     var source by remember(plugin.fileName) { mutableStateOf("") }
     var selectedTab by remember(plugin.fileName) { mutableStateOf(0) }
     var loadingError by remember(plugin.fileName) { mutableStateOf<String?>(null) }
+    var sourceLoaded by remember(plugin.fileName) { mutableStateOf(false) }
     var closeConfirmOpen by remember(plugin.fileName) { mutableStateOf(false) }
-    val changed = source != originalSource
+    var readEditorSource by remember(plugin.fileName) {
+        mutableStateOf<(((String) -> Unit) -> Unit)?>(null)
+    }
+
+    fun readCurrentSource(callback: (String) -> Unit) {
+        readEditorSource?.invoke(callback) ?: callback(source)
+    }
 
     fun requestClose() {
-        if (changed) {
-            closeConfirmOpen = true
-        } else {
-            onDismiss()
+        readCurrentSource { currentSource ->
+            if (currentSource != originalSource) {
+                closeConfirmOpen = true
+            } else {
+                onDismiss()
+            }
         }
     }
 
@@ -96,9 +98,13 @@ internal fun PluginSourceEditorScreen(
             .onSuccess {
                 originalSource = it
                 source = it
+                sourceLoaded = true
                 loadingError = null
             }
-            .onFailure { loadingError = it.message ?: "读取插件源码失败" }
+            .onFailure {
+                sourceLoaded = false
+                loadingError = it.message ?: "读取插件源码失败"
+            }
     }
 
     BackHandler(onBack = ::requestClose)
@@ -147,26 +153,33 @@ internal fun PluginSourceEditorScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = plugin.fileName + if (changed) " · 未保存" else "",
+                        text = plugin.fileName,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                TextButton(
+                Button(
                     onClick = {
-                        runCatching { manager.savePluginSource(plugin.fileName, source) }
-                            .onSuccess {
-                                originalSource = source
-                                onSaved()
-                                FishPiNotifier.success("已保存并重载插件")
-                            }
-                            .onFailure { error ->
-                                FishPiNotifier.error("保存失败: ${error.message ?: "未知错误"}")
-                            }
+                        readCurrentSource { currentSource ->
+                            runCatching { manager.savePluginSource(plugin.fileName, currentSource) }
+                                .onSuccess {
+                                    source = currentSource
+                                    originalSource = currentSource
+                                    onSaved()
+                                    FishPiNotifier.success("已保存并重载插件")
+                                }
+                                .onFailure { error ->
+                                    FishPiNotifier.error("保存失败: ${error.message ?: "未知错误"}")
+                                }
+                        }
                     },
-                    enabled = changed && loadingError == null,
+                    enabled = sourceLoaded && loadingError == null,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                 ) {
                     Icon(Icons.Rounded.Save, contentDescription = null, modifier = Modifier.size(17.dp))
@@ -184,7 +197,16 @@ internal fun PluginSourceEditorScreen(
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
             TabRow(selectedTabIndex = selectedTab, containerColor = FishPiTheme.surface) {
                 Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("编辑") })
-                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("预览") })
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = {
+                        readCurrentSource { currentSource ->
+                            source = currentSource
+                            selectedTab = 1
+                        }
+                    },
+                    text = { Text("预览") },
+                )
             }
             loadingError?.let { error ->
                 Text(
@@ -195,8 +217,10 @@ internal fun PluginSourceEditorScreen(
                 )
             } ?: when (selectedTab) {
                 0 -> PluginSourceEditor(
-                    source = source,
-                    onSourceChange = { source = it },
+                    externalSource = originalSource,
+                    onReaderChanged = { reader ->
+                        readEditorSource = reader
+                    },
                     modifier = Modifier.weight(1f),
                 )
                 else -> PluginSourcePreview(
@@ -211,16 +235,44 @@ internal fun PluginSourceEditorScreen(
 @Composable
 @SuppressLint("SetJavaScriptEnabled")
 private fun PluginSourceEditor(
-    source: String,
-    onSourceChange: (String) -> Unit,
+    externalSource: String,
+    onReaderChanged: ((((String) -> Unit) -> Unit)?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val latestSource = rememberUpdatedState(source)
-    val latestOnSourceChange = rememberUpdatedState(onSourceChange)
-    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val latestExternalSource = rememberUpdatedState(externalSource)
     var editorWebView by remember { mutableStateOf<WebView?>(null) }
+    val editorSource = remember { arrayOfNulls<String>(1) }
 
-    fun pushSourceToEditor(view: WebView?, value: String) {
+    fun decodeJavascriptString(value: String?): String {
+        if (value.isNullOrBlank() || value == "null") return ""
+        return runCatching { JSONTokener(value).nextValue() as? String }
+            .getOrNull()
+            ?: ""
+    }
+
+    fun readCurrentSource(callback: (String) -> Unit) {
+        val view = editorWebView
+        if (view == null) {
+            callback(editorSource[0] ?: "")
+            return
+        }
+        view.evaluateJavascript(
+            "window.fishpiGetSource ? window.fishpiGetSource() : ''",
+        ) { encoded ->
+            val value = decodeJavascriptString(encoded)
+            editorSource[0] = value
+            callback(value)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onReaderChanged(::readCurrentSource)
+        onDispose { onReaderChanged(null) }
+    }
+
+    fun pushSourceToEditor(view: WebView?, value: String, force: Boolean = false) {
+        if (!force && editorSource[0] == value) return
+        editorSource[0] = value
         view?.evaluateJavascript(
             "if (window.fishpiSetSource) window.fishpiSetSource(${JSONObject.quote(value)})",
             null,
@@ -236,15 +288,8 @@ private fun PluginSourceEditor(
         )
     }
 
-    val bridge = remember {
-        CodeMirrorBridge(
-            mainHandler = mainHandler,
-            onReady = {
-                pushEditorSize(editorWebView)
-                pushSourceToEditor(editorWebView, latestSource.value)
-            },
-            onSourceChanged = { latestOnSourceChange.value(it) },
-        )
+    LaunchedEffect(externalSource, editorWebView) {
+        pushSourceToEditor(editorWebView, externalSource, force = true)
     }
 
     Box(
@@ -262,15 +307,18 @@ private fun PluginSourceEditor(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
                     setBackgroundColor(android.graphics.Color.rgb(250, 251, 248))
-                    webViewClient = CodeMirrorWebViewClient()
-                    webChromeClient = CodeMirrorChromeClient()
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView, url: String) {
+                            pushEditorSize(view)
+                            pushSourceToEditor(view, latestExternalSource.value, force = true)
+                        }
+                    }
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = false
                     settings.allowFileAccess = true
                     settings.blockNetworkLoads = true
                     settings.builtInZoomControls = false
                     settings.displayZoomControls = false
-                    addJavascriptInterface(bridge, "FishPiCodeMirror")
                     addOnLayoutChangeListener { changedView, _, _, _, _, _, _, _, _ ->
                         pushEditorSize(changedView as? WebView)
                     }
@@ -279,79 +327,16 @@ private fun PluginSourceEditor(
             },
             update = { view ->
                 pushEditorSize(view)
-                pushSourceToEditor(view, source)
             },
             onRelease = { view ->
                 if (editorWebView === view) {
                     editorWebView = null
                 }
-                view.removeJavascriptInterface("FishPiCodeMirror")
                 view.stopLoading()
                 view.loadUrl("about:blank")
                 view.destroy()
             },
         )
-    }
-}
-
-private class CodeMirrorBridge(
-    private val mainHandler: Handler,
-    private val onReady: () -> Unit,
-    private val onSourceChanged: (String) -> Unit,
-) {
-    @JavascriptInterface
-    fun onEditorReady() {
-        Log.d("FishPiCodeMirror", "editor ready")
-        mainHandler.post { onReady() }
-    }
-
-    @JavascriptInterface
-    fun onSourceChanged(value: String) {
-        Log.d("FishPiCodeMirror", "source changed length=${value.length}")
-        mainHandler.post { onSourceChanged(value) }
-    }
-
-    @JavascriptInterface
-    fun onEditorError(value: String) {
-        Log.e("FishPiCodeMirror", value)
-    }
-}
-
-private class CodeMirrorWebViewClient : WebViewClient() {
-    override fun onPageFinished(view: WebView, url: String) {
-        super.onPageFinished(view, url)
-        Log.d("FishPiCodeMirror", "page finished: $url")
-        view.evaluateJavascript(
-            """
-            (function() {
-              var editor = document.querySelector('.cm-editor');
-              var content = document.querySelector('.cm-content');
-              var status = document.getElementById('status');
-              return JSON.stringify({
-                ready: !!window.fishpiSetSource,
-                editor: !!editor,
-                content: !!content,
-                text: content ? content.innerText.length : -1,
-                editorRect: editor ? [editor.clientWidth, editor.clientHeight] : null,
-                contentRect: content ? [content.clientWidth, content.clientHeight] : null,
-                body: [document.body.clientWidth, document.body.clientHeight],
-                status: status ? getComputedStyle(status).display + ':' + status.textContent : null
-              });
-            })()
-            """.trimIndent(),
-        ) { value ->
-            Log.d("FishPiCodeMirror", "page state: $value")
-        }
-    }
-}
-
-private class CodeMirrorChromeClient : WebChromeClient() {
-    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-        Log.d(
-            "FishPiCodeMirror",
-            "${consoleMessage.message()} @ ${consoleMessage.sourceId()}:${consoleMessage.lineNumber()}",
-        )
-        return true
     }
 }
 
