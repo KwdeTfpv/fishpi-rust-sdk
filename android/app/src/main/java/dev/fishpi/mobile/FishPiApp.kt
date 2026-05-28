@@ -22,7 +22,7 @@ import kotlinx.coroutines.withContext
 fun FishPiApp() {
     val context = LocalContext.current
     val store = remember { SessionStore(context.applicationContext) }
-    val fallbackTheme = FishPiThemePreset.Island
+    val fallbackTheme = FishPiThemePreset.DeepBlueNeon
     val builtinOptions = remember { builtinThemeOptions() }
     var importedThemes by remember {
         mutableStateOf(store.getImportedThemeJsons().mapNotNull { raw ->
@@ -30,13 +30,15 @@ fun FishPiApp() {
         })
     }
     var chatWallpaperUri by remember { mutableStateOf(store.getChatWallpaperUri()) }
-    val themeOptions = builtinOptions
+    val themeOptions = remember(builtinOptions, importedThemes) {
+        buildThemeOptions(builtinOptions, importedThemes)
+    }
     var themeKey by remember {
         val savedThemeKey = store.getThemePresetKey()
         mutableStateOf(
             when {
                 savedThemeKey.isBlank() -> fallbackTheme.key
-                builtinOptions.none { it.key == savedThemeKey } -> fallbackTheme.key
+                themeOptions.none { it.key == savedThemeKey } -> fallbackTheme.key
                 else -> savedThemeKey
             },
         )

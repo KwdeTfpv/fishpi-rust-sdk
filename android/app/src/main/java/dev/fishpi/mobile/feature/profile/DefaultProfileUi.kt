@@ -696,7 +696,7 @@ private fun ThemeEditorOverlay(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            PresetChip("重置为岛屿", onClick = { applyPalette(option.palette) })
+            PresetChip("重置为夜间模式", onClick = { applyPalette(option.palette) })
             ThemeColorSections.forEach { section ->
                 Text(
                     text = section.label,

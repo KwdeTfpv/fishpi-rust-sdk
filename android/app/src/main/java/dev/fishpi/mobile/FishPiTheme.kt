@@ -18,7 +18,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 
 internal enum class FishPiThemePreset(val label: String, val key: String) {
-    Island("岛屿", "island"),
+    Island("夜间模式", "island"),
     DeepBlueNeon("深蓝荧光", "deep-blue-neon"),
     ;
 
@@ -81,34 +81,34 @@ internal data class FishPiPalette(
 private val ThemeKeySanitizeRegex = Regex("[^a-z0-9_-]+")
 
 internal val IslandFishPiPalette = FishPiPalette(
-    background = Color(0xFFFAFBF8),
-    chatBackground = Color(0xFFF7FAF6),
+    background = Color(0xFF121212),
+    chatBackground = Color(0xFF101010),
     wallpaperColors = listOf(
-        Color(0xFFFFFFFF),
-        Color(0xFFF8FBF7),
-        Color(0xFFF2F7F1),
+        Color(0xFF0B0B0B),
+        Color(0xFF121212),
+        Color(0xFF1A1A1A),
     ),
-    surface = Color(0xFFFFFFFF),
-    surfaceElevated = Color(0xFFF7FAF5),
-    surfaceContainer = Color(0xFFEEF5ED),
-    onSurface = Color(0xFF24352C),
-    weakText = Color(0xFF66756D),
-    userName = Color(0xFF52635A),
-    clientText = Color(0xFF6C7B72),
-    clientBackground = Color(0xFFEFF6EC),
-    timeText = Color(0xFF74827A),
-    outline = Color(0xFFD9E5D5),
-    accent = Color(0xFF3E9D75),
-    quoteBackground = Color(0xFFF3F8F0),
-    outgoingBubble = Color(0xFFE9F6E3),
-    incomingBubble = Color(0xFFFFFFFF),
-    linkText = Color(0xFF2C846F),
-    quoteText = Color(0xFF65756C),
-    quoteLine = Color(0xFF8CC8A7),
-    toolDefault = Color(0xFF3E9D75),
-    toolGallery = Color(0xFF56A86A),
-    toolCamera = Color(0xFF5AA7BF),
-    toolRedPacket = Color(0xFFE53935),
+    surface = Color(0xFF1E1E1E),
+    surfaceElevated = Color(0xFF252525),
+    surfaceContainer = Color(0xFF2C2C2C),
+    onSurface = Color(0xFFEDEDED),
+    weakText = Color(0xFFB0B0B0),
+    userName = Color(0xFFD6D6D6),
+    clientText = Color(0xFFA8A8A8),
+    clientBackground = Color(0xFF303030),
+    timeText = Color(0xFF8E8E8E),
+    outline = Color(0xFF3A3A3A),
+    accent = Color(0xFFE0E0E0),
+    quoteBackground = Color(0xFF2A2A2A),
+    outgoingBubble = Color(0xFF3A3A3A),
+    incomingBubble = Color(0xFF242424),
+    linkText = Color(0xFFE0E0E0),
+    quoteText = Color(0xFFC7C7C7),
+    quoteLine = Color(0xFF5A5A5A),
+    toolDefault = Color(0xFFD0D0D0),
+    toolGallery = Color(0xFFD0D0D0),
+    toolCamera = Color(0xFFD0D0D0),
+    toolRedPacket = Color(0xFFFF5252),
 )
 
 internal val DeepBlueNeonFishPiPalette = FishPiPalette(
@@ -163,7 +163,7 @@ internal object FishPiTheme {
 }
 
 internal fun builtinThemeOptions(): List<FishPiThemeOption> =
-    listOf(FishPiThemePreset.Island, FishPiThemePreset.DeepBlueNeon).map { preset ->
+    listOf(FishPiThemePreset.DeepBlueNeon, FishPiThemePreset.Island).map { preset ->
         FishPiThemeOption(
             key = preset.key,
             label = preset.label,
@@ -171,6 +171,20 @@ internal fun builtinThemeOptions(): List<FishPiThemeOption> =
             palette = preset.previewPalette(),
             uiStyle = preset.uiStyle(),
             builtinPreset = preset,
+        )
+    }
+
+internal fun buildThemeOptions(
+    builtinOptions: List<FishPiThemeOption>,
+    importedThemes: List<CustomFishPiTheme>,
+): List<FishPiThemeOption> =
+    builtinOptions + importedThemes.map { custom ->
+        FishPiThemeOption(
+            key = custom.key,
+            label = custom.label,
+            description = custom.description,
+            palette = custom.palette,
+            rawJson = custom.rawJson,
         )
     }
 
@@ -185,7 +199,7 @@ internal fun FishPiThemePreset.uiStyle(): FishPiUiStyle =
 
 internal fun FishPiThemePreset.themeDescription(): String =
     when (this) {
-        FishPiThemePreset.Island -> "暖奶油底色，草绿与木质色强调"
+        FishPiThemePreset.Island -> "通用深色背景，中性灰层级与高对比文字"
         FishPiThemePreset.DeepBlueNeon -> "深蓝主色，荧光绿强调，白色内容层"
     }
 
