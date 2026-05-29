@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'android/**'
+      - 'android/version.properties'
   workflow_dispatch:
     inputs:
       dry_run:
