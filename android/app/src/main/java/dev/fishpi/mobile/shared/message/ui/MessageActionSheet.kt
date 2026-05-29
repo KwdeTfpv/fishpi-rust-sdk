@@ -55,7 +55,7 @@ internal fun MessageActionSheet(
                     QuickReactionOptions.forEach { option ->
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(FishPiTheme.radiusField))
                                 .background(
                                     if (message.currentUserReaction == option.value) {
                                         FishPiTheme.accent.copy(alpha = 0.12f)
@@ -67,7 +67,10 @@ internal fun MessageActionSheet(
                                     onReaction(option.value)
                                     onDismiss()
                                 }
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                .padding(
+                                    horizontal = FishPiTheme.spacingControl,
+                                    vertical = FishPiTheme.spacingControl * 0.72f,
+                                ),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(text = option.emoji)
@@ -98,6 +101,7 @@ internal fun MessageActionSheet(
             }
     }
 }
+
 
 
 

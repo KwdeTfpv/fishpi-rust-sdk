@@ -180,10 +180,6 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val ChatPageHorizontalPadding = 14.dp
-private val ChatPageVerticalGap = 10.dp
-private val ChatPanelCorner = 16.dp
-private val ChatControlGap = 10.dp
 private val ChatIconButtonSize = 36.dp
 private const val ChatPluginFloatPrefsName = "chat_plugin_float"
 private const val ChatPluginFloatXKey = "x"
@@ -585,7 +581,7 @@ private fun DefaultChatUiContent(
             icon = Icons.Rounded.PhotoLibrary,
             enabled = !isUploadingAttachment,
             iconTint = FishPiTheme.toolGallery,
-            iconBackground = Color(0xFFE8F8EE),
+            iconBackground = FishPiTheme.toolGallery.copy(alpha = 0.12f),
             onClick = {
                 bridge.closeAttachmentPanel()
                 attachmentPicker.openGallery()
@@ -597,7 +593,7 @@ private fun DefaultChatUiContent(
             icon = Icons.Rounded.AddAPhoto,
             enabled = !isUploadingAttachment,
             iconTint = FishPiTheme.toolCamera,
-            iconBackground = Color(0xFFEAF1FF),
+            iconBackground = FishPiTheme.toolCamera.copy(alpha = 0.12f),
             onClick = {
                 bridge.closeAttachmentPanel()
                 attachmentPicker.openCamera()
@@ -609,7 +605,7 @@ private fun DefaultChatUiContent(
             icon = Icons.Rounded.CardGiftcard,
             enabled = !isUploadingAttachment,
             iconTint = FishPiTheme.toolRedPacket,
-            iconBackground = Color(0xFFFFECEA),
+            iconBackground = FishPiTheme.toolRedPacket.copy(alpha = 0.12f),
             onClick = {
                 dispatch(ChatAction.OpenRedPacketComposer)
             },
@@ -820,7 +816,7 @@ private fun DefaultChatUiContent(
                         drawBackground = false,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = ChatPageHorizontalPadding),
+                            .padding(horizontal = FishPiTheme.spacingPage),
                         onLoadMore = { loadMoreHistory() },
                         onNearBottomChanged = { nearBottom ->
                             chatListNearBottom = nearBottom
@@ -930,7 +926,7 @@ private fun DefaultChatUiContent(
                     },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(end = ChatPageHorizontalPadding + 10.dp, bottom = 7.dp)
+                        .padding(end = FishPiTheme.spacingPage + FishPiTheme.spacingControl, bottom = 7.dp)
                         .zIndex(5f),
                 )
 
@@ -1028,8 +1024,8 @@ private fun DefaultChatUiContent(
             },
             modifier = Modifier
                 .padding(
-                    start = ChatPageHorizontalPadding,
-                    end = ChatPageHorizontalPadding,
+                    start = FishPiTheme.spacingPage,
+                    end = FishPiTheme.spacingPage,
                     top = 2.dp,
                     bottom = 8.dp,
                 )
@@ -1642,7 +1638,7 @@ internal fun ChatFilterSettingsOverlay(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(14.dp),
+            contentPadding = PaddingValues(FishPiTheme.spacingPage),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
@@ -1762,7 +1758,7 @@ internal fun ChatFilterSettingsOverlay(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusBox))
                         .background(FishPiErrorRed.copy(alpha = 0.08f))
                         .clickable {
                             onSave(ChatFilterConfig(
@@ -1795,7 +1791,7 @@ internal fun ChatFilterSettingsOverlay(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusBox))
                         .background(FishPiTheme.surfaceContainer)
                         .clickable {
                             onSave(ChatFilterConfig(
@@ -1832,7 +1828,7 @@ private fun ChatSendOnEnterSettingRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(FishPiTheme.surfaceContainer)
             .clickable(onClick = onToggle)
             .padding(14.dp),
@@ -1858,7 +1854,7 @@ private fun ChatAvatarSettingRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(FishPiTheme.surfaceContainer)
             .clickable(onClick = onToggle)
             .padding(14.dp),
@@ -1881,7 +1877,7 @@ private fun CapsuleSwitch(checked: Boolean) {
     Box(
         modifier = Modifier
             .size(width = 58.dp, height = 32.dp)
-            .clip(RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
             .background(if (checked) FishPiTheme.accent else FishPiTheme.surface),
         contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
     ) {
@@ -1889,7 +1885,7 @@ private fun CapsuleSwitch(checked: Boolean) {
             modifier = Modifier
                 .padding(horizontal = 4.dp)
                 .size(24.dp)
-                .clip(RoundedCornerShape(999.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                 .background(FishPiTheme.background),
             contentAlignment = Alignment.Center,
         ) {
@@ -1915,7 +1911,7 @@ private fun FilterRuleEditor(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(FishPiTheme.surfaceContainer)
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -1932,7 +1928,7 @@ private fun FilterRuleEditor(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(FishPiTheme.radiusBox))
                     .background(if (value.isNotBlank()) FishPiTheme.accent.copy(alpha = 0.12f) else FishPiTheme.surface)
                     .clickable(enabled = value.isNotBlank()) { onAdd() },
                 contentAlignment = Alignment.Center,
@@ -1952,7 +1948,7 @@ private fun FilterRuleEditor(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusField))
                         .background(FishPiTheme.surface)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -2125,7 +2121,7 @@ private fun BlockedMessageRow(
                 }
                 Surface(
                     color = if (isMine) FishPiTheme.accent.copy(alpha = 0.16f) else FishPiTheme.surface,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(FishPiTheme.radiusBox),
                     modifier = Modifier
                         .onGloballyPositioned { coordinates ->
                             val offset = coordinates.positionInWindow()
@@ -2168,7 +2164,7 @@ private fun BlockedMessageRow(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(150.dp)
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(FishPiTheme.radiusField))
                                     .clickable { onImageClick(url) },
                             )
                         }
@@ -2187,7 +2183,7 @@ private fun BlockedMessageRow(
                         itemsIndexed(message.reactionSummary) { _, reaction ->
                             Surface(
                                 color = if (reaction.selected) FishPiTheme.accent.copy(alpha = 0.14f) else FishPiTheme.surface,
-                                shape = RoundedCornerShape(999.dp),
+                                shape = RoundedCornerShape(FishPiTheme.radiusSelector),
                                 modifier = Modifier.clickable { onReactionClick(message, reaction.value) },
                             ) {
                                 Text(
@@ -2393,9 +2389,9 @@ private fun ChatRoomContextBar(
     return
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(FishPiTheme.radiusBox),
         color = FishPiTheme.surface.copy(alpha = 0.82f),
-        border = BorderStroke(1.dp, FishPiTheme.outline.copy(alpha = 0.12f)),
+        border = BorderStroke(FishPiTheme.borderWidth, FishPiTheme.outline.copy(alpha = 0.12f)),
         shadowElevation = 0.dp,
     ) {
         Column(
@@ -2644,7 +2640,7 @@ private fun ChatOnlineUserRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -2780,7 +2776,7 @@ private fun ChatActionOverflowMenu(
                     .align(Alignment.TopEnd)
                     .padding(top = 1.dp, end = 0.dp)
                     .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
-                    .clip(RoundedCornerShape(999.dp))
+                    .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                     .background(palette.accent)
                     .padding(horizontal = 4.dp, vertical = 1.dp),
                 contentAlignment = Alignment.Center,
@@ -2814,7 +2810,7 @@ private fun ChatTopicEditorDialog(
                 .widthIn(max = 460.dp),
             shape = RoundedCornerShape(18.dp),
             color = FishPiTheme.surface,
-            border = BorderStroke(1.dp, FishPiTheme.outline.copy(alpha = 0.16f)),
+            border = BorderStroke(FishPiTheme.borderWidth, FishPiTheme.outline.copy(alpha = 0.16f)),
             shadowElevation = 0.dp,
         ) {
             Column(
@@ -2844,9 +2840,9 @@ private fun ChatTopicEditorDialog(
                     )
                 }
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(FishPiTheme.radiusBox + 4.dp),
                     color = FishPiTheme.surfaceContainer,
-                    border = BorderStroke(1.dp, FishPiTheme.outline.copy(alpha = 0.14f)),
+                    border = BorderStroke(FishPiTheme.borderWidth, FishPiTheme.outline.copy(alpha = 0.14f)),
                     shadowElevation = 0.dp,
                 ) {
                     BasicTextField(
@@ -3023,9 +3019,9 @@ private fun ChatPluginFloatingPanel(
                         )
                     }
                 },
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(FishPiTheme.radiusBox + 4.dp),
             color = palette.surface.copy(alpha = 0.96f),
-            border = BorderStroke(1.dp, palette.outline.copy(alpha = 0.14f)),
+            border = BorderStroke(FishPiTheme.borderWidth, palette.outline.copy(alpha = 0.14f)),
             shadowElevation = 0.dp,
             tonalElevation = 0.dp,
         ) {
@@ -3156,7 +3152,7 @@ private fun PluginFloatingChip(
     selected: Boolean = false,
 ) {
     val palette = LocalFishPiPalette.current
-    val shape = RoundedCornerShape(999.dp)
+    val shape = RoundedCornerShape(FishPiTheme.radiusSelector)
     Row(
         modifier = modifier
             .clip(shape)
@@ -3306,7 +3302,7 @@ private fun ChatActionsSheet(
                 shape = RoundedCornerShape(topStart = 18.dp, topEnd = 8.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
                 color = palette.surface,
                 shadowElevation = 0.dp,
-                border = BorderStroke(1.dp, palette.outline.copy(alpha = 0.18f)),
+                border = BorderStroke(FishPiTheme.borderWidth, palette.outline.copy(alpha = 0.18f)),
             ) {
                 Column(
                     modifier = Modifier
@@ -3415,7 +3411,7 @@ private fun ChatActionSheetMiniItem(
         contentColor = palette.onSurface,
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
-        border = BorderStroke(1.dp, palette.outline.copy(alpha = 0.10f)),
+        border = BorderStroke(FishPiTheme.borderWidth, palette.outline.copy(alpha = 0.10f)),
     ) {
         Column(
             modifier = Modifier
@@ -3454,12 +3450,12 @@ private fun ChatActionSheetItem(
     Surface(
         onClick = onClick,
         modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(FishPiTheme.radiusBox),
         color = palette.background.copy(alpha = 0.72f),
         contentColor = palette.onSurface,
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
-        border = BorderStroke(1.dp, palette.outline.copy(alpha = 0.13f)),
+        border = BorderStroke(FishPiTheme.borderWidth, palette.outline.copy(alpha = 0.13f)),
     ) {
         Row(
         modifier = Modifier
@@ -3505,7 +3501,7 @@ private fun ChatActionSheetItem(
             badgeText?.let { badge ->
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                         .background(palette.accent)
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                     contentAlignment = Alignment.Center,
@@ -3541,9 +3537,9 @@ private fun AiChatContextBar(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(FishPiTheme.radiusField),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.26f)),
+        border = BorderStroke(FishPiTheme.borderWidth, MaterialTheme.colorScheme.primary.copy(alpha = 0.26f)),
         shadowElevation = 0.dp,
     ) {
         Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -3551,7 +3547,7 @@ private fun AiChatContextBar(
                 Box(
                     modifier = Modifier
                         .size(width = 4.dp, height = 30.dp)
-                        .clip(RoundedCornerShape(99.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                         .background(if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error),
                 )
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -3675,16 +3671,17 @@ private fun chatConnectionConnected(status: String): Boolean {
         text.contains("reconnected", ignoreCase = true)
 }
 
+@Composable
 private fun chatConnectionDotColor(status: String, connected: Boolean): Color {
     val text = status.trim()
-    if (connected) return Color(0xFF2E9D68)
+    if (connected) return FishPiTheme.success
     val reconnecting = text.isBlank() ||
         text.contains("连接中") ||
         text.contains("重连") ||
         text.contains("恢复中") ||
         text.contains("connecting", ignoreCase = true) ||
         text.contains("reconnect", ignoreCase = true)
-    return if (reconnecting) Color(0xFFE2A72E) else Color(0xFFE4564F)
+    return if (reconnecting) FishPiTheme.warning else FishPiTheme.error
 }
 
 @Composable
@@ -3716,10 +3713,10 @@ private fun ChatConnectionChip(
     connected: Boolean,
     onClick: () -> Unit,
 ) {
-    val color = if (connected) Color(0xFF2E9D68) else MaterialTheme.colorScheme.error
+    val color = if (connected) FishPiTheme.success else FishPiTheme.error
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
             .clickable(onClick = onClick)
             .padding(horizontal = 2.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -3789,7 +3786,7 @@ private fun ChatUnreadCountButton(
         contentColor = palette.accent,
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
-        border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.28f)),
+        border = BorderStroke(FishPiTheme.borderWidth, palette.accent.copy(alpha = 0.28f)),
     ) {
         Row(
             modifier = Modifier
@@ -3851,7 +3848,7 @@ private fun TimeSeparatorBar(text: String) {
     ) {
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusField))
                 .background(FishPiTheme.surfaceContainer)
                 .padding(horizontal = 10.dp, vertical = 5.dp),
             contentAlignment = Alignment.Center,
@@ -3878,6 +3875,7 @@ private fun HistoryLoadState(
         Text(text = text, color = FishPiTheme.accent)
     }
 }
+
 
 
 

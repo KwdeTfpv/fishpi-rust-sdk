@@ -18,6 +18,7 @@ import coil3.asDrawable
 import coil3.request.ImageRequest
 import dev.fishpi.mobile.shared.message.ChatListItem
 import dev.fishpi.mobile.LocalFishPiPalette
+import dev.fishpi.mobile.LocalFishPiThemeTokens
 import dev.fishpi.mobile.chatui.ChatMarkdownRenderCache
 import dev.fishpi.mobile.chatui.MarkwonChatRenderer
 import dev.fishpi.mobile.data.ChatRoomMessage
@@ -61,8 +62,9 @@ internal fun NativeMessageList(
     controller: NativeMessageListController = rememberNativeMessageListController(),
 ) {
     val palette = LocalFishPiPalette.current
+    val tokens = LocalFishPiThemeTokens.current
     val context = LocalContext.current
-    val theme = remember(palette) { NativeMessageTheme.fromPalette(palette) }
+    val theme = remember(palette, tokens) { NativeMessageTheme.fromTheme(palette, tokens) }
     val imageLoader = rememberFishPiImageLoader()
     val markdownCache = remember(palette) { ChatMarkdownRenderCache() }
     val renderScope = remember(palette) { CoroutineScope(SupervisorJob() + Dispatchers.Default) }

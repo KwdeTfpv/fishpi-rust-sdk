@@ -105,14 +105,14 @@ internal fun FishPiUserSummaryCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(FishPiTheme.surfaceContainer)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(FishPiTheme.spacingSection),
+        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
         ) {
             FishPiAvatar(
                 avatarUrl = user.userAvatarUrl,
@@ -122,7 +122,7 @@ internal fun FishPiUserSummaryCard(
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
                 ) {
                     Text(
                         text = user.displayName,
@@ -140,7 +140,7 @@ internal fun FishPiUserSummaryCard(
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem)) {
             FishPiProfileStatChip(label = "积分", value = user.points.toString())
             FishPiProfileStatChip(label = "关注", value = user.following.toString())
             FishPiProfileStatChip(label = "粉丝", value = user.follower.toString())
@@ -182,10 +182,10 @@ internal fun FishPiMedalWall(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(FishPiTheme.surface.copy(alpha = 0.84f))
-            .padding(horizontal = 14.dp, vertical = 13.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(FishPiTheme.spacingSection),
+        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
     ) {
         Text(text = "勋章墙", color = titleColor, fontWeight = FontWeight.Bold)
         when {
@@ -270,9 +270,9 @@ internal fun FishPiMedalBadge(
             modifier = Modifier
                 .padding(start = 12.dp, top = 2.dp)
                 .height(21.dp)
-                .clip(RoundedCornerShape(999.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                 .background(backgroundColor)
-                .border(1.dp, Color(0xFFCECECE), RoundedCornerShape(999.dp))
+                .border(FishPiTheme.borderWidth, FishPiTheme.outline.copy(alpha = 0.38f), RoundedCornerShape(FishPiTheme.radiusSelector))
                 .padding(start = 15.dp, end = 10.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
@@ -295,8 +295,8 @@ internal fun FishPiMedalBadge(
             textColor = textColor,
             modifier = Modifier
                 .size(25.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .border(1.dp, Color(0xFFCECECE), RoundedCornerShape(999.dp)),
+                .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
+                .border(FishPiTheme.borderWidth, FishPiTheme.outline.copy(alpha = 0.38f), RoundedCornerShape(FishPiTheme.radiusSelector)),
         )
     }
 }
@@ -351,7 +351,7 @@ internal fun FishPiRoleBadge(role: String) {
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.35f))
                 .background(FishPiErrorRed)
                 .padding(horizontal = 6.dp, vertical = 2.dp),
         )
@@ -362,9 +362,12 @@ internal fun FishPiRoleBadge(role: String) {
 internal fun FishPiProfileStatChip(label: String, value: String) {
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(FishPiTheme.surface)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .padding(
+                horizontal = FishPiTheme.spacingControl,
+                vertical = FishPiTheme.spacingControl * 0.75f,
+            ),
     ) {
         Text(text = value, color = FishPiTheme.accent, fontWeight = FontWeight.SemiBold)
         Text(text = label, color = FishPiTheme.onSurface.copy(alpha = 0.58f))
@@ -406,4 +409,5 @@ private fun Modifier.fishPiOverlapStart(overlap: Dp): Modifier = this.then(
         }
     },
 )
+
 

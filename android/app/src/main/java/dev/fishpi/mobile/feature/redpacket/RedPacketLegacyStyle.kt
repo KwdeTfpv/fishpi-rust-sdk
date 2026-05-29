@@ -137,7 +137,7 @@ internal fun RedPacketCard(
                     ),
                 ),
             )
-            .border(1.dp, RedPacketGold.copy(alpha = 0.32f), RoundedCornerShape(24.dp))
+            .border(FishPiTheme.borderWidth, RedPacketGold.copy(alpha = 0.32f), RoundedCornerShape(24.dp))
             .clickable(enabled = preview.openable, onClick = onClick)
             .padding(16.dp),
     ) {
@@ -1136,7 +1136,7 @@ private fun RedPacketDialogFrame(
                 .fillMaxWidth()
                 .widthIn(max = 336.dp)
                 .heightIn(max = maxHeight * 0.82f)
-                .border(1.dp, FishPiTheme.surfaceContainer.copy(alpha = 0.86f), shape)
+                .border(FishPiTheme.borderWidth, FishPiTheme.surfaceContainer.copy(alpha = 0.86f), shape)
                 .clip(shape)
                 .background(FishPiTheme.surface)
                 .consumeTaps(),
@@ -1332,7 +1332,7 @@ private fun RedPacketCompactTextField(
             .fillMaxWidth()
             .clip(shape)
             .background(FishPiTheme.surfaceContainer.copy(alpha = if (enabled) 0.46f else 0.26f))
-            .border(1.dp, borderColor, shape)
+            .border(FishPiTheme.borderWidth, borderColor, shape)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),

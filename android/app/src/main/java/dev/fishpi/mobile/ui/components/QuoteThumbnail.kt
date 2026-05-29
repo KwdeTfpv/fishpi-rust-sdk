@@ -31,8 +31,9 @@ internal fun QuoteThumbnail(url: String) {
         contentScale = ContentScale.Crop,
         modifier = Modifier
             .size(48.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusField))
             .background(FishPiTheme.accent.copy(alpha = 0.12f)),
     )
 }
+
 

@@ -34,15 +34,6 @@ import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.LocalFishPiPalette
 
 internal object UiLayerTokens {
-    val PagePadding = 16.dp
-    val SectionGap = 12.dp
-    val InlineGap = 8.dp
-    val ControlRadius = 14.dp
-    val CardRadius = 12.dp
-    val ChipRadius = 999.dp
-    val ControlPadding = PaddingValues(horizontal = 12.dp, vertical = 9.dp)
-    val CardPadding = PaddingValues(14.dp)
-
     const val ZPage = 0f
     const val ZControl = 10f
     const val ZFloating = 30f
@@ -79,8 +70,11 @@ internal fun UiLayerScaffold(
 @Composable
 internal fun ControlSurface(
     modifier: Modifier = Modifier,
-    shape: RoundedCornerShape = RoundedCornerShape(UiLayerTokens.ControlRadius),
-    contentPadding: PaddingValues = UiLayerTokens.ControlPadding,
+    shape: RoundedCornerShape = RoundedCornerShape(FishPiTheme.radiusField),
+    contentPadding: PaddingValues = PaddingValues(
+        horizontal = FishPiTheme.spacingControl,
+        vertical = FishPiTheme.spacingControl * 0.75f,
+    ),
     content: @Composable BoxScope.() -> Unit,
 ) {
     val palette = LocalFishPiPalette.current
@@ -91,7 +85,7 @@ internal fun ControlSurface(
         contentColor = palette.onSurface,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.18f)),
+        border = BorderStroke(FishPiTheme.borderWidth, palette.accent.copy(alpha = 0.18f + FishPiTheme.depth * 0.12f)),
     ) {
         Box(Modifier.padding(contentPadding), content = content)
     }
@@ -101,13 +95,13 @@ internal fun ControlSurface(
 internal fun ContentCardSurface(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
-    contentPadding: PaddingValues = UiLayerTokens.CardPadding,
+    contentPadding: PaddingValues = PaddingValues(FishPiTheme.spacingSection),
     content: @Composable BoxScope.() -> Unit,
 ) {
     val palette = LocalFishPiPalette.current
-    val shape = RoundedCornerShape(UiLayerTokens.CardRadius)
+    val shape = RoundedCornerShape(FishPiTheme.radiusBox)
     val color = palette.surface.copy(alpha = 0.78f)
-    val border = BorderStroke(1.dp, palette.outline.copy(alpha = 0.12f))
+    val border = BorderStroke(FishPiTheme.borderWidth, palette.outline.copy(alpha = 0.12f + FishPiTheme.depth * 0.10f))
     if (onClick == null) {
         Surface(
             modifier = modifier,
@@ -146,7 +140,7 @@ internal fun ActionChipButton(
     leadingDot: Boolean = false,
 ) {
     val palette = LocalFishPiPalette.current
-    val shape = RoundedCornerShape(UiLayerTokens.ChipRadius)
+    val shape = RoundedCornerShape(FishPiTheme.radiusSelector)
     val bg = when {
         selected -> palette.accent
         enabled -> palette.surface.copy(alpha = 0.92f)
@@ -162,14 +156,14 @@ internal fun ActionChipButton(
             .clip(shape)
             .background(bg)
             .border(
-                1.dp,
+                FishPiTheme.borderWidth,
                 if (selected) palette.toolDefault.copy(alpha = 0.42f) else palette.outline.copy(alpha = 0.18f),
                 shape,
             )
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
+            .padding(horizontal = FishPiTheme.spacingControl, vertical = FishPiTheme.spacingControl * 0.45f),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem * 0.75f),
     ) {
         if (leadingDot) {
             Box(
@@ -195,14 +189,14 @@ internal fun IconActionButton(
     iconSize: Dp = 19.dp,
 ) {
     val palette = LocalFishPiPalette.current
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(FishPiTheme.radiusField)
     Box(
         modifier = modifier
             .size(size)
             .clip(shape)
             .background(if (selected) palette.accent.copy(alpha = 0.12f) else palette.surface.copy(alpha = 0.72f))
             .border(
-                1.dp,
+                FishPiTheme.borderWidth,
                 if (selected) palette.accent.copy(alpha = 0.26f) else palette.outline.copy(alpha = 0.14f),
                 shape,
             )
@@ -234,16 +228,19 @@ internal fun FloatingNoticePill(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(FishPiTheme.radiusField),
         color = palette.surface.copy(alpha = 0.96f),
         contentColor = if (enabled) palette.accent else palette.weakText,
-        border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.18f)),
+        border = BorderStroke(FishPiTheme.borderWidth, palette.accent.copy(alpha = 0.18f + FishPiTheme.depth * 0.10f)),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+            modifier = Modifier.padding(
+                horizontal = FishPiTheme.spacingControl,
+                vertical = FishPiTheme.spacingControl * 0.64f,
+            ),
             color = if (enabled) palette.accent else palette.weakText,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
@@ -253,8 +250,8 @@ internal fun FloatingNoticePill(
 
 @Composable
 internal fun statusSuccessColor(): Color =
-    LocalFishPiPalette.current.toolDefault
+    FishPiTheme.success
 
 @Composable
 internal fun statusWarningColor(): Color =
-    MaterialTheme.colorScheme.error
+    FishPiTheme.warning

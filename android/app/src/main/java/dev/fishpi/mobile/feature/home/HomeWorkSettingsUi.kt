@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.feature.home
 
 import dev.fishpi.mobile.ui.components.FishPiPillButton
+import dev.fishpi.mobile.FishPiTheme
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -232,9 +233,9 @@ internal fun HomeTimePickerItem(
     val colors = MaterialTheme.colorScheme
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(colors.surfaceContainer)
-            .border(1.dp, colors.outline.copy(alpha = 0.20f), RoundedCornerShape(12.dp))
+            .border(FishPiTheme.borderWidth, colors.outline.copy(alpha = 0.20f), RoundedCornerShape(FishPiTheme.radiusBox))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -286,4 +287,6 @@ internal fun HomeSettingChoice(
             .padding(horizontal = if (compact) 8.dp else 12.dp, vertical = if (compact) 7.dp else 8.dp),
     )
 }
+
+
 

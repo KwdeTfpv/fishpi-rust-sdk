@@ -6,6 +6,8 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import dev.fishpi.mobile.FishPiPalette
+import dev.fishpi.mobile.FishPiThemeTokens
+import dev.fishpi.mobile.IslandFishPiThemeTokens
 
 internal data class NativeMessageTheme(
     val background: Int = Color.rgb(246, 241, 232),
@@ -26,9 +28,19 @@ internal data class NativeMessageTheme(
     val quoteLine: Int = Color.rgb(132, 120, 106),
     val serviceBackground: Int = Color.argb(130, 237, 143, 38),
     val quoteBackground: Int = Color.rgb(250, 244, 236),
+    val radiusSelectorDp: Float = 999f,
+    val radiusFieldDp: Float = 18f,
+    val radiusBoxDp: Float = 12f,
+    val spacingItemDp: Float = 8f,
+    val spacingControlDp: Float = 10f,
+    val borderWidthDp: Float = 1f,
+    val depth: Float = 0.1f,
 ) {
     companion object {
-        fun fromPalette(palette: FishPiPalette): NativeMessageTheme {
+        fun fromPalette(palette: FishPiPalette): NativeMessageTheme =
+            fromTheme(palette, IslandFishPiThemeTokens)
+
+        fun fromTheme(palette: FishPiPalette, tokens: FishPiThemeTokens): NativeMessageTheme {
             val isDark = palette.chatBackground.luminance() < 0.5f
             val incomingBubble = if (isDark) {
                 palette.surface.copy(alpha = 0.88f)
@@ -69,6 +81,13 @@ internal data class NativeMessageTheme(
                 quoteLine = palette.quoteLine.toArgb(),
                 serviceBackground = palette.accent.copy(alpha = 0.26f).toArgb(),
                 quoteBackground = quoteBackground.toArgb(),
+                radiusSelectorDp = tokens.radius.selector,
+                radiusFieldDp = tokens.radius.field,
+                radiusBoxDp = tokens.radius.box,
+                spacingItemDp = tokens.spacing.item,
+                spacingControlDp = tokens.spacing.control,
+                borderWidthDp = tokens.border.width,
+                depth = tokens.depth.level,
             )
         }
     }

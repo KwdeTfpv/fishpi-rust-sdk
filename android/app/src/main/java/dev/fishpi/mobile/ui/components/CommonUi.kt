@@ -63,18 +63,18 @@ internal fun PlaceholderScreen(title: String, subtitle: String) {
         modifier = Modifier
             .fillMaxSize()
             .background(softPageBrush())
-            .padding(22.dp),
+            .padding(FishPiTheme.spacingPage),
         contentAlignment = Alignment.Center,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusBox))
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.58f))
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), RoundedCornerShape(18.dp))
-                .padding(22.dp),
+                .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f + FishPiTheme.depth * 0.10f), RoundedCornerShape(FishPiTheme.radiusBox))
+                .padding(FishPiTheme.spacingSection),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
         ) {
             SoftIllustrationGlyph()
             Text(text = title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -91,22 +91,22 @@ internal fun FishPiListCard(
     startAction: @Composable (() -> Unit)? = null,
     endAction: @Composable (() -> Unit)? = null,
 ) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(FishPiTheme.radiusBox)
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.62f))
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f), shape)
-            .padding(16.dp),
+            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f + FishPiTheme.depth * 0.08f), shape)
+            .padding(FishPiTheme.spacingSection),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         startAction?.invoke()
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(start = if (startAction == null) 0.dp else 12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+                .padding(start = if (startAction == null) 0.dp else FishPiTheme.spacingItem),
+            verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem / 2),
         ) {
             Text(
                 text = title,
@@ -121,7 +121,7 @@ internal fun FishPiListCard(
             )
         }
         endAction?.let {
-            Box(modifier = Modifier.padding(start = 12.dp)) {
+            Box(modifier = Modifier.padding(start = FishPiTheme.spacingItem)) {
                 it()
             }
         }
@@ -139,7 +139,7 @@ internal fun FishPiPillButton(
     containerColor: Color? = null,
     contentColor: Color? = null,
 ) {
-    val buttonShape = RoundedCornerShape(if (compact) 12.dp else 14.dp)
+    val buttonShape = RoundedCornerShape(if (compact) FishPiTheme.radiusField * 0.78f else FishPiTheme.radiusField)
     val targetContainer = when {
         danger -> MaterialTheme.colorScheme.errorContainer
         else -> containerColor ?: MaterialTheme.colorScheme.primaryContainer
@@ -153,13 +153,13 @@ internal fun FishPiPillButton(
             .clip(buttonShape)
             .background(if (enabled) targetContainer else MaterialTheme.colorScheme.surfaceContainerHigh)
             .border(
-                1.dp,
+                FishPiTheme.borderWidth,
                 if (enabled) MaterialTheme.colorScheme.outline.copy(alpha = 0.18f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
                 buttonShape,
             )
             .clickable(enabled = enabled, onClick = onClick)
             .padding(
-                horizontal = if (compact) 11.dp else 15.dp,
+                horizontal = if (compact) FishPiTheme.spacingControl else FishPiTheme.spacingControl + 4.dp,
                 vertical = if (compact) 5.dp else 7.dp,
             ),
         contentAlignment = Alignment.Center,
@@ -185,13 +185,13 @@ internal fun FishPiIconButton(
     sizeDp: Int = 38,
     iconSizeDp: Int = 21,
 ) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(FishPiTheme.radiusField)
     Box(
         modifier = modifier
             .size(sizeDp.dp)
             .clip(shape)
             .background(if (enabled) background else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.58f))
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f), shape)
+            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f + FishPiTheme.depth * 0.08f), shape)
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -276,18 +276,18 @@ internal fun TextField(
     maxLines: Int = Int.MAX_VALUE,
     minLines: Int = 1,
 ) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(FishPiTheme.radiusField)
     Column(
         modifier = modifier
             .clip(shape)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.62f))
             .border(
-                width = 1.dp,
+                width = FishPiTheme.borderWidth,
                 color = if (isError) MaterialTheme.colorScheme.error.copy(alpha = 0.62f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
                 shape = shape,
             )
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+            .padding(horizontal = FishPiTheme.spacingControl + 2.dp, vertical = FishPiTheme.spacingControl),
+        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem / 2),
     ) {
         label?.let {
             Text(
@@ -299,7 +299,7 @@ internal fun TextField(
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
         ) {
             leadingIcon?.invoke()
             BasicTextField(
@@ -357,18 +357,18 @@ internal fun TextField(
     maxLines: Int = Int.MAX_VALUE,
     minLines: Int = 1,
 ) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(FishPiTheme.radiusField)
     Column(
         modifier = modifier
             .clip(shape)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.62f))
             .border(
-                width = 1.dp,
+                width = FishPiTheme.borderWidth,
                 color = if (isError) MaterialTheme.colorScheme.error.copy(alpha = 0.62f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
                 shape = shape,
             )
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+            .padding(horizontal = FishPiTheme.spacingControl + 2.dp, vertical = FishPiTheme.spacingControl),
+        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem / 2),
     ) {
         label?.let {
             Text(
@@ -380,7 +380,7 @@ internal fun TextField(
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
         ) {
             leadingIcon?.invoke()
             BasicTextField(
@@ -432,8 +432,8 @@ internal fun LoadingScreen(message: String, showLogo: Boolean = true) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier.padding(horizontal = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
+            modifier = Modifier.padding(horizontal = FishPiTheme.spacingPage + FishPiTheme.spacingSection),
         ) {
             if (showLogo) {
                 FishPiBrandLoadingLogo()
@@ -456,9 +456,9 @@ internal fun FishPiBrandLoadingLogo() {
     Box(
         modifier = Modifier
             .size(76.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f))
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f), RoundedCornerShape(18.dp)),
+            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f + FishPiTheme.depth * 0.08f), RoundedCornerShape(FishPiTheme.radiusBox)),
         contentAlignment = Alignment.Center,
     ) {
         Image(
@@ -514,18 +514,18 @@ internal fun ErrorState(message: String, onRetry: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(20.dp),
+            .padding(FishPiTheme.spacingPage),
         contentAlignment = Alignment.Center,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusBox + 10.dp))
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f))
-                .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.16f), RoundedCornerShape(28.dp))
-                .padding(20.dp),
+                .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.error.copy(alpha = 0.16f + FishPiTheme.depth * 0.08f), RoundedCornerShape(FishPiTheme.radiusBox + 10.dp))
+                .padding(FishPiTheme.spacingSection),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
         ) {
             SoftIllustrationGlyph(color = MaterialTheme.colorScheme.error.copy(alpha = 0.32f))
             Text(text = message, color = MaterialTheme.colorScheme.error)
@@ -541,7 +541,7 @@ private fun SoftIllustrationGlyph(
     Box(
         modifier = Modifier
             .size(86.dp)
-            .clip(RoundedCornerShape(34.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox + 16.dp))
             .background(
                 Brush.verticalGradient(
                     listOf(

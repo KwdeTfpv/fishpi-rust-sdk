@@ -71,27 +71,37 @@ internal fun AppToolGridPanel(
 ) {
     val rowCount = ((actions.size + 3) / 4).coerceAtLeast(1)
     val visibleRows = rowCount.coerceAtMost(3)
-    val panelHeight = fixedHeight ?: (18 + visibleRows * 68 + (visibleRows - 1) * 4).dp
+    val panelHeight = fixedHeight ?: (
+        FishPiTheme.spacingSection +
+            (visibleRows * 68).dp +
+            FishPiTheme.spacingItem * (visibleRows - 1).coerceAtLeast(0) / 2f
+        )
+    val panelShape = RoundedCornerShape(
+        topStart = FishPiTheme.radiusBox + 4.dp,
+        topEnd = FishPiTheme.radiusBox + 4.dp,
+        bottomStart = FishPiTheme.radiusBox * 0.66f,
+        bottomEnd = FishPiTheme.radiusBox * 0.66f,
+    )
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .height(panelHeight)
-            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 8.dp, bottomEnd = 8.dp))
+            .clip(panelShape)
             .background(FishPiTheme.surface.copy(alpha = 0.56f))
             .border(
-                1.dp,
-                FishPiTheme.outline.copy(alpha = 0.08f),
-                RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
+                FishPiTheme.borderWidth,
+                FishPiTheme.outline.copy(alpha = 0.08f + FishPiTheme.depth * 0.08f),
+                panelShape,
             )
-            .padding(horizontal = 6.dp, vertical = 5.dp),
+            .padding(horizontal = FishPiTheme.spacingItem, vertical = FishPiTheme.spacingItem / 2),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
             modifier = Modifier
                 .padding(bottom = 5.dp)
                 .size(width = 34.dp, height = 3.dp)
-                .clip(RoundedCornerShape(99.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                 .background(FishPiTheme.outline.copy(alpha = 0.22f)),
         )
         LazyVerticalGrid(
@@ -100,8 +110,8 @@ internal fun AppToolGridPanel(
                 .fillMaxWidth()
                 .weight(1f),
             contentPadding = PaddingValues(0.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem / 2),
+            verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem / 2),
         ) {
             items(actions, key = { it.source + ":" + it.id }) { action ->
                 FishPiToolActionCell(action = action)
@@ -117,16 +127,16 @@ private fun FishPiToolActionCell(action: ChatToolAction) {
     Column(
         modifier = Modifier
             .heightIn(min = 62.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusField))
             .clickable(enabled = action.enabled, onClick = action.onClick)
             .padding(horizontal = 2.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem / 4),
     ) {
         Box(
             modifier = Modifier
                 .size(34.dp)
-                .clip(if (action.id.hashCode() % 2 == 0) CircleShape else RoundedCornerShape(10.dp)),
+                .clip(if (action.id.hashCode() % 2 == 0) CircleShape else RoundedCornerShape(FishPiTheme.radiusField)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -139,7 +149,7 @@ private fun FishPiToolActionCell(action: ChatToolAction) {
         Box(
             modifier = Modifier
                 .size(width = 18.dp, height = 2.dp)
-                .clip(RoundedCornerShape(99.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                 .background(
                     if (action.enabled) tint.copy(alpha = 0.32f)
                     else FishPiTheme.weakText.copy(alpha = 0.16f),
@@ -167,7 +177,7 @@ internal fun AppTaskPanel(
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.34f))
             .silentTap(onDismiss)
-            .padding(horizontal = 14.dp)
+            .padding(horizontal = FishPiTheme.spacingPage)
             .statusBarsPadding()
             .navigationBarsPadding(),
         contentAlignment = Alignment.Center,
@@ -177,7 +187,7 @@ internal fun AppTaskPanel(
                 .fillMaxWidth()
                 .widthIn(max = 520.dp)
                 .height(maxHeight * 0.86f)
-                .clip(RoundedCornerShape(22.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusBox + 8.dp))
                 .background(FishPiTheme.surface)
                 .consumeTaps(),
             content = content,
@@ -205,11 +215,11 @@ internal fun AppFullScreenWorkspace(
                 .fillMaxWidth()
                 .zIndex(1f)
                 .background(FishPiTheme.surface)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = FishPiTheme.spacingPage, vertical = FishPiTheme.spacingControl),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem / 4)) {
                 Text(
                     text = title,
                     color = FishPiTheme.onSurface,

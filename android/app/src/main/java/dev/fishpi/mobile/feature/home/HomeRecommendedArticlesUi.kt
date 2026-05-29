@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.feature.home
 
 import dev.fishpi.mobile.ui.components.FishPiPillButton
+import dev.fishpi.mobile.FishPiTheme
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -120,9 +121,9 @@ internal fun HomeArticleCard(article: HomeArticleUiModel, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(FishPiTheme.radiusBox + 8.dp),
         colors = CardDefaults.cardColors(containerColor = homeArticleCardColor()),
-        border = BorderStroke(1.dp, homeIslandBorderColor()),
+        border = BorderStroke(FishPiTheme.borderWidth, homeIslandBorderColor()),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(
@@ -168,7 +169,7 @@ internal fun HomeArticleCard(article: HomeArticleUiModel, onClick: () -> Unit) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(2.05f)
-                        .clip(RoundedCornerShape(18.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusBox + 4.dp))
                         .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                 )
             }
@@ -183,7 +184,7 @@ internal fun HomeArticleCard(article: HomeArticleUiModel, onClick: () -> Unit) {
                             color = MaterialTheme.colorScheme.primary,
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(999.dp))
+                                .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                                 .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.56f))
                                 .padding(horizontal = 9.dp, vertical = 4.dp),
                         )
@@ -240,4 +241,6 @@ internal fun homeArticleTags(tags: String): List<String> =
         .map { it.trim() }
         .filter { it.isNotBlank() }
         .distinct()
+
+
 

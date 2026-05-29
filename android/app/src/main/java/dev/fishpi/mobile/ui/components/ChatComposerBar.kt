@@ -142,34 +142,34 @@ internal fun ChatInputBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 0.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem / 2),
     ) {
         if (currentTopicLabel.isNotBlank()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
+                    .padding(horizontal = FishPiTheme.spacingItem),
                 contentAlignment = Alignment.Center,
             ) {
                 Row(
                     modifier = Modifier
                         .widthIn(max = 260.dp)
-                        .clip(RoundedCornerShape(15.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                         .background(
                             if (topicSelected) FishPiTheme.accent.copy(alpha = 0.09f)
                             else composerContainerColor().copy(alpha = 0.56f)
                         )
                         .border(
-                            1.dp,
+                            FishPiTheme.borderWidth,
                             if (topicSelected) FishPiTheme.accent.copy(alpha = 0.24f)
                             else composerBorderColor().copy(alpha = 0.72f),
-                            RoundedCornerShape(15.dp),
+                            RoundedCornerShape(FishPiTheme.radiusSelector),
                         )
                         .clickable {
                             topicSelected = !topicSelected
                             onPickCurrentTopic()
                         }
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                        .padding(horizontal = FishPiTheme.spacingControl, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
@@ -196,11 +196,11 @@ internal fun ChatInputBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(FishPiTheme.radiusBox))
                     .background(FishPiTheme.surfaceContainer)
-                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                    .padding(horizontal = FishPiTheme.spacingControl + 2.dp, vertical = FishPiTheme.spacingControl),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
             ) {
                 Text(
                     text = "${it.username}: ${it.preview}",
@@ -215,33 +215,33 @@ internal fun ChatInputBar(
             }
         }
         if (pendingAttachments.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem), verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem)) {
                 pendingAttachments.forEach { file ->
                     Text(
                             text = file.filename.ifBlank { "附件" },
                         color = FishPiTheme.onSurface,
                         fontSize = 12.sp,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(FishPiTheme.radiusField))
                             .background(FishPiTheme.surfaceContainer)
                             .clickable { onRemoveAttachment(file) }
-                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                            .padding(horizontal = FishPiTheme.spacingControl, vertical = 7.dp),
                     )
                 }
             }
         }
         if (atCandidates.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem), verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem)) {
                 atCandidates.forEach { username ->
                     Text(
                         text = "@$username",
                         color = FishPiTheme.accent,
                         fontSize = 12.sp,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
+                            .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                             .background(FishPiTheme.surfaceContainer)
                             .clickable { onPickAtUser(username) }
-                            .padding(horizontal = 11.dp, vertical = 7.dp),
+                            .padding(horizontal = FishPiTheme.spacingControl + 1.dp, vertical = 7.dp),
                     )
                 }
             }
@@ -250,18 +250,18 @@ internal fun ChatInputBar(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(composerRadius()),
             color = composerContainerColor(),
-            border = androidx.compose.foundation.BorderStroke(1.dp, composerBorderColor()),
+            border = androidx.compose.foundation.BorderStroke(FishPiTheme.borderWidth, composerBorderColor()),
             shadowElevation = 0.dp,
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(
-                        horizontal = 8.dp,
-                        vertical = 8.dp,
+                        horizontal = FishPiTheme.spacingItem,
+                        vertical = FishPiTheme.spacingItem,
                     ),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
             ) {
                 ComposerIconButton(
                     icon = Icons.Rounded.InsertEmoticon,
@@ -362,7 +362,7 @@ internal fun ChatInputBar(
 
 @Composable
 private fun composerRadius() =
-    22.dp
+    FishPiTheme.radiusField + 4.dp
 
 @Composable
 private fun composerContainerColor() =
@@ -400,7 +400,7 @@ private fun ComposerIconButton(
     selected: Boolean = false,
     prominent: Boolean = false,
 ) {
-    val radius = 16.dp
+    val radius = FishPiTheme.radiusField
     val size = when {
         prominent -> 42.dp
         else -> 38.dp
@@ -425,10 +425,10 @@ private fun ComposerIconButton(
     Box(
         modifier = Modifier
             .size(size)
-            .shadow(if (prominent && enabled) 5.dp else 0.dp, RoundedCornerShape(radius), clip = false)
+            .shadow(if (prominent && enabled) (FishPiTheme.depth * 8).dp else 0.dp, RoundedCornerShape(radius), clip = false)
             .clip(RoundedCornerShape(radius))
             .background(bg)
-            .border(1.dp, border, RoundedCornerShape(radius))
+            .border(FishPiTheme.borderWidth, border, RoundedCornerShape(radius))
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

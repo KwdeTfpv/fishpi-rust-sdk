@@ -1,11 +1,190 @@
 ---
-title: FishPi 插件开发指南
-description: FishPi Android 插件系统开发文档
+title: FishPi Android 扩展开发指南
+description: FishPi Android 主题与插件系统开发文档
 ---
 
-# FishPi 插件开发指南
+# FishPi Android 扩展开发指南
 
 FishPi Android 插件是放在手机本地的 JavaScript 文件，运行在 App 内置 WebView 沙箱中。插件可以监听聊天室消息、修改待发送文本、调用已暴露的 SDK API、保存配置、发送系统提示，注册聊天室快捷动作，并生成原生插件页面、对话框和表单 UI。
+
+## 自定义主题
+
+FishPi Android 的分享主题使用 `.fpt` 主题包。主题包会把颜色、圆角、边距、边框、层级、聊天背景和预览图一起交给 App，App 再映射到 Compose 原生 UI、聊天室消息、插件 UI、帖子、资料页、清风明月和红包等界面。
+
+主题可以在 App 内进入 `我的 -> 设置 -> 主题` 后编辑或导入。导入文件必须使用 `.fpt` 后缀，不能直接导入 `.json`。
+
+### 主题包结构
+
+`.fpt` 是 zip 格式的文件，包内路径使用 `/` 分隔。
+
+```text
+theme.fpt
+├─ theme.json
+├─ assets/
+│  └─ wallpaper.png
+└─ previews/
+   ├─ chat.png
+   ├─ chatroom.png
+   ├─ home.png
+   ├─ article.png
+   └─ profile.png
+```
+
+`theme.json` 必须存在。`assets` 和 `previews` 可以不放；没有预览图时，App 会使用本地实时预览。
+
+### theme.json 示例
+
+```json
+{
+  "schema": 1,
+  "previewTemplate": "fishpi-mobile-v1",
+  "name": "Deep Blue Lime",
+  "description": "深蓝、荧光绿、白色内容层",
+  "colorScheme": "light",
+  "colors": {
+    "base-100": "#F3F8FF",
+    "base-200": "#FFFFFF",
+    "base-300": "#E9F2FF",
+    "base-content": "#08233F",
+    "primary": "#08233F",
+    "primary-content": "#FFFFFF",
+    "secondary": "#0B5C93",
+    "secondary-content": "#FFFFFF",
+    "accent": "#7CFF52",
+    "accent-content": "#08233F",
+    "neutral": "#5D7188",
+    "neutral-content": "#FFFFFF",
+    "info": "#0B5C93",
+    "success": "#42D94D",
+    "warning": "#EAB308",
+    "error": "#E53935"
+  },
+  "radius": {
+    "radius-selector": 40,
+    "radius-field": 18,
+    "radius-box": 12
+  },
+  "spacing": {
+    "page": 14,
+    "section": 12,
+    "item": 8,
+    "control": 10
+  },
+  "border": {
+    "border": 1,
+    "opacity": 0.2
+  },
+  "depth": {
+    "depth": 0.12
+  },
+  "wallpaper": {
+    "image": "assets/wallpaper.png"
+  }
+}
+```
+
+### 顶层字段
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| `schema` | 是 | 当前固定为 `1` |
+| `previewTemplate` | 是 | 当前固定为 `fishpi-mobile-v1` |
+| `name` | 是 | 主题名称，显示在主题列表中 |
+| `description` | 否 | 主题说明 |
+| `colorScheme` | 否 | `light` 或 `dark`；不填时使用默认深色规则 |
+| `colors` | 是 | 颜色表 |
+| `radius` | 否 | 圆角设置 |
+| `spacing` | 否 | 间距设置 |
+| `border` | 否 | 边框设置 |
+| `depth` | 否 | 层级强度 |
+| `wallpaper.image` | 否 | 聊天背景图片，可以是包内相对路径或 `https://...` |
+
+颜色值必须是 `#RRGGBB` 格式，例如 `#08233F`。不支持透明度写在主题颜色里；透明度由 App 组件自己控制。
+
+`wallpaper.image` 推荐写包内相对路径，例如 `assets/wallpaper.png`。导入后 App 会复制到私有目录，断网也能显示。也可以填写 `https://...` 图片地址，适合不想把图片放进主题包的情况。
+
+包内路径不能使用绝对路径、空路径或 `../`。图片支持 `png`、`jpg`、`jpeg`、`webp`、`gif`、`svg`。
+
+### colors
+
+| 字段 | 用途 |
+|------|------|
+| `base-100` | 页面背景 |
+| `base-200` | 内容底色，例如主要内容面、列表项和普通容器 |
+| `base-300` | 控件底色，例如输入框、轻按钮和二级区域 |
+| `base-content` | 正文文字 |
+| `primary` | 主色，用于关键操作、强选中态和主要视觉边界 |
+| `primary-content` | 主色上的文字或图标 |
+| `secondary` | 链接、用户名、@ 信息等辅助品牌色 |
+| `secondary-content` | secondary 上的文字或图标 |
+| `accent` | 强调点，例如当前状态、关键提示、引用线 |
+| `accent-content` | accent 上的文字或图标 |
+| `neutral` | 辅助文字、时间、弱边界 |
+| `neutral-content` | neutral 上的文字或图标 |
+| `info` | 信息状态，也用于部分工具入口 |
+| `success` | 成功、已连接、在线状态 |
+| `warning` | 警告、正在重连、需要注意的状态 |
+| `error` | 错误、危险操作、红包业务强调 |
+
+建议：
+
+- `base-content` 和 `base-100/base-200` 要有足够对比度，否则正文会难读。
+- `primary` 不要太亮或太刺眼，它会出现在关键操作和选中态。
+- `success/warning/error` 是语义色，不建议为了配色统一而改成同一种颜色。
+- 红包会保留一部分业务红色，但会读取 `error` 作为危险和红包相关强调色。
+
+### radius
+
+| 字段 | 范围 | 用途 |
+|------|------|------|
+| `radius-selector` | `0` - `40` | 胶囊、状态标签、选择器 |
+| `radius-field` | `0` - `40` | 输入框、按钮、控制条 |
+| `radius-box` | `0` - `40` | 卡片、消息气泡、浮层容器 |
+
+单位是 dp。想要接近胶囊效果时，把 `radius-selector` 调到 `40` 即可。
+
+### spacing
+
+| 字段 | 范围 | 用途 |
+|------|------|------|
+| `page` | `8` - `28` | 页面左右边距 |
+| `section` | `6` - `28` | 大区块之间的距离和主要容器内距 |
+| `item` | `4` - `20` | 图标、文字、列表项之间的普通间距 |
+| `control` | `4` - `20` | 按钮、输入框、chip 内部留白 |
+
+单位是 dp。想让 App 更松弛，可以先增加 `page` 和 `section`；觉得按钮或输入框太肥，可以降低 `control`。
+
+### border 与 depth
+
+| 字段 | 范围 | 用途 |
+|------|------|------|
+| `border.border` | `0` - `3` | 描边粗细，单位 dp |
+| `border.opacity` | `0` - `1` | 描边可见程度 |
+| `depth.depth` | `0` - `1` | 层级强度，影响部分描边和轻层级表现 |
+
+FishPi Android 尽量少用厚重阴影，所以层级主要通过底色、描边和透明度表达。觉得界面“框太多”时，可以降低 `border.opacity` 和 `depth`。
+
+### 预览图
+
+主题包可以放 5 张预览图：
+
+| 文件 | 用途 |
+|------|------|
+| `previews/chat.png` | 聊天入口预览 |
+| `previews/chatroom.png` | 聊天室详情预览 |
+| `previews/home.png` | 首页预览 |
+| `previews/article.png` | 帖子预览 |
+| `previews/profile.png` | 我的页预览 |
+
+建议预览图使用同一尺寸，例如 `1080x1920` 或 `720x1280`。后续如果接入主题上传接口，服务端也会按同一套模板生成这些预览图。
+
+### 制作建议
+
+1. 先确定 `base-100/base-200/base-300/base-content`，保证页面和文字可读。
+2. 再设置 `primary/secondary/accent`，控制主操作、链接和强调点。
+3. 最后设置 `success/warning/error`，不要破坏连接状态、错误状态和红包提示的语义。
+4. 圆角不要全部拉满。通常 `radius-box` 比 `radius-field` 小一点会更稳。
+5. 如果界面显得拥挤，优先增加 `page` 和 `section`；如果控件显得肥大，降低 `control`。
 
 ## 快速开始
 

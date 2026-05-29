@@ -16,6 +16,8 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 internal enum class FishPiThemePreset(val label: String, val key: String) {
     Island("夜间模式", "island"),
@@ -36,18 +38,22 @@ internal data class CustomFishPiTheme(
     val key: String,
     val label: String,
     val description: String,
+    val tokens: FishPiThemeTokens,
     val palette: FishPiPalette,
     val rawJson: String,
+    val previewImageUris: Map<String, String> = emptyMap(),
 )
 
 internal data class FishPiThemeOption(
     val key: String,
     val label: String,
     val description: String,
+    val tokens: FishPiThemeTokens,
     val palette: FishPiPalette,
     val uiStyle: FishPiUiStyle = FishPiUiStyle.Classic,
     val builtinPreset: FishPiThemePreset? = null,
     val rawJson: String? = null,
+    val previewImageUris: Map<String, String> = emptyMap(),
 )
 
 internal data class FishPiPalette(
@@ -78,71 +84,120 @@ internal data class FishPiPalette(
     val toolRedPacket: Color = Color(0xFFE53935),
 )
 
+internal enum class FishPiThemeColorScheme {
+    Light,
+    Dark,
+}
+
+internal data class FishPiColorTokens(
+    val base100: Color,
+    val base200: Color,
+    val base300: Color,
+    val baseContent: Color,
+    val primary: Color,
+    val primaryContent: Color,
+    val secondary: Color,
+    val secondaryContent: Color,
+    val accent: Color,
+    val accentContent: Color,
+    val neutral: Color,
+    val neutralContent: Color,
+    val info: Color,
+    val success: Color,
+    val warning: Color,
+    val error: Color,
+)
+
+internal data class FishPiRadiusTokens(
+    val selector: Float,
+    val field: Float,
+    val box: Float,
+)
+
+internal data class FishPiSpacingTokens(
+    val page: Float,
+    val section: Float,
+    val item: Float,
+    val control: Float,
+)
+
+internal data class FishPiBorderTokens(
+    val width: Float,
+    val opacity: Float,
+)
+
+internal data class FishPiDepthTokens(
+    val level: Float,
+)
+
+internal data class FishPiThemeTokens(
+    val colorScheme: FishPiThemeColorScheme,
+    val colors: FishPiColorTokens,
+    val radius: FishPiRadiusTokens,
+    val spacing: FishPiSpacingTokens,
+    val border: FishPiBorderTokens,
+    val depth: FishPiDepthTokens,
+)
+
 private val ThemeKeySanitizeRegex = Regex("[^a-z0-9_-]+")
 
-internal val IslandFishPiPalette = FishPiPalette(
-    background = Color(0xFF121212),
-    chatBackground = Color(0xFF101010),
-    wallpaperColors = listOf(
-        Color(0xFF0B0B0B),
-        Color(0xFF121212),
-        Color(0xFF1A1A1A),
+internal val IslandFishPiThemeTokens = FishPiThemeTokens(
+    colorScheme = FishPiThemeColorScheme.Dark,
+    colors = FishPiColorTokens(
+        base100 = Color(0xFF121212),
+        base200 = Color(0xFF1E1E1E),
+        base300 = Color(0xFF2C2C2C),
+        baseContent = Color(0xFFEDEDED),
+        primary = Color(0xFFE0E0E0),
+        primaryContent = Color(0xFF101010),
+        secondary = Color(0xFFD6D6D6),
+        secondaryContent = Color(0xFF101010),
+        accent = Color(0xFFB6B6B6),
+        accentContent = Color(0xFF101010),
+        neutral = Color(0xFFB0B0B0),
+        neutralContent = Color(0xFF101010),
+        info = Color(0xFFD0D0D0),
+        success = Color(0xFF42D974),
+        warning = Color(0xFFE4C36A),
+        error = Color(0xFFFF5252),
     ),
-    surface = Color(0xFF1E1E1E),
-    surfaceElevated = Color(0xFF252525),
-    surfaceContainer = Color(0xFF2C2C2C),
-    onSurface = Color(0xFFEDEDED),
-    weakText = Color(0xFFB0B0B0),
-    userName = Color(0xFFD6D6D6),
-    clientText = Color(0xFFA8A8A8),
-    clientBackground = Color(0xFF303030),
-    timeText = Color(0xFF8E8E8E),
-    outline = Color(0xFF3A3A3A),
-    accent = Color(0xFFE0E0E0),
-    quoteBackground = Color(0xFF2A2A2A),
-    outgoingBubble = Color(0xFF3A3A3A),
-    incomingBubble = Color(0xFF242424),
-    linkText = Color(0xFFE0E0E0),
-    quoteText = Color(0xFFC7C7C7),
-    quoteLine = Color(0xFF5A5A5A),
-    toolDefault = Color(0xFFD0D0D0),
-    toolGallery = Color(0xFFD0D0D0),
-    toolCamera = Color(0xFFD0D0D0),
-    toolRedPacket = Color(0xFFFF5252),
+    radius = FishPiRadiusTokens(selector = 999f, field = 18f, box = 12f),
+    spacing = FishPiSpacingTokens(page = 14f, section = 12f, item = 8f, control = 10f),
+    border = FishPiBorderTokens(width = 1f, opacity = 0.22f),
+    depth = FishPiDepthTokens(level = 0.08f),
 )
 
-internal val DeepBlueNeonFishPiPalette = FishPiPalette(
-    background = Color(0xFFF3F8FF),
-    chatBackground = Color(0xFFEDF5FF),
-    wallpaperColors = listOf(
-        Color(0xFFFFFFFF),
-        Color(0xFFF3F8FF),
-        Color(0xFFEAF4FF),
+internal val DeepBlueNeonFishPiThemeTokens = FishPiThemeTokens(
+    colorScheme = FishPiThemeColorScheme.Light,
+    colors = FishPiColorTokens(
+        base100 = Color(0xFFF3F8FF),
+        base200 = Color(0xFFFFFFFF),
+        base300 = Color(0xFFE9F2FF),
+        baseContent = Color(0xFF08233F),
+        primary = Color(0xFF08233F),
+        primaryContent = Color(0xFFFFFFFF),
+        secondary = Color(0xFF0B5C93),
+        secondaryContent = Color(0xFFFFFFFF),
+        accent = Color(0xFF7CFF52),
+        accentContent = Color(0xFF08233F),
+        neutral = Color(0xFF5D7188),
+        neutralContent = Color(0xFFFFFFFF),
+        info = Color(0xFF0B5C93),
+        success = Color(0xFF42D94D),
+        warning = Color(0xFFEAB308),
+        error = Color(0xFFE53935),
     ),
-    surface = Color(0xFFFFFFFF),
-    surfaceElevated = Color(0xFFF8FBFF),
-    surfaceContainer = Color(0xFFE9F2FF),
-    onSurface = Color(0xFF08233F),
-    weakText = Color(0xFF5D7188),
-    userName = Color(0xFF123E69),
-    clientText = Color(0xFF526A82),
-    clientBackground = Color(0xFFEAF2FA),
-    timeText = Color(0xFF6B7D90),
-    outline = Color(0xFFC9D8E8),
-    accent = Color(0xFF08233F),
-    quoteBackground = Color(0xFFF0F8FF),
-    outgoingBubble = Color(0xFFE8FBE7),
-    incomingBubble = Color(0xFFFFFFFF),
-    linkText = Color(0xFF0B5C93),
-    quoteText = Color(0xFF526A82),
-    quoteLine = Color(0xFF7CFF52),
-    toolDefault = Color(0xFF7CFF52),
-    toolGallery = Color(0xFF42D94D),
-    toolCamera = Color(0xFF0B5C93),
-    toolRedPacket = Color(0xFFE53935),
+    radius = FishPiRadiusTokens(selector = 999f, field = 18f, box = 12f),
+    spacing = FishPiSpacingTokens(page = 14f, section = 12f, item = 8f, control = 10f),
+    border = FishPiBorderTokens(width = 1f, opacity = 0.20f),
+    depth = FishPiDepthTokens(level = 0.12f),
 )
+
+internal val IslandFishPiPalette = IslandFishPiThemeTokens.toPalette()
+internal val DeepBlueNeonFishPiPalette = DeepBlueNeonFishPiThemeTokens.toPalette()
 
 internal val LocalFishPiPalette = compositionLocalOf { IslandFishPiPalette }
+internal val LocalFishPiThemeTokens = compositionLocalOf { IslandFishPiThemeTokens }
 internal val LocalFishPiUiStyle = compositionLocalOf { FishPiUiStyle.Classic }
 
 internal object FishPiTheme {
@@ -155,20 +210,68 @@ internal object FishPiTheme {
     val weakText: Color @Composable get() = LocalFishPiPalette.current.weakText
     val outline: Color @Composable get() = LocalFishPiPalette.current.outline
     val accent: Color @Composable get() = LocalFishPiPalette.current.accent
+    val success: Color @Composable get() = LocalFishPiThemeTokens.current.colors.success
+    val warning: Color @Composable get() = LocalFishPiThemeTokens.current.colors.warning
+    val error: Color @Composable get() = LocalFishPiThemeTokens.current.colors.error
     val linkText: Color @Composable get() = LocalFishPiPalette.current.linkText
     val toolGallery: Color @Composable get() = LocalFishPiPalette.current.toolGallery
     val toolCamera: Color @Composable get() = LocalFishPiPalette.current.toolCamera
     val toolRedPacket: Color @Composable get() = LocalFishPiPalette.current.toolRedPacket
+    val radiusSelector: Dp @Composable get() = LocalFishPiThemeTokens.current.radius.selector.dp
+    val radiusField: Dp @Composable get() = LocalFishPiThemeTokens.current.radius.field.dp
+    val radiusBox: Dp @Composable get() = LocalFishPiThemeTokens.current.radius.box.dp
+    val spacingPage: Dp @Composable get() = LocalFishPiThemeTokens.current.spacing.page.dp
+    val spacingSection: Dp @Composable get() = LocalFishPiThemeTokens.current.spacing.section.dp
+    val spacingItem: Dp @Composable get() = LocalFishPiThemeTokens.current.spacing.item.dp
+    val spacingControl: Dp @Composable get() = LocalFishPiThemeTokens.current.spacing.control.dp
+    val borderWidth: Dp @Composable get() = LocalFishPiThemeTokens.current.border.width.dp
+    val depth: Float @Composable get() = LocalFishPiThemeTokens.current.depth.level
     val uiStyle: FishPiUiStyle @Composable get() = LocalFishPiUiStyle.current
+}
+
+internal fun FishPiThemeTokens.toPalette(wallpaperImageUri: String? = null): FishPiPalette {
+    val c = colors
+    val dark = colorScheme == FishPiThemeColorScheme.Dark
+    val outgoingAlpha = if (dark) 0.20f else 0.10f
+    val incoming = if (dark) c.base200 else c.base200
+    return FishPiPalette(
+        background = c.base100,
+        chatBackground = if (dark) c.base100 else c.base100,
+        wallpaperColors = listOf(c.base100, c.base200, c.base300),
+        wallpaperImageUri = wallpaperImageUri,
+        surface = c.base200,
+        surfaceElevated = c.base200,
+        surfaceContainer = c.base300,
+        onSurface = c.baseContent,
+        weakText = c.neutral,
+        userName = c.secondary,
+        clientText = c.neutral,
+        clientBackground = c.base300,
+        timeText = c.neutral.copy(alpha = 0.78f),
+        outline = c.neutral.copy(alpha = border.opacity.coerceIn(0f, 1f)),
+        accent = c.primary,
+        quoteBackground = c.base300.copy(alpha = if (dark) 0.82f else 0.72f),
+        outgoingBubble = c.primary.copy(alpha = outgoingAlpha),
+        incomingBubble = incoming,
+        linkText = c.secondary,
+        quoteText = c.neutral,
+        quoteLine = c.accent,
+        toolDefault = c.accent,
+        toolGallery = c.success,
+        toolCamera = c.info,
+        toolRedPacket = c.error,
+    )
 }
 
 internal fun builtinThemeOptions(): List<FishPiThemeOption> =
     listOf(FishPiThemePreset.DeepBlueNeon, FishPiThemePreset.Island).map { preset ->
+        val tokens = preset.themeTokens()
         FishPiThemeOption(
             key = preset.key,
             label = preset.label,
             description = preset.themeDescription(),
-            palette = preset.previewPalette(),
+            tokens = tokens,
+            palette = tokens.toPalette(),
             uiStyle = preset.uiStyle(),
             builtinPreset = preset,
         )
@@ -183,16 +286,21 @@ internal fun buildThemeOptions(
             key = custom.key,
             label = custom.label,
             description = custom.description,
+            tokens = custom.tokens,
             palette = custom.palette,
             rawJson = custom.rawJson,
+            previewImageUris = custom.previewImageUris,
         )
     }
 
-internal fun FishPiThemePreset.previewPalette(): FishPiPalette =
+internal fun FishPiThemePreset.themeTokens(): FishPiThemeTokens =
     when (this) {
-        FishPiThemePreset.Island -> IslandFishPiPalette
-        FishPiThemePreset.DeepBlueNeon -> DeepBlueNeonFishPiPalette
+        FishPiThemePreset.Island -> IslandFishPiThemeTokens
+        FishPiThemePreset.DeepBlueNeon -> DeepBlueNeonFishPiThemeTokens
     }
+
+internal fun FishPiThemePreset.previewPalette(): FishPiPalette =
+    themeTokens().toPalette()
 
 internal fun FishPiThemePreset.uiStyle(): FishPiUiStyle =
     FishPiUiStyle.Classic
@@ -205,36 +313,68 @@ internal fun FishPiThemePreset.themeDescription(): String =
 
 internal fun parseCustomFishPiTheme(rawJson: String): CustomFishPiTheme {
     val json = JSONObject(rawJson)
-    val colors = json.optJSONObject("colors") ?: json
+    val colors = json.optJSONObject("colors") ?: JSONObject()
     val name = json.optString("name").ifBlank { json.optString("label").ifBlank { "导入主题" } }
-    val base = IslandFishPiPalette
-    val palette = FishPiPalette(
-        background = colors.optThemeColor("background", base.background),
-        chatBackground = colors.optThemeColor("chatBackground", base.chatBackground),
-        wallpaperColors = json.optWallpaperColors(colors, base.wallpaperColors),
-        wallpaperImageUri = json.optJSONObject("wallpaper")?.optString("image").orEmpty().ifBlank { null },
-        surface = colors.optThemeColor("surface", base.surface),
-        surfaceElevated = colors.optThemeColor("surfaceElevated", base.surfaceElevated),
-        surfaceContainer = colors.optThemeColor("surfaceContainer", base.surfaceContainer),
-        onSurface = colors.optThemeColor("onSurface", base.onSurface),
-        weakText = colors.optThemeColor("weakText", base.weakText),
-        userName = colors.optThemeColor("userName", base.userName),
-        clientText = colors.optThemeColor("clientText", base.clientText),
-        clientBackground = colors.optThemeColor("clientBackground", base.clientBackground),
-        timeText = colors.optThemeColor("timeText", base.timeText),
-        outline = colors.optThemeColor("outline", base.outline),
-        accent = colors.optThemeColor("accent", base.accent),
-        quoteBackground = colors.optThemeColor("quoteBackground", base.quoteBackground),
-        outgoingBubble = colors.optThemeColor("outgoingBubble", base.outgoingBubble),
-        incomingBubble = colors.optThemeColor("incomingBubble", base.incomingBubble),
-        linkText = colors.optThemeColor("linkText", base.linkText),
-        quoteText = colors.optThemeColor("quoteText", base.quoteText),
-        quoteLine = colors.optThemeColor("quoteLine", base.quoteLine),
-        toolDefault = colors.optThemeColor("toolDefault", base.toolDefault),
-        toolGallery = colors.optThemeColor("toolGallery", base.toolGallery),
-        toolCamera = colors.optThemeColor("toolCamera", base.toolCamera),
-        toolRedPacket = colors.optThemeColor("toolRedPacket", base.toolRedPacket),
+    val base = IslandFishPiThemeTokens
+    val radius = json.optJSONObject("radius") ?: JSONObject()
+    val spacing = json.optJSONObject("spacing") ?: JSONObject()
+    val border = json.optJSONObject("border") ?: JSONObject()
+    val depth = json.optJSONObject("depth") ?: JSONObject()
+    val schemeValue = json.optString("colorScheme")
+        .ifBlank { json.optString("prefersdark") }
+        .lowercase()
+    val tokens = FishPiThemeTokens(
+        colorScheme = when (schemeValue) {
+            "light" -> FishPiThemeColorScheme.Light
+            "dark" -> FishPiThemeColorScheme.Dark
+            else -> base.colorScheme
+        },
+        colors = FishPiColorTokens(
+            base100 = colors.optThemeColor("base100", "base-100", base.colors.base100),
+            base200 = colors.optThemeColor("base200", "base-200", base.colors.base200),
+            base300 = colors.optThemeColor("base300", "base-300", base.colors.base300),
+            baseContent = colors.optThemeColor("baseContent", "base-content", base.colors.baseContent),
+            primary = colors.optThemeColor("primary", "primary", base.colors.primary),
+            primaryContent = colors.optThemeColor("primaryContent", "primary-content", base.colors.primaryContent),
+            secondary = colors.optThemeColor("secondary", "secondary", base.colors.secondary),
+            secondaryContent = colors.optThemeColor("secondaryContent", "secondary-content", base.colors.secondaryContent),
+            accent = colors.optThemeColor("accent", "accent", base.colors.accent),
+            accentContent = colors.optThemeColor("accentContent", "accent-content", base.colors.accentContent),
+            neutral = colors.optThemeColor("neutral", "neutral", base.colors.neutral),
+            neutralContent = colors.optThemeColor("neutralContent", "neutral-content", base.colors.neutralContent),
+            info = colors.optThemeColor("info", "info", base.colors.info),
+            success = colors.optThemeColor("success", "success", base.colors.success),
+            warning = colors.optThemeColor("warning", "warning", base.colors.warning),
+            error = colors.optThemeColor("error", "error", base.colors.error),
+        ),
+        radius = FishPiRadiusTokens(
+            selector = radius.optThemeFloat("selector", "radius-selector", base.radius.selector, 0f, 40f),
+            field = radius.optThemeFloat("field", "radius-field", base.radius.field, 0f, 40f),
+            box = radius.optThemeFloat("box", "radius-box", base.radius.box, 0f, 40f),
+        ),
+        spacing = FishPiSpacingTokens(
+            page = spacing.optThemeFloat("page", "page", base.spacing.page, 8f, 28f),
+            section = spacing.optThemeFloat("section", "section", base.spacing.section, 6f, 28f),
+            item = spacing.optThemeFloat("item", "item", base.spacing.item, 4f, 20f),
+            control = spacing.optThemeFloat("control", "control", base.spacing.control, 4f, 20f),
+        ),
+        border = FishPiBorderTokens(
+            width = border.optThemeFloat("width", "border", base.border.width, 0f, 3f),
+            opacity = border.optThemeFloat("opacity", "opacity", base.border.opacity, 0f, 1f),
+        ),
+        depth = FishPiDepthTokens(
+            level = depth.optThemeFloat("level", "depth", base.depth.level, 0f, 1f),
+        ),
     )
+    val wallpaperImageUri = json.optJSONObject("wallpaper")?.optString("image").orEmpty().ifBlank { null }
+    val palette = tokens.toPalette(wallpaperImageUri)
+    val previewImageUris = json.optJSONObject("previews")?.let { previews ->
+        buildMap {
+            listOf("chat", "chatroom", "home", "article", "profile").forEach { key ->
+                previews.optString(key).trim().takeIf { it.isNotBlank() }?.let { put(key, it) }
+            }
+        }
+    }.orEmpty()
     val explicitKey = json.optString("key").ifBlank { json.optString("id") }
     val key = "custom:" + explicitKey.ifBlank { "${name}-${rawJson.hashCode()}" }
         .lowercase()
@@ -244,78 +384,83 @@ internal fun parseCustomFishPiTheme(rawJson: String): CustomFishPiTheme {
         key = key,
         label = name,
         description = json.optString("description").ifBlank { "外部导入主题" },
+        tokens = tokens,
         palette = palette,
         rawJson = rawJson,
+        previewImageUris = previewImageUris,
     )
 }
 
 internal fun buildEditableThemeJson(
     label: String,
     description: String,
-    palette: FishPiPalette,
+    tokens: FishPiThemeTokens,
 ): String {
+    val c = tokens.colors
     val colors = JSONObject()
-        .put("background", palette.background.toThemeHex())
-        .put("chatBackground", palette.chatBackground.toThemeHex())
-        .put("surface", palette.surface.toThemeHex())
-        .put("surfaceElevated", palette.surfaceElevated.toThemeHex())
-        .put("surfaceContainer", palette.surfaceContainer.toThemeHex())
-        .put("onSurface", palette.onSurface.toThemeHex())
-        .put("weakText", palette.weakText.toThemeHex())
-        .put("userName", palette.userName.toThemeHex())
-        .put("clientText", palette.clientText.toThemeHex())
-        .put("clientBackground", palette.clientBackground.toThemeHex())
-        .put("timeText", palette.timeText.toThemeHex())
-        .put("outline", palette.outline.toThemeHex())
-        .put("accent", palette.accent.toThemeHex())
-        .put("quoteBackground", palette.quoteBackground.toThemeHex())
-        .put("outgoingBubble", palette.outgoingBubble.toThemeHex())
-        .put("incomingBubble", palette.incomingBubble.toThemeHex())
-        .put("linkText", palette.linkText.toThemeHex())
-        .put("quoteText", palette.quoteText.toThemeHex())
-        .put("quoteLine", palette.quoteLine.toThemeHex())
-        .put("toolDefault", palette.toolDefault.toThemeHex())
-        .put("toolGallery", palette.toolGallery.toThemeHex())
-        .put("toolCamera", palette.toolCamera.toThemeHex())
-        .put("toolRedPacket", palette.toolRedPacket.toThemeHex())
-    val wallpaper = JSONObject()
-        .put("colors", JSONArray().apply {
-            palette.wallpaperColors.forEach { put(it.toThemeHex()) }
-        })
-    palette.wallpaperImageUri?.let { wallpaper.put("image", it) }
+        .put("base-100", c.base100.toThemeHex())
+        .put("base-200", c.base200.toThemeHex())
+        .put("base-300", c.base300.toThemeHex())
+        .put("base-content", c.baseContent.toThemeHex())
+        .put("primary", c.primary.toThemeHex())
+        .put("primary-content", c.primaryContent.toThemeHex())
+        .put("secondary", c.secondary.toThemeHex())
+        .put("secondary-content", c.secondaryContent.toThemeHex())
+        .put("accent", c.accent.toThemeHex())
+        .put("accent-content", c.accentContent.toThemeHex())
+        .put("neutral", c.neutral.toThemeHex())
+        .put("neutral-content", c.neutralContent.toThemeHex())
+        .put("info", c.info.toThemeHex())
+        .put("success", c.success.toThemeHex())
+        .put("warning", c.warning.toThemeHex())
+        .put("error", c.error.toThemeHex())
     return JSONObject()
+        .put("schema", 1)
+        .put("previewTemplate", "fishpi-mobile-v1")
         .put("name", label.ifBlank { "应用内主题" })
         .put("description", description.ifBlank { "应用内编辑主题" })
+        .put("colorScheme", tokens.colorScheme.name.lowercase())
         .put("colors", colors)
-        .put("wallpaper", wallpaper)
+        .put("radius", JSONObject()
+            .put("radius-selector", tokens.radius.selector)
+            .put("radius-field", tokens.radius.field)
+            .put("radius-box", tokens.radius.box))
+        .put("spacing", JSONObject()
+            .put("page", tokens.spacing.page)
+            .put("section", tokens.spacing.section)
+            .put("item", tokens.spacing.item)
+            .put("control", tokens.spacing.control))
+        .put("border", JSONObject()
+            .put("border", tokens.border.width)
+            .put("opacity", tokens.border.opacity))
+        .put("depth", JSONObject().put("depth", tokens.depth.level))
         .toString()
 }
 
 internal fun Color.toThemeHex(): String =
     "#%06X".format(0xFFFFFF and toArgb())
 
-private fun JSONObject.optThemeColor(name: String, fallback: Color): Color {
-    val value = optString(name).trim()
+private fun JSONObject.optThemeColor(primaryName: String, aliasName: String, fallback: Color): Color {
+    val value = optString(primaryName).ifBlank { optString(aliasName) }.trim()
     if (value.isBlank()) return fallback
     return runCatching {
         Color(android.graphics.Color.parseColor(value))
     }.getOrDefault(fallback)
 }
 
-private fun JSONObject.optWallpaperColors(colors: JSONObject, fallback: List<Color>): List<Color> {
-    val wallpaper = optJSONObject("wallpaper")
-    val array = wallpaper?.optJSONArray("colors") ?: colors.optJSONArray("wallpaper")
-    if (array == null || array.length() == 0) return fallback
-    val parsed = buildList {
-        for (index in 0 until array.length()) {
-            val value = array.optString(index).trim()
-            if (value.isNotBlank()) {
-                runCatching { Color(android.graphics.Color.parseColor(value)) }
-                    .onSuccess { add(it) }
-            }
-        }
+private fun JSONObject.optThemeFloat(
+    primaryName: String,
+    aliasName: String,
+    fallback: Float,
+    min: Float,
+    max: Float,
+): Float {
+    val value = when {
+        has(primaryName) -> optDouble(primaryName, fallback.toDouble())
+        has(aliasName) -> optDouble(aliasName, fallback.toDouble())
+        else -> fallback.toDouble()
     }
-    return parsed.ifEmpty { fallback }
+    return value.toFloat().coerceIn(min, max)
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -496,6 +641,7 @@ internal fun FishPiPalette.toM3ColorScheme(): androidx.compose.material3.ColorSc
 @Composable
 internal fun FishPiM3BridgedTheme(
     palette: FishPiPalette,
+    tokens: FishPiThemeTokens = IslandFishPiThemeTokens,
     uiStyle: FishPiUiStyle = FishPiUiStyle.Classic,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
@@ -513,6 +659,7 @@ internal fun FishPiM3BridgedTheme(
 
     androidx.compose.runtime.CompositionLocalProvider(
         LocalFishPiPalette provides palette,
+        LocalFishPiThemeTokens provides tokens,
         LocalFishPiUiStyle provides uiStyle,
     ) {
         MaterialTheme(

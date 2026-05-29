@@ -24,7 +24,7 @@ internal fun ProfileRoute(
     themeKey: String,
     onSaveChatFilters: (ChatFilterConfig) -> Unit,
     onThemeChange: (String) -> Unit,
-    onImportTheme: (String) -> Result<String>,
+    onImportThemePackage: suspend (String) -> Result<String>,
     onSaveEditedTheme: (String) -> Result<String>,
     onDeleteCustomTheme: (String) -> Boolean,
     chatWallpaperUri: String,
@@ -89,9 +89,9 @@ internal fun ProfileRoute(
                 ProfileEffect.AddAccount -> onAddAccount()
                 is ProfileEffect.SaveChatFilters -> onSaveChatFilters(effect.config)
                 is ProfileEffect.ChangeTheme -> onThemeChange(effect.key)
-                is ProfileEffect.ImportTheme -> onImportTheme(effect.raw).fold(
+                is ProfileEffect.ImportThemePackage -> onImportThemePackage(effect.uri).fold(
                     onSuccess = { FishPiNotifier.success("已导入主题：$it") },
-                    onFailure = { FishPiNotifier.error("主题导入失败：${it.message ?: "格式不正确"}") },
+                    onFailure = { FishPiNotifier.error("主题导入失败：${it.message ?: "请选择 FishPi 主题包"}") },
                 )
                 is ProfileEffect.SaveEditedTheme -> onSaveEditedTheme(effect.raw).fold(
                     onSuccess = {

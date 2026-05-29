@@ -15,7 +15,7 @@ internal sealed interface ProfileEffect {
     data object AddAccount : ProfileEffect
     data class SaveChatFilters(val config: ChatFilterConfig) : ProfileEffect
     data class ChangeTheme(val key: String) : ProfileEffect
-    data class ImportTheme(val raw: String) : ProfileEffect
+    data class ImportThemePackage(val uri: String) : ProfileEffect
     data class SaveEditedTheme(val raw: String) : ProfileEffect
     data class DeleteCustomTheme(val key: String) : ProfileEffect
     data class ChangeChatWallpaper(val uri: String) : ProfileEffect

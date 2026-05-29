@@ -159,12 +159,6 @@ import kotlinx.coroutines.launch
 
 private data class ArticleFilter(val key: String, val label: String)
 
-private val ArticleScreenPadding = 14.dp
-private val ArticleSectionGap = 10.dp
-private val ArticleInlineGap = 8.dp
-private val ArticleMicroGap = 4.dp
-private val ArticleCardRadius = 12.dp
-private val ArticleCardPadding = 14.dp
 private val ArticlePinnedClearance = 38.dp
 
 private val BaseArticleFilters = listOf(
@@ -307,28 +301,28 @@ private fun ArticleListPage(
             ControlSurface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = ArticleScreenPadding, vertical = ArticleScreenPadding),
+                    .padding(horizontal = FishPiTheme.spacingPage, vertical = FishPiTheme.spacingPage),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(ArticleSectionGap),
+                    horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
                 ) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(ArticleMicroGap)) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem / 2)) {
                         Text(
                             text = "帖子",
                             color = MaterialTheme.colorScheme.onSurface,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(ArticleInlineGap), verticalAlignment = Alignment.CenterVertically) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem), verticalAlignment = Alignment.CenterVertically) {
                             AnimalStatusPill(
                                 label = if (appliedTag.isBlank()) "全部帖子" else "#$appliedTag",
                                 color = MaterialTheme.colorScheme.primary,
                             )
                             AnimalStatusPill(
                                 label = "${articles.size} 条",
-                                color = Color(0xFF7B6F54),
+                                color = FishPiTheme.accent,
                             )
                         }
                     }
@@ -346,8 +340,8 @@ private fun ArticleListPage(
                 }
             }
             Row(
-                modifier = Modifier.padding(horizontal = ArticleScreenPadding, vertical = ArticleMicroGap),
-                horizontalArrangement = Arrangement.spacedBy(ArticleInlineGap),
+                modifier = Modifier.padding(horizontal = FishPiTheme.spacingPage, vertical = FishPiTheme.spacingItem / 2),
+                horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
             ) {
                 articleFiltersForTag(appliedTag).forEach { item ->
                     val selected = item == filter
@@ -362,9 +356,9 @@ private fun ArticleListPage(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = ArticleScreenPadding, vertical = ArticleInlineGap),
+                        .padding(horizontal = FishPiTheme.spacingPage, vertical = FishPiTheme.spacingItem),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(ArticleInlineGap),
+                    horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
                 ) {
                     TextField(
                         value = tagInput,
@@ -394,7 +388,7 @@ private fun ArticleListPage(
                 }
             }
             error?.let {
-                Text(text = it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = ArticleScreenPadding))
+                Text(text = it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = FishPiTheme.spacingPage))
             }
             when {
                 isLoading && articles.isEmpty() -> LoadingScreen("加载帖子...")
@@ -404,8 +398,8 @@ private fun ArticleListPage(
                 else -> LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = ArticleScreenPadding, vertical = ArticleSectionGap),
-                    verticalArrangement = Arrangement.spacedBy(ArticleSectionGap),
+                    contentPadding = PaddingValues(horizontal = FishPiTheme.spacingPage, vertical = FishPiTheme.spacingSection),
+                    verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
                 ) {
                     items(
                         items = articles,
@@ -910,17 +904,17 @@ private fun ArticleRow(item: ArticleSummary, onClick: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
-                    start = ArticleCardPadding,
-                    top = ArticleCardPadding,
-                    end = if (item.sticky) ArticlePinnedClearance else ArticleCardPadding,
-                    bottom = ArticleCardPadding,
+                    start = FishPiTheme.spacingSection,
+                    top = FishPiTheme.spacingSection,
+                    end = if (item.sticky) ArticlePinnedClearance else FishPiTheme.spacingSection,
+                    bottom = FishPiTheme.spacingSection,
                 ),
-            verticalArrangement = Arrangement.spacedBy(ArticleSectionGap),
+            verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ArticleSectionGap)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection)) {
                 ArticleAvatar(avatar = item.avatar, author = item.author, perfect = item.perfect)
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(ArticleMicroGap)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ArticleInlineGap)) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem / 2)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem)) {
                         Text(text = item.author, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         Text(text = item.time, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
                     }
@@ -933,9 +927,9 @@ private fun ArticleRow(item: ArticleSummary, onClick: () -> Unit) {
             }
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(ArticleInlineGap),
+                verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ArticleInlineGap)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem)) {
                     Text(
                         text = item.title,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -1034,13 +1028,13 @@ private fun ArticleStatusIcon(
 private fun ArticlePinnedCornerBadge(
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(topEnd = ArticleCardRadius, bottomStart = ArticleCardRadius)
+    val shape = RoundedCornerShape(topEnd = FishPiTheme.radiusBox, bottomStart = FishPiTheme.radiusBox)
     Box(
         modifier = modifier
             .clip(shape)
             .background(MaterialTheme.colorScheme.error.copy(alpha = 0.08f))
-            .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.12f), shape)
-            .padding(start = ArticleInlineGap, top = 6.dp, end = ArticleInlineGap, bottom = 6.dp),
+            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.error.copy(alpha = 0.12f), shape)
+            .padding(start = FishPiTheme.spacingItem, top = 6.dp, end = FishPiTheme.spacingItem, bottom = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -1139,7 +1133,7 @@ private fun ArticleDetailPage(
                         )
                         AnimalStatusPill(
                             label = "评论 ${detail?.commentCount ?: 0}",
-                            color = Color(0xFF7B6F54),
+                            color = FishPiTheme.accent,
                             onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
                         )
                     }
@@ -1624,13 +1618,13 @@ private fun ArticleRewardCard(
 ) {
     Column(
         modifier = Modifier
-            .padding(horizontal = 18.dp)
+            .padding(horizontal = FishPiTheme.spacingPage)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.18f))
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f), RoundedCornerShape(FishPiTheme.radiusBox))
+            .padding(FishPiTheme.spacingSection),
+        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(
@@ -1792,8 +1786,11 @@ private fun ArticleReaderBottomBar(
         modifier = Modifier
             .fillMaxWidth()
             .imePadding()
-            .padding(horizontal = 9.dp, vertical = 7.dp),
-        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+            .padding(
+                horizontal = FishPiTheme.spacingPage,
+                vertical = FishPiTheme.spacingItem * 0.75f,
+            ),
+        contentPadding = PaddingValues(FishPiTheme.spacingItem * 0.75f),
     ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -1815,10 +1812,13 @@ private fun ArticleReaderBottomBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(FishPiTheme.radiusField))
                     .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.40f))
-                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f), RoundedCornerShape(16.dp))
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                    .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f), RoundedCornerShape(FishPiTheme.radiusField))
+                    .padding(
+                        horizontal = FishPiTheme.spacingControl,
+                        vertical = FishPiTheme.spacingControl * 0.64f,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
@@ -2043,20 +2043,25 @@ private fun ArticleCommentToolButton(
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val background = when {
+        !prominent -> Color.Transparent
         !enabled -> MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.54f)
         prominent -> MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
         else -> MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f)
     }
-    val shape = RoundedCornerShape(12.dp)
+    val borderColor = if (prominent && enabled) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.26f)
+    } else {
+        Color.Transparent
+    }
+    val shape = RoundedCornerShape(FishPiTheme.radiusField)
     Box(
         modifier = Modifier
             .size(36.dp)
             .clip(shape)
             .background(background)
             .border(
-                1.dp,
-                if (prominent && enabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.26f)
-                else MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
+                if (prominent) FishPiTheme.borderWidth else 0.dp,
+                borderColor,
                 shape,
             )
             .combinedClickable(
@@ -2159,9 +2164,9 @@ private fun ArticleCommentRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.42f))
-            .padding(horizontal = 11.dp, vertical = 11.dp),
+            .padding(FishPiTheme.spacingSection),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -2265,10 +2270,13 @@ private fun ArticleReplyContext(reply: ArticleReplyPreview) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(11.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusField))
             .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.72f))
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f), RoundedCornerShape(11.dp))
-            .padding(horizontal = 9.dp, vertical = 8.dp),
+            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f), RoundedCornerShape(FishPiTheme.radiusField))
+            .padding(
+                horizontal = FishPiTheme.spacingControl,
+                vertical = FishPiTheme.spacingControl * 0.72f,
+            ),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -2764,6 +2772,7 @@ private fun ArticleDetailView.toSummary(): ArticleSummary =
         perfect = false,
         thumbnail = imageUrls.firstOrNull().orEmpty(),
     )
+
 
 
 

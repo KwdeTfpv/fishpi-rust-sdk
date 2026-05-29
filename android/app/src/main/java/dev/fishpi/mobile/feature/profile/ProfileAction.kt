@@ -43,7 +43,7 @@ internal sealed interface ProfileAction {
     data object AddAccount : ProfileAction
     data class SaveChatFilters(val config: ChatFilterConfig) : ProfileAction
     data class ChangeTheme(val key: String) : ProfileAction
-    data class ImportTheme(val raw: String) : ProfileAction
+    data class ImportThemePackage(val uri: String) : ProfileAction
     data class SaveEditedTheme(val raw: String) : ProfileAction
     data class DeleteCustomTheme(val key: String) : ProfileAction
     data class ChangeChatWallpaper(val uri: String) : ProfileAction

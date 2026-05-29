@@ -43,14 +43,14 @@ internal fun ChatBarrageComposerDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 460.dp),
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(FishPiTheme.radiusBox),
             color = FishPiTheme.surface,
-            border = BorderStroke(1.dp, FishPiTheme.outline.copy(alpha = 0.16f)),
+            border = BorderStroke(FishPiTheme.borderWidth, FishPiTheme.outline.copy(alpha = 0.16f)),
             shadowElevation = 0.dp,
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(FishPiTheme.spacingSection),
+                verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -74,9 +74,9 @@ internal fun ChatBarrageComposerDialog(
                     )
                 }
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(FishPiTheme.radiusField),
                     color = FishPiTheme.surfaceContainer,
-                    border = BorderStroke(1.dp, FishPiTheme.outline.copy(alpha = 0.14f)),
+                    border = BorderStroke(FishPiTheme.borderWidth, FishPiTheme.outline.copy(alpha = 0.14f)),
                     shadowElevation = 0.dp,
                 ) {
                     BasicTextField(
@@ -85,7 +85,10 @@ internal fun ChatBarrageComposerDialog(
                         enabled = !state.isSending,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 11.dp),
+                            .padding(
+                                horizontal = FishPiTheme.spacingControl,
+                                vertical = FishPiTheme.spacingControl,
+                            ),
                         textStyle = TextStyle(
                             color = FishPiTheme.onSurface,
                             fontSize = 15.sp,

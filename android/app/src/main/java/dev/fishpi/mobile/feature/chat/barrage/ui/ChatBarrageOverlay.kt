@@ -121,9 +121,9 @@ private fun ChatBarrageFlyingItem(
             .offset { IntOffset(offsetX.value.roundToInt(), laneTopPx) }
             .widthIn(max = 260.dp)
             .clickable { holdRequest += 1 },
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(FishPiTheme.radiusField),
         color = FishPiTheme.surface.copy(alpha = 0.78f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.36f)),
+        border = androidx.compose.foundation.BorderStroke(FishPiTheme.borderWidth, accent.copy(alpha = 0.36f)),
         shadowElevation = 0.dp,
     ) {
         Row(

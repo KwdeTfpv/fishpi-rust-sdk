@@ -120,8 +120,8 @@ private fun HomeClassicUi(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding(),
-        contentPadding = PaddingValues(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 88.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(start = FishPiTheme.spacingPage, top = FishPiTheme.spacingSection, end = FishPiTheme.spacingPage, bottom = 88.dp),
+        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
     ) {
         item {
             HomeTodayWorkspace(state = state, dispatch = dispatch)
@@ -194,8 +194,8 @@ private fun HomeSoftDefaultUi(
             .fillMaxSize()
             .background(uiPageBrush())
             .statusBarsPadding(),
-        contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 92.dp),
-        verticalArrangement = Arrangement.spacedBy(15.dp),
+        contentPadding = PaddingValues(start = FishPiTheme.spacingPage, top = FishPiTheme.spacingControl, end = FishPiTheme.spacingPage, bottom = 92.dp),
+        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
     ) {
         item {
             HomeSoftHeroScene(state = state, dispatch = dispatch)
@@ -303,9 +303,9 @@ private fun HomeTodayWorkspace(
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(FishPiTheme.radiusBox),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+            border = BorderStroke(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
             shadowElevation = 0.dp,
         ) {
             Column(
@@ -441,7 +441,7 @@ private fun HomeSoftStatusBand(
     }
     ControlSurface(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(12.dp),
+        contentPadding = PaddingValues(FishPiTheme.spacingSection),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
@@ -494,7 +494,6 @@ private fun HomeSoftLivenessSummary(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -545,7 +544,7 @@ private fun HomeSoftStatusPill(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusField))
             .clickable(onClick = onClick)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.48f))
             .padding(horizontal = 9.dp, vertical = 8.dp),
@@ -668,13 +667,13 @@ private fun HomeSoftPlanRow(
     compact: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val shape = if (compact) RoundedCornerShape(12.dp) else RoundedCornerShape(topStart = 14.dp, topEnd = 28.dp, bottomEnd = 14.dp, bottomStart = 28.dp)
+    val shape = if (compact) RoundedCornerShape(FishPiTheme.radiusBox) else RoundedCornerShape(topStart = 14.dp, topEnd = 28.dp, bottomEnd = 14.dp, bottomStart = 28.dp)
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .background(homeSoftContainerColor())
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), shape)
+            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = if (compact) 9.dp else 12.dp),
         verticalArrangement = if (compact) Arrangement.spacedBy(6.dp) else Arrangement.SpaceBetween,
@@ -713,7 +712,7 @@ private fun HomeSoftMiniAction(
             .height(56.dp)
             .clip(shape)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.88f))
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f), shape)
+            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f), shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -745,7 +744,7 @@ private fun HomeSoftQuoteCard(text: String) {
                     ),
                 ),
             )
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), RoundedCornerShape(topStart = 12.dp, topEnd = 24.dp, bottomEnd = 12.dp, bottomStart = 12.dp))
+            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), RoundedCornerShape(topStart = 12.dp, topEnd = 24.dp, bottomEnd = 12.dp, bottomStart = 12.dp))
             .padding(13.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
@@ -763,9 +762,9 @@ private fun HomeSoftCommunityRail(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(homeSoftContainerColor(alpha = 0.90f))
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(FishPiTheme.radiusBox))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -783,7 +782,7 @@ private fun HomeSoftCommunityRail(
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.66f))
                     .clickable { dispatch(HomeAction.OpenArticle) }
                     .padding(horizontal = 6.dp, vertical = 3.dp),
             )
@@ -822,7 +821,7 @@ private fun HomeSoftCommunityArticleRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.66f))
             .clickable(onClick = onClick)
             .padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -885,7 +884,7 @@ private fun HomeSoftRecommendedFooter(
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.66f))
                     .clickable(enabled = !state.isLoadingRecommendedMore) {
                         dispatch(HomeAction.LoadMoreRecommended)
                     }
@@ -906,9 +905,9 @@ private fun HomeSoftRecommendedFooter(
 private fun HomeDatePill(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(homeSoftContainerColor(alpha = 0.88f))
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(FishPiTheme.radiusBox))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -929,7 +928,7 @@ private fun HomeStatusCell(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(11.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox * 0.9f))
             .clickable(onClick = onClick)
             .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -946,14 +945,14 @@ private fun HomePrimaryActions(dispatch: (HomeAction) -> Unit) {
         HomeMainAction(
             title = "进入聊天室",
             subtitle = "去跟大家聊聊天吧~",
-            accent = Color(0xFF45A6A1),
+            accent = FishPiTheme.accent,
             onClick = { dispatch(HomeAction.OpenChat) },
         )
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
             HomeActionRow("帖子", "看看帖子", Icons.Rounded.Newspaper, MaterialTheme.colorScheme.primary, Modifier.weight(1f)) { dispatch(HomeAction.OpenArticle) }
-            HomeActionRow("清风明月", "清风明月", Icons.Rounded.NightsStay, Color(0xFF7B68B8), Modifier.weight(1f)) { dispatch(HomeAction.OpenBreezemoon) }
+            HomeActionRow("清风明月", "清风明月", Icons.Rounded.NightsStay, MaterialTheme.colorScheme.tertiary, Modifier.weight(1f)) { dispatch(HomeAction.OpenBreezemoon) }
         }
-        HomeActionRow("打开工具", "娱乐与扩展入口", Icons.Rounded.LocalCafe, Color(0xFF5B8E7D), Modifier.fillMaxWidth()) { dispatch(HomeAction.OpenFun) }
+        HomeActionRow("打开工具", "娱乐与扩展入口", Icons.Rounded.LocalCafe, FishPiTheme.accent, Modifier.fillMaxWidth()) { dispatch(HomeAction.OpenFun) }
     }
 }
 
@@ -966,9 +965,9 @@ private fun HomeMainAction(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(FishPiTheme.radiusBox),
         color = accent.copy(alpha = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) 0.20f else 0.11f),
-        border = BorderStroke(1.dp, accent.copy(alpha = 0.18f)),
+        border = BorderStroke(FishPiTheme.borderWidth, accent.copy(alpha = 0.18f)),
         shadowElevation = 0.dp,
         onClick = onClick,
     ) {
@@ -998,9 +997,9 @@ private fun HomeActionRow(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(FishPiTheme.radiusBox),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.76f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+        border = BorderStroke(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
         shadowElevation = 0.dp,
         onClick = onClick,
     ) {
@@ -1012,7 +1011,7 @@ private fun HomeActionRow(
             Box(
                 modifier = Modifier
                     .size(32.dp)
-                    .clip(RoundedCornerShape(9.dp))
+                    .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.8f))
                     .background(color.copy(alpha = 0.10f)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1031,9 +1030,9 @@ private fun HomeDeskNote(text: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.62f))
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f), RoundedCornerShape(12.dp))
+            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f), RoundedCornerShape(FishPiTheme.radiusBox))
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1076,7 +1075,7 @@ private fun HomePulseHeader(
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.66f))
                 .clickable(onClick = onOpenArticle)
                 .padding(horizontal = 8.dp, vertical = 5.dp),
         )
@@ -1098,7 +1097,7 @@ private fun HomePulseItem(article: HomeArticleUiModel, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .clickable(onClick = onClick)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.Top,
@@ -1107,7 +1106,7 @@ private fun HomePulseItem(article: HomeArticleUiModel, onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(34.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusField))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center,
         ) {
@@ -1151,3 +1150,4 @@ private fun HomePulseMetric(icon: ImageVector, value: Long) {
         Text(text = value.toString(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
     }
 }
+

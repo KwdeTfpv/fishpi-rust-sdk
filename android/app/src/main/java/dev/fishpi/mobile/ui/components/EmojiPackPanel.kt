@@ -154,12 +154,15 @@ internal fun EmojiPackPanel(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(FishPiTheme.surface.copy(alpha = 0.96f))
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(
+                horizontal = FishPiTheme.spacingItem,
+                vertical = FishPiTheme.spacingItem * 0.75f,
+            ),
+        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem * 0.75f),
     ) {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem * 0.64f)) {
             items(groups, key = { it.id }) { group ->
                 EmojiGroupChip(
                     group = group,
@@ -189,7 +192,7 @@ internal fun EmojiPackPanel(
                                     modifier = Modifier
                                         .weight(1f)
                                         .aspectRatio(1f)
-                                        .clip(RoundedCornerShape(14.dp))
+                                        .clip(RoundedCornerShape(FishPiTheme.radiusBox))
                                         .background(FishPiTheme.surfaceContainer)
                                         .clickable { onPickEmoji(item) },
                                     contentAlignment = Alignment.Center,
@@ -230,13 +233,16 @@ private fun EmojiGroupChip(
 ) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.66f))
             .background(
                 if (selected) FishPiTheme.accent.copy(alpha = 0.14f)
                 else FishPiTheme.surfaceContainer,
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .padding(
+                horizontal = FishPiTheme.spacingItem,
+                vertical = FishPiTheme.spacingItem * 0.38f,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -247,4 +253,5 @@ private fun EmojiGroupChip(
         )
     }
 }
+
 

@@ -59,9 +59,21 @@ fun FishPiApp() {
             applyThemeKey(custom.key)
             custom.label
         }
+    suspend fun importThemePackage(uri: String): Result<String> =
+        runCatching {
+            val custom = withContext(Dispatchers.IO) {
+                importFishPiThemePackage(context.applicationContext, uri)
+            }
+            val nextThemes = (importedThemes.filterNot { it.key == custom.key } + custom)
+            importedThemes = nextThemes
+            store.saveImportedThemeJsons(nextThemes.map { it.rawJson })
+            applyThemeKey(custom.key)
+            custom.label
+        }
     fun deleteCustomTheme(key: String): Boolean {
         val existing = importedThemes.firstOrNull { it.key == key } ?: return false
         val nextThemes = importedThemes.filterNot { it.key == existing.key }
+        deleteFishPiThemePackageFiles(context.applicationContext, existing.key)
         importedThemes = nextThemes
         store.saveImportedThemeJsons(nextThemes.map { it.rawJson })
         if (themeKey == existing.key) {
@@ -69,7 +81,8 @@ fun FishPiApp() {
         }
         return true
     }
-    val palette = activeTheme.palette.copy(wallpaperImageUri = chatWallpaperUri.ifBlank { null })
+    val activeWallpaperUri = chatWallpaperUri.ifBlank { activeTheme.palette.wallpaperImageUri.orEmpty() }
+    val palette = activeTheme.tokens.toPalette(activeWallpaperUri.ifBlank { null })
     fun applyChatWallpaper(uri: String) {
         chatWallpaperUri = uri
         store.saveChatWallpaperUri(uri)
@@ -82,7 +95,7 @@ fun FishPiApp() {
             applyThemeKey(resolvedKey)
         }
     }
-    FishPiM3BridgedTheme(palette = palette, uiStyle = activeTheme.uiStyle) {
+    FishPiM3BridgedTheme(palette = palette, tokens = activeTheme.tokens, uiStyle = activeTheme.uiStyle) {
         val api = remember { FishPiApiClient.shared }
         val scope = rememberCoroutineScope()
         var session by remember { mutableStateOf<AppSession?>(null) }
@@ -161,7 +174,7 @@ fun FishPiApp() {
                         applyThemeKey(next.key)
                     },
                     onThemeChange = { applyThemeKey(it) },
-                    onImportTheme = { importTheme(it) },
+                    onImportThemePackage = { importThemePackage(it) },
                     onSaveEditedTheme = { importTheme(it) },
                     onDeleteCustomTheme = { deleteCustomTheme(it) },
                     chatWallpaperUri = chatWallpaperUri,

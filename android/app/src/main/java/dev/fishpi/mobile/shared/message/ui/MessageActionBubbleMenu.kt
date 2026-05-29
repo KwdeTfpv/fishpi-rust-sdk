@@ -117,12 +117,15 @@ internal fun MessageActionBubbleMenu(
             Column(
                 modifier = Modifier
                     .width(menuWidth)
-                    .shadow(4.dp, RoundedCornerShape(14.dp), clip = false)
-                    .clip(RoundedCornerShape(14.dp))
+                    .shadow(4.dp, RoundedCornerShape(FishPiTheme.radiusBox), clip = false)
+                    .clip(RoundedCornerShape(FishPiTheme.radiusBox))
                     .background(menuBackground)
-                    .border(BorderStroke(1.dp, menuBorder), RoundedCornerShape(14.dp))
+                    .border(BorderStroke(FishPiTheme.borderWidth, menuBorder), RoundedCornerShape(FishPiTheme.radiusBox))
                     .consumeTaps()
-                    .padding(horizontal = 5.dp, vertical = 4.dp),
+                    .padding(
+                        horizontal = FishPiTheme.spacingControl * 0.45f,
+                        vertical = FishPiTheme.spacingControl * 0.36f,
+                    ),
                 verticalArrangement = Arrangement.Center,
             ) {
                 when (submenu) {
@@ -170,7 +173,7 @@ internal fun MessageActionBubbleMenu(
                     .size(9.dp)
                     .rotate(45f)
                     .background(menuBackground)
-                    .border(1.dp, menuBorder.copy(alpha = 0.72f)),
+                    .border(FishPiTheme.borderWidth, menuBorder.copy(alpha = 0.72f)),
             )
         }
     }
@@ -264,10 +267,13 @@ private fun ReactionActionRow(
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.66f))
                 .background(itemBackground)
                 .clickable(onClick = onBack)
-                .padding(horizontal = 7.dp, vertical = 6.dp),
+                .padding(
+                    horizontal = FishPiTheme.spacingControl * 0.64f,
+                    vertical = FishPiTheme.spacingControl * 0.55f,
+                ),
         )
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -276,10 +282,10 @@ private fun ReactionActionRow(
             QuickReactionOptions.forEach { option ->
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.66f))
                         .background(if (selected == option.value) selectedBackground else Color.Transparent)
                         .clickable { onReaction(option.value) }
-                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                        .padding(FishPiTheme.spacingControl * 0.55f),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(text = option.emoji)
@@ -304,10 +310,13 @@ private fun MenuAction(
     Column(
         modifier = Modifier
             .width(33.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.66f))
             .background(if (action.enabled) itemBackground else Color.Transparent)
             .clickable(enabled = action.enabled, onClick = action.onClick)
-            .padding(horizontal = 2.dp, vertical = 3.dp),
+            .padding(
+                horizontal = FishPiTheme.spacingControl * 0.18f,
+                vertical = FishPiTheme.spacingControl * 0.27f,
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
@@ -315,4 +324,5 @@ private fun MenuAction(
         Text(text = action.label, color = color, fontWeight = FontWeight.SemiBold, fontSize = 9.sp, maxLines = 1)
     }
 }
+
 

@@ -49,13 +49,17 @@ internal fun AppBottomSheet(
             .silentTap(onDismiss),
         contentAlignment = Alignment.BottomCenter,
     ) {
+        val sheetShape = RoundedCornerShape(
+            topStart = FishPiTheme.radiusBox + 16.dp,
+            topEnd = FishPiTheme.radiusBox + 16.dp,
+        )
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .imePadding()
                 .then(if (withNavigationBarPadding) Modifier.navigationBarsPadding() else Modifier)
-                .shadow(10.dp, RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp), clip = false)
-                .clip(RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp))
+                .shadow((FishPiTheme.depth * 12).dp, sheetShape, clip = false)
+                .clip(sheetShape)
                 .background(
                     Brush.verticalGradient(
                         listOf(
@@ -64,10 +68,10 @@ internal fun AppBottomSheet(
                         ),
                     ),
                 )
-                .border(1.dp, FishPiTheme.outline.copy(alpha = 0.16f), RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp))
+                .border(FishPiTheme.borderWidth, FishPiTheme.outline.copy(alpha = 0.16f + FishPiTheme.depth * 0.10f), sheetShape)
                 .consumeTaps()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(horizontal = FishPiTheme.spacingPage, vertical = FishPiTheme.spacingSection),
+            verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
             content = {
                 AppSheetHandle()
                 content()
@@ -85,7 +89,7 @@ private fun AppSheetHandle() {
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.14f)
-                .clip(RoundedCornerShape(999.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                 .background(FishPiTheme.outline.copy(alpha = 0.42f))
                 .padding(vertical = 2.dp),
         )
@@ -98,7 +102,7 @@ internal fun AppSheetTitle(text: String) {
         text = text,
         color = FishPiTheme.onSurface,
         fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+        modifier = Modifier.padding(horizontal = FishPiTheme.spacingItem / 2, vertical = FishPiTheme.spacingItem / 2),
     )
 }
 
@@ -115,13 +119,13 @@ internal fun AppSheetActionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusField))
                 .background(FishPiTheme.surface.copy(alpha = 0.74f))
-                .border(1.dp, FishPiTheme.outline.copy(alpha = 0.12f), RoundedCornerShape(18.dp))
+                .border(FishPiTheme.borderWidth, FishPiTheme.outline.copy(alpha = 0.12f + FishPiTheme.depth * 0.08f), RoundedCornerShape(FishPiTheme.radiusField))
                 .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .padding(horizontal = FishPiTheme.spacingControl + 2.dp, vertical = FishPiTheme.spacingControl + 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
     ) {
         Box(
             modifier = Modifier

@@ -28,7 +28,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -166,7 +165,7 @@ internal fun DefaultBreezemoonUi(
         ),
     )
 
-    val accent = if (isSystemInDarkTheme()) Color(0xFFD4B96A) else Color(0xFFC9A44F)
+    val accent = FishPiTheme.accent
     val cardBg = MaterialTheme.colorScheme.surfaceContainerLow
 
     UiLayerScaffold {
@@ -179,9 +178,15 @@ internal fun DefaultBreezemoonUi(
             ControlSurface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                shape = RoundedCornerShape(16.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 9.dp),
+                    .padding(
+                        horizontal = FishPiTheme.spacingPage,
+                        vertical = FishPiTheme.spacingItem,
+                    ),
+                shape = RoundedCornerShape(FishPiTheme.radiusField),
+                contentPadding = PaddingValues(
+                    horizontal = FishPiTheme.spacingControl,
+                    vertical = FishPiTheme.spacingControl,
+                ),
             ) {
                 Row(
                     modifier = Modifier
@@ -221,12 +226,12 @@ internal fun DefaultBreezemoonUi(
                 state = listState,
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(
-                    start = 12.dp,
+                    start = FishPiTheme.spacingPage,
                     top = 4.dp,
-                    end = 12.dp,
+                    end = FishPiTheme.spacingPage,
                     bottom = emojiPanelReserve + 8.dp,
                 ),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
             ) {
                 items(state.items, key = { it.id.ifBlank { it.createTime + it.authorName + it.content } }) { item ->
                     BreezemoonCard(
@@ -245,16 +250,22 @@ internal fun DefaultBreezemoonUi(
                 modifier = Modifier
                     .fillMaxWidth()
                     .onSizeChanged { size -> composerHeight = with(density) { size.height.toDp() } }
-                    .padding(horizontal = 8.dp, vertical = 7.dp),
+                    .padding(
+                        horizontal = FishPiTheme.spacingPage,
+                        vertical = FishPiTheme.spacingItem * 0.75f,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem * 0.75f),
             ) {
                 Box(
                     modifier = Modifier.weight(1f).height(IntrinsicSize.Min)
-                        .clip(RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusBox + 8.dp))
                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.84f))
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), RoundedCornerShape(24.dp))
-                        .padding(horizontal = 6.dp, vertical = 5.dp),
+                        .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f + FishPiTheme.depth * 0.08f), RoundedCornerShape(FishPiTheme.radiusBox + 8.dp))
+                        .padding(
+                            horizontal = FishPiTheme.spacingItem * 0.75f,
+                            vertical = FishPiTheme.spacingItem * 0.64f,
+                        ),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -358,7 +369,7 @@ internal fun DefaultBreezemoonUi(
                     onPickEmoji = { dispatch(BreezemoonAction.PickEmoji(it.name, it.url)) },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(horizontal = 10.dp)
+                        .padding(horizontal = FishPiTheme.spacingPage)
                         .padding(bottom = composerHeight + 8.dp)
                         .consumeTaps(),
                 )
@@ -403,18 +414,18 @@ private fun BreezemoonCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox + 8.dp))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.78f))
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(9.dp),
+            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f + FishPiTheme.depth * 0.08f), RoundedCornerShape(FishPiTheme.radiusBox + 8.dp))
+            .padding(FishPiTheme.spacingSection),
+        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SubcomposeAsyncImage(
                 model = item.avatar,
                 imageLoader = rememberFishPiImageLoader(),
                 contentDescription = "${item.authorName}头像",
-                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(16.dp)),
+                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(FishPiTheme.radiusField)),
             )
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -511,6 +522,7 @@ private fun CharSequence.withBreezemoonMemberLinks(
     }
     return spannable
 }
+
 
 
 

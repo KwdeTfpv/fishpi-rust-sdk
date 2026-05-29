@@ -59,6 +59,7 @@ import dev.fishpi.mobile.utils.MarkdownMediaType
 import dev.fishpi.mobile.utils.toFishPiGeneratedBadgeOrNull
 import kotlinx.coroutines.Job
 import org.json.JSONObject
+import kotlin.math.roundToInt
 
 internal class NativeMessageAdapter(
     private var theme: NativeMessageTheme,
@@ -128,7 +129,7 @@ internal class NativeMessageAdapter(
         return NativeMessageViewHolder(
             view = LinearLayout(parent.context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(10), dp(4), dp(10), dp(4))
+                setPadding(0, dp(4), 0, dp(4))
                 layoutParams = RecyclerView.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -480,6 +481,15 @@ internal class NativeMessageViewHolder(
         get() = themeProvider()
     private val markdownRenderer: MarkwonChatRenderer
         get() = markdownRendererProvider()
+    private val boxRadius: Float
+        get() = theme.radiusBoxDp
+    private val fieldRadius: Float
+        get() = theme.radiusFieldDp
+    private val selectorRadius: Float
+        get() = theme.radiusSelectorDp
+    private fun themeBorderPx(): Int = dp(theme.borderWidthDp).roundToInt().coerceAtLeast(0)
+    private fun themeItemPx(): Int = dp(theme.spacingItemDp).roundToInt()
+    private fun themeControlPx(): Int = dp(theme.spacingControlDp).roundToInt()
 
     fun recycle() {
         renderJob?.cancel()
@@ -536,8 +546,8 @@ internal class NativeMessageViewHolder(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply {
-                leftMargin = if (isMine) 0 else dp(7)
-                rightMargin = if (isMine) dp(7) else 0
+                leftMargin = if (isMine) 0 else themeItemPx()
+                rightMargin = if (isMine) themeItemPx() else 0
             }
         }
 
@@ -567,8 +577,8 @@ internal class NativeMessageViewHolder(
             setTextColor(NativeRedPacketText)
             textSize = 11f
             gravity = Gravity.CENTER
-            background = roundRect(theme.serviceBackground, 999f)
-            setPadding(dp(10), dp(4), dp(10), dp(4))
+            background = roundRect(theme.serviceBackground, selectorRadius)
+            setPadding(themeControlPx(), dp(4), themeControlPx(), dp(4))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -608,21 +618,22 @@ internal class NativeMessageViewHolder(
             setTextColor(theme.clientText)
             textSize = 9.5f
             includeFontPadding = false
-            background = roundRect(theme.clientBackground, 6f)
-            setPadding(dp(5), dp(1), dp(5), dp(1))
+            background = roundRect(theme.clientBackground, fieldRadius * 0.45f)
+            val horizontalPadding = (themeControlPx() * 0.5f).roundToInt()
+            setPadding(horizontalPadding, dp(1), horizontalPadding, dp(1))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply {
-                leftMargin = dp(5)
-                rightMargin = dp(5)
+                leftMargin = (themeItemPx() * 0.6f).roundToInt()
+                rightMargin = (themeItemPx() * 0.6f).roundToInt()
             }
         }
     }
 
     private fun bubbleBackground(color: Int): GradientDrawable =
-        roundRect(color, 8f).apply {
-            setStroke(dp(1), theme.bubbleBorder)
+        roundRect(color, boxRadius).apply {
+            setStroke(themeBorderPx(), theme.bubbleBorder)
         }
 
     private fun bubbleView(message: ChatRoomMessage, item: ChatListItem, isMine: Boolean): ChatBubbleFrame {
@@ -639,10 +650,10 @@ internal class NativeMessageViewHolder(
             elevation = 0f
             enableMessageLongPress(message, isMine, this)
             content.setPadding(
-                if (standaloneCard) 0 else dp(11),
-                if (standaloneCard) 0 else dp(8),
-                if (standaloneCard) 0 else dp(11),
-                if (standaloneCard) 0 else dp(9),
+                if (standaloneCard) 0 else themeControlPx() + dp(1),
+                if (standaloneCard) 0 else themeControlPx() - dp(2),
+                if (standaloneCard) 0 else themeControlPx() + dp(1),
+                if (standaloneCard) 0 else themeControlPx() - dp(1),
             )
 
             when {
@@ -797,8 +808,8 @@ internal class NativeMessageViewHolder(
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             enableMessageLongPress(message, isMine, anchorView)
-            background = roundRect(theme.quoteBackground.withAlpha(150), 10f).apply {
-                setStroke(dp(1), theme.bubbleBorder)
+            background = roundRect(theme.quoteBackground.withAlpha(150), fieldRadius).apply {
+                setStroke(themeBorderPx(), theme.bubbleBorder)
             }
             isClickable = card.sourceUrl.isNotBlank()
             isFocusable = card.sourceUrl.isNotBlank()
@@ -808,14 +819,14 @@ internal class NativeMessageViewHolder(
                     onLinkClick(card.sourceUrl)
                 }
             }
-            setPadding(dp(8), dp(8), dp(10), dp(8))
+            setPadding(themeControlPx(), themeControlPx(), themeControlPx(), themeControlPx())
             layoutParams = LinearLayout.LayoutParams(dp(236), ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dp(2)
                 bottomMargin = dp(6)
             }
 
             addView(musicCover(card.coverUrl), LinearLayout.LayoutParams(dp(48), dp(48)).apply {
-                rightMargin = dp(10)
+                rightMargin = themeItemPx()
             })
 
             addView(LinearLayout(context).apply {
@@ -850,7 +861,7 @@ internal class NativeMessageViewHolder(
 
     private fun musicCover(url: String): FrameLayout {
         return FrameLayout(view.context).apply {
-            background = roundRect(theme.clientBackground, 8f)
+            background = roundRect(theme.clientBackground, fieldRadius)
             clipToOutline = true
             val placeholder = TextView(context).apply {
                 text = "♪"
@@ -1105,8 +1116,8 @@ internal class NativeMessageViewHolder(
                     setTextColor(if (reaction.selected) theme.accent else theme.weakText)
                     textSize = 13f
                     typeface = if (reaction.selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-                    background = roundRect(if (reaction.selected) theme.quoteBackground else 0x00000000, 14f)
-                    setPadding(dp(8), dp(4), dp(8), dp(4))
+                    background = roundRect(if (reaction.selected) theme.quoteBackground else 0x00000000, selectorRadius)
+                    setPadding(themeControlPx(), dp(4), themeControlPx(), dp(4))
                     layoutParams = LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.WRAP_CONTENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -1125,7 +1136,7 @@ internal class NativeMessageViewHolder(
     private fun LinearLayout.addVideo(url: String, message: ChatRoomMessage, isMine: Boolean, anchorView: View) {
         addView(FrameLayout(context).apply {
             enableMessageLongPress(message, isMine, anchorView)
-            background = roundRect(theme.quoteBackground.withAlpha(76), 8f)
+            background = roundRect(theme.quoteBackground.withAlpha(76), boxRadius)
             layoutParams = LinearLayout.LayoutParams(dp(230), dp(176)).apply {
                 topMargin = dp(8)
             }
@@ -1150,8 +1161,8 @@ internal class NativeMessageViewHolder(
             text = "🔗 ${runCatching { java.net.URI(url).host }.getOrNull().orEmpty().ifBlank { url }}"
             setTextColor(theme.accent)
             textSize = 13f
-            background = roundRect(theme.quoteBackground, 8f)
-            setPadding(dp(9))
+            background = roundRect(theme.quoteBackground, boxRadius)
+            setPadding(themeControlPx())
             layoutParams = LinearLayout.LayoutParams(dp(230), ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dp(7)
             }
@@ -1184,8 +1195,8 @@ internal class NativeMessageViewHolder(
         val card = LinearLayout(context).apply {
             enableMessageLongPress(message, isMine, anchorView)
             orientation = LinearLayout.VERTICAL
-            background = roundRect(NativeRedPacketBackground, 8f)
-            setPadding(dp(13), dp(11), dp(13), dp(10))
+            background = roundRect(NativeRedPacketBackground, boxRadius)
+            setPadding(themeControlPx() + dp(3), themeControlPx() + dp(1), themeControlPx() + dp(3), themeControlPx())
             layoutParams = LinearLayout.LayoutParams(dp(220), ViewGroup.LayoutParams.WRAP_CONTENT)
             alpha = if (message.redPacket?.openable == true || isMine) 1f else 0.72f
             if (!showGestureActions) {
@@ -1214,8 +1225,8 @@ internal class NativeMessageViewHolder(
                         textSize = 11f
                         typeface = Typeface.DEFAULT_BOLD
                         includeFontPadding = false
-                        background = roundRect(NativeRedPacketText, 999f)
-                        setPadding(dp(8), dp(3), dp(8), dp(3))
+                        background = roundRect(NativeRedPacketText, selectorRadius)
+                        setPadding(themeControlPx(), dp(3), themeControlPx(), dp(3))
                         layoutParams = LinearLayout.LayoutParams(
                             ViewGroup.LayoutParams.WRAP_CONTENT,
                             ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -1408,10 +1419,10 @@ internal class NativeMessageViewHolder(
             includeFontPadding = false
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
-            background = roundRect(theme.quoteBackground, 14f).apply {
-                setStroke(dp(1), theme.bubbleBorder)
+            background = roundRect(theme.quoteBackground, fieldRadius).apply {
+                setStroke(themeBorderPx(), theme.bubbleBorder)
             }
-            setPadding(dp(9), dp(6), dp(9), dp(6))
+            setPadding(themeControlPx(), dp(6), themeControlPx(), dp(6))
         }
         sourcePopup = PopupWindow(
             content,
@@ -1471,13 +1482,13 @@ internal class NativeMessageViewHolder(
 
     private fun avatarView(message: ChatRoomMessage): FrameLayout {
         return FrameLayout(view.context).apply {
-            background = roundRect(theme.clientBackground, 14f).apply {
-                setStroke(dp(1), theme.bubbleBorder)
+            background = roundRect(theme.clientBackground, fieldRadius).apply {
+                setStroke(themeBorderPx(), theme.bubbleBorder)
             }
             clipToOutline = true
             elevation = dp(1).toFloat()
             layoutParams = LinearLayout.LayoutParams(dp(38), dp(38)).apply {
-                topMargin = dp(7)
+                topMargin = themeItemPx()
             }
             setOnClickListener {
                 dismissSourcePopup()
@@ -1538,7 +1549,7 @@ internal class NativeMessageViewHolder(
             ).apply {
                 topMargin = dp(3)
             }
-            setPadding(dp(4), 0, dp(4), 0)
+            setPadding((themeItemPx() * 0.5f).roundToInt(), 0, (themeItemPx() * 0.5f).roundToInt(), 0)
 
             // Avatar stack — keep original order from repeat messages.
             val avatars = stack.participantAvatars
@@ -1585,8 +1596,8 @@ internal class NativeMessageViewHolder(
             layoutParams = LinearLayout.LayoutParams(dp(20), dp(20)).apply {
                 marginStart = if (index > 0) dp(-6) else 0
             }
-            background = roundRect(0x00000000, 14f).apply {
-                setStroke(dp(1), theme.bubbleBorder)
+            background = roundRect(0x00000000, fieldRadius).apply {
+                setStroke(themeBorderPx(), theme.bubbleBorder)
             }
             clipToOutline = true
             if (url.isNotBlank()) {
@@ -1616,11 +1627,11 @@ internal class NativeMessageViewHolder(
             typeface = Typeface.DEFAULT_BOLD
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(8).toFloat()
+                cornerRadius = dp(boxRadius)
                 setColor(accentColor and 0x33FFFFFF)
-                setStroke(dp(1), accentColor and 0x66FFFFFF)
+                setStroke(themeBorderPx(), accentColor and 0x66FFFFFF)
             }
-            setPadding(dp(8), dp(2), dp(8), dp(2))
+            setPadding(themeControlPx(), dp(2), themeControlPx(), dp(2))
             setOnClickListener {
                 dismissSourcePopup()
                 onRepeatClick(message)

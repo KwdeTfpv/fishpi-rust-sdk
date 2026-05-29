@@ -1,167 +1,210 @@
 package dev.fishpi.mobile.utils
 
 import androidx.compose.ui.graphics.Color
-import dev.fishpi.mobile.FishPiPalette
+import dev.fishpi.mobile.FishPiBorderTokens
+import dev.fishpi.mobile.FishPiColorTokens
+import dev.fishpi.mobile.FishPiDepthTokens
+import dev.fishpi.mobile.FishPiRadiusTokens
+import dev.fishpi.mobile.FishPiSpacingTokens
+import dev.fishpi.mobile.FishPiThemeColorScheme
+import dev.fishpi.mobile.FishPiThemeTokens
 import dev.fishpi.mobile.toThemeHex
 
-internal enum class ThemeColorKey {
-    Background,
-    ChatBackground,
-    WallpaperStart,
-    WallpaperEnd,
-    Surface,
-    SurfaceElevated,
-    SurfaceContainer,
-    Outline,
-    QuoteBackground,
-    OutgoingBubble,
-    IncomingBubble,
-    OnSurface,
-    WeakText,
-    UserName,
-    ClientText,
-    ClientBackground,
-    TimeText,
+internal enum class ThemeTokenColorKey {
+    Base100,
+    Base200,
+    Base300,
+    BaseContent,
+    Primary,
+    PrimaryContent,
+    Secondary,
+    SecondaryContent,
     Accent,
-    LinkText,
-    QuoteText,
-    QuoteLine,
-    ToolDefault,
-    ToolGallery,
-    ToolCamera,
-    ToolRedPacket,
+    AccentContent,
+    Neutral,
+    NeutralContent,
+    Info,
+    Success,
+    Warning,
+    Error,
 }
 
-internal data class ThemeColorSpec(val key: ThemeColorKey, val label: String)
+internal enum class ThemeTokenMetricKey {
+    RadiusSelector,
+    RadiusField,
+    RadiusBox,
+    SpacingPage,
+    SpacingSection,
+    SpacingItem,
+    SpacingControl,
+    BorderWidth,
+    BorderOpacity,
+    Depth,
+}
 
-internal data class ThemeColorSection(val label: String, val colors: List<ThemeColorSpec>)
+internal data class ThemeTokenColorSpec(val key: ThemeTokenColorKey, val label: String)
+internal data class ThemeTokenMetricSpec(
+    val key: ThemeTokenMetricKey,
+    val label: String,
+    val range: ClosedFloatingPointRange<Float>,
+    val suffix: String,
+)
 
-internal val ThemeColorSections = listOf(
-    ThemeColorSection(
-        "基础背景",
+internal data class ThemeTokenColorSection(val label: String, val colors: List<ThemeTokenColorSpec>)
+internal data class ThemeTokenMetricSection(val label: String, val metrics: List<ThemeTokenMetricSpec>)
+
+internal val ThemeTokenColorSections = listOf(
+    ThemeTokenColorSection(
+        "底色",
         listOf(
-            ThemeColorSpec(ThemeColorKey.Background, "主背景"),
-            ThemeColorSpec(ThemeColorKey.ChatBackground, "聊天背景"),
-            ThemeColorSpec(ThemeColorKey.WallpaperStart, "壁纸渐变起始"),
-            ThemeColorSpec(ThemeColorKey.WallpaperEnd, "壁纸渐变结束"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.Base100, "base-100 页面底色"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.Base200, "base-200 内容表面"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.Base300, "base-300 控件表面"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.BaseContent, "base-content 正文"),
         ),
     ),
-    ThemeColorSection(
-        "界面表面",
+    ThemeTokenColorSection(
+        "品牌",
         listOf(
-            ThemeColorSpec(ThemeColorKey.Surface, "页面卡片背景"),
-            ThemeColorSpec(ThemeColorKey.SurfaceElevated, "浮层 / 高层卡片"),
-            ThemeColorSpec(ThemeColorKey.SurfaceContainer, "输入框 / 控件背景"),
-            ThemeColorSpec(ThemeColorKey.Outline, "分割线 / 边框"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.Primary, "primary 主操作"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.PrimaryContent, "primary-content"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.Secondary, "secondary 链接/@"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.SecondaryContent, "secondary-content"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.Accent, "accent 状态强调"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.AccentContent, "accent-content"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.Neutral, "neutral 弱文字/边界"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.NeutralContent, "neutral-content"),
         ),
     ),
-    ThemeColorSection(
-        "文字颜色",
+    ThemeTokenColorSection(
+        "状态",
         listOf(
-            ThemeColorSpec(ThemeColorKey.OnSurface, "主要字体"),
-            ThemeColorSpec(ThemeColorKey.WeakText, "弱文字"),
-            ThemeColorSpec(ThemeColorKey.Accent, "全局强调色"),
-            ThemeColorSpec(ThemeColorKey.LinkText, "链接 / @ 文字"),
-        ),
-    ),
-    ThemeColorSection(
-        "聊天消息",
-        listOf(
-            ThemeColorSpec(ThemeColorKey.OutgoingBubble, "自己消息气泡"),
-            ThemeColorSpec(ThemeColorKey.IncomingBubble, "别人消息气泡"),
-            ThemeColorSpec(ThemeColorKey.UserName, "用户名"),
-            ThemeColorSpec(ThemeColorKey.TimeText, "消息时间"),
-            ThemeColorSpec(ThemeColorKey.ClientText, "ClientType 文字"),
-            ThemeColorSpec(ThemeColorKey.ClientBackground, "ClientType 背景"),
-        ),
-    ),
-    ThemeColorSection(
-        "引用和代码",
-        listOf(
-            ThemeColorSpec(ThemeColorKey.QuoteBackground, "引用 / 代码背景"),
-            ThemeColorSpec(ThemeColorKey.QuoteText, "引用文字"),
-            ThemeColorSpec(ThemeColorKey.QuoteLine, "引用竖线"),
-        ),
-    ),
-    ThemeColorSection(
-        "底部工具",
-        listOf(
-            ThemeColorSpec(ThemeColorKey.ToolDefault, "默认工具图标"),
-            ThemeColorSpec(ThemeColorKey.ToolGallery, "相册图标"),
-            ThemeColorSpec(ThemeColorKey.ToolCamera, "拍照图标"),
-            ThemeColorSpec(ThemeColorKey.ToolRedPacket, "红包图标"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.Info, "info 信息/拍照"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.Success, "success 成功/相册"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.Warning, "warning 警告"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.Error, "error 错误/红包"),
         ),
     ),
 )
 
-internal data class EditableThemePalette(private val values: Map<ThemeColorKey, String>) {
-    operator fun get(key: ThemeColorKey): String = values[key].orEmpty()
-
-    fun with(key: ThemeColorKey, value: String): EditableThemePalette =
-        copy(values = values + (key to value))
-
-    fun isValid(): Boolean = ThemeColorKey.entries.all { get(it).isValidThemeHex() }
-
-    fun toPalette(base: FishPiPalette): FishPiPalette = base.copy(
-        background = get(ThemeColorKey.Background).toThemeColor(),
-        chatBackground = get(ThemeColorKey.ChatBackground).toThemeColor(),
-        wallpaperColors = listOf(
-            get(ThemeColorKey.WallpaperStart).toThemeColor(),
-            get(ThemeColorKey.WallpaperEnd).toThemeColor(),
+internal val ThemeTokenMetricSections = listOf(
+    ThemeTokenMetricSection(
+        "圆角",
+        listOf(
+            ThemeTokenMetricSpec(ThemeTokenMetricKey.RadiusSelector, "selector 选择器", 0f..40f, "dp"),
+            ThemeTokenMetricSpec(ThemeTokenMetricKey.RadiusField, "field 输入/按钮", 0f..40f, "dp"),
+            ThemeTokenMetricSpec(ThemeTokenMetricKey.RadiusBox, "box 卡片/气泡", 0f..40f, "dp"),
         ),
-        surface = get(ThemeColorKey.Surface).toThemeColor(),
-        surfaceElevated = get(ThemeColorKey.SurfaceElevated).toThemeColor(),
-        surfaceContainer = get(ThemeColorKey.SurfaceContainer).toThemeColor(),
-        onSurface = get(ThemeColorKey.OnSurface).toThemeColor(),
-        weakText = get(ThemeColorKey.WeakText).toThemeColor(),
-        userName = get(ThemeColorKey.UserName).toThemeColor(),
-        clientText = get(ThemeColorKey.ClientText).toThemeColor(),
-        clientBackground = get(ThemeColorKey.ClientBackground).toThemeColor(),
-        timeText = get(ThemeColorKey.TimeText).toThemeColor(),
-        outline = get(ThemeColorKey.Outline).toThemeColor(),
-        accent = get(ThemeColorKey.Accent).toThemeColor(),
-        quoteBackground = get(ThemeColorKey.QuoteBackground).toThemeColor(),
-        outgoingBubble = get(ThemeColorKey.OutgoingBubble).toThemeColor(),
-        incomingBubble = get(ThemeColorKey.IncomingBubble).toThemeColor(),
-        linkText = get(ThemeColorKey.LinkText).toThemeColor(),
-        quoteText = get(ThemeColorKey.QuoteText).toThemeColor(),
-        quoteLine = get(ThemeColorKey.QuoteLine).toThemeColor(),
-        toolDefault = get(ThemeColorKey.ToolDefault).toThemeColor(),
-        toolGallery = get(ThemeColorKey.ToolGallery).toThemeColor(),
-        toolCamera = get(ThemeColorKey.ToolCamera).toThemeColor(),
-        toolRedPacket = get(ThemeColorKey.ToolRedPacket).toThemeColor(),
+    ),
+    ThemeTokenMetricSection(
+        "间距",
+        listOf(
+            ThemeTokenMetricSpec(ThemeTokenMetricKey.SpacingPage, "page 页面边距", 8f..28f, "dp"),
+            ThemeTokenMetricSpec(ThemeTokenMetricKey.SpacingSection, "section 区块间距", 6f..28f, "dp"),
+            ThemeTokenMetricSpec(ThemeTokenMetricKey.SpacingItem, "item 条目间距", 4f..20f, "dp"),
+            ThemeTokenMetricSpec(ThemeTokenMetricKey.SpacingControl, "control 控件内距", 4f..20f, "dp"),
+        ),
+    ),
+    ThemeTokenMetricSection(
+        "边界",
+        listOf(
+            ThemeTokenMetricSpec(ThemeTokenMetricKey.BorderWidth, "border 边框粗细", 0f..3f, "dp"),
+            ThemeTokenMetricSpec(ThemeTokenMetricKey.BorderOpacity, "border 边框强度", 0f..1f, ""),
+            ThemeTokenMetricSpec(ThemeTokenMetricKey.Depth, "depth 层级强度", 0f..1f, ""),
+        ),
+    ),
+)
+
+internal data class EditableThemeTokens(
+    val colorScheme: FishPiThemeColorScheme,
+    private val colors: Map<ThemeTokenColorKey, String>,
+    private val metrics: Map<ThemeTokenMetricKey, Float>,
+) {
+    operator fun get(key: ThemeTokenColorKey): String = colors[key].orEmpty()
+    operator fun get(key: ThemeTokenMetricKey): Float = metrics[key] ?: 0f
+
+    fun with(key: ThemeTokenColorKey, value: String): EditableThemeTokens =
+        copy(colors = colors + (key to value))
+
+    fun with(key: ThemeTokenMetricKey, value: Float): EditableThemeTokens =
+        copy(metrics = metrics + (key to value))
+
+    fun withScheme(value: FishPiThemeColorScheme): EditableThemeTokens =
+        copy(colorScheme = value)
+
+    fun isValid(): Boolean =
+        ThemeTokenColorKey.entries.all { get(it).isValidThemeHex() }
+
+    fun toTokens(base: FishPiThemeTokens): FishPiThemeTokens = base.copy(
+        colorScheme = colorScheme,
+        colors = FishPiColorTokens(
+            base100 = get(ThemeTokenColorKey.Base100).toThemeColor(),
+            base200 = get(ThemeTokenColorKey.Base200).toThemeColor(),
+            base300 = get(ThemeTokenColorKey.Base300).toThemeColor(),
+            baseContent = get(ThemeTokenColorKey.BaseContent).toThemeColor(),
+            primary = get(ThemeTokenColorKey.Primary).toThemeColor(),
+            primaryContent = get(ThemeTokenColorKey.PrimaryContent).toThemeColor(),
+            secondary = get(ThemeTokenColorKey.Secondary).toThemeColor(),
+            secondaryContent = get(ThemeTokenColorKey.SecondaryContent).toThemeColor(),
+            accent = get(ThemeTokenColorKey.Accent).toThemeColor(),
+            accentContent = get(ThemeTokenColorKey.AccentContent).toThemeColor(),
+            neutral = get(ThemeTokenColorKey.Neutral).toThemeColor(),
+            neutralContent = get(ThemeTokenColorKey.NeutralContent).toThemeColor(),
+            info = get(ThemeTokenColorKey.Info).toThemeColor(),
+            success = get(ThemeTokenColorKey.Success).toThemeColor(),
+            warning = get(ThemeTokenColorKey.Warning).toThemeColor(),
+            error = get(ThemeTokenColorKey.Error).toThemeColor(),
+        ),
+        radius = FishPiRadiusTokens(
+            selector = get(ThemeTokenMetricKey.RadiusSelector),
+            field = get(ThemeTokenMetricKey.RadiusField),
+            box = get(ThemeTokenMetricKey.RadiusBox),
+        ),
+        spacing = FishPiSpacingTokens(
+            page = get(ThemeTokenMetricKey.SpacingPage),
+            section = get(ThemeTokenMetricKey.SpacingSection),
+            item = get(ThemeTokenMetricKey.SpacingItem),
+            control = get(ThemeTokenMetricKey.SpacingControl),
+        ),
+        border = FishPiBorderTokens(
+            width = get(ThemeTokenMetricKey.BorderWidth),
+            opacity = get(ThemeTokenMetricKey.BorderOpacity),
+        ),
+        depth = FishPiDepthTokens(level = get(ThemeTokenMetricKey.Depth)),
     )
 
     companion object {
-        fun from(palette: FishPiPalette): EditableThemePalette = EditableThemePalette(
-            mapOf(
-                ThemeColorKey.Background to palette.background.toThemeHex(),
-                ThemeColorKey.ChatBackground to palette.chatBackground.toThemeHex(),
-                ThemeColorKey.WallpaperStart to (palette.wallpaperColors.firstOrNull()?.toThemeHex()
-                    ?: palette.background.toThemeHex()),
-                ThemeColorKey.WallpaperEnd to (palette.wallpaperColors.lastOrNull()?.toThemeHex()
-                    ?: palette.chatBackground.toThemeHex()),
-                ThemeColorKey.Surface to palette.surface.toThemeHex(),
-                ThemeColorKey.SurfaceElevated to palette.surfaceElevated.toThemeHex(),
-                ThemeColorKey.SurfaceContainer to palette.surfaceContainer.toThemeHex(),
-                ThemeColorKey.Outline to palette.outline.toThemeHex(),
-                ThemeColorKey.QuoteBackground to palette.quoteBackground.toThemeHex(),
-                ThemeColorKey.OutgoingBubble to palette.outgoingBubble.toThemeHex(),
-                ThemeColorKey.IncomingBubble to palette.incomingBubble.toThemeHex(),
-                ThemeColorKey.OnSurface to palette.onSurface.toThemeHex(),
-                ThemeColorKey.WeakText to palette.weakText.toThemeHex(),
-                ThemeColorKey.UserName to palette.userName.toThemeHex(),
-                ThemeColorKey.ClientText to palette.clientText.toThemeHex(),
-                ThemeColorKey.ClientBackground to palette.clientBackground.toThemeHex(),
-                ThemeColorKey.TimeText to palette.timeText.toThemeHex(),
-                ThemeColorKey.Accent to palette.accent.toThemeHex(),
-                ThemeColorKey.LinkText to palette.linkText.toThemeHex(),
-                ThemeColorKey.QuoteText to palette.quoteText.toThemeHex(),
-                ThemeColorKey.QuoteLine to palette.quoteLine.toThemeHex(),
-                ThemeColorKey.ToolDefault to palette.toolDefault.toThemeHex(),
-                ThemeColorKey.ToolGallery to palette.toolGallery.toThemeHex(),
-                ThemeColorKey.ToolCamera to palette.toolCamera.toThemeHex(),
-                ThemeColorKey.ToolRedPacket to palette.toolRedPacket.toThemeHex(),
+        fun from(tokens: FishPiThemeTokens): EditableThemeTokens = EditableThemeTokens(
+            colorScheme = tokens.colorScheme,
+            colors = mapOf(
+                ThemeTokenColorKey.Base100 to tokens.colors.base100.toThemeHex(),
+                ThemeTokenColorKey.Base200 to tokens.colors.base200.toThemeHex(),
+                ThemeTokenColorKey.Base300 to tokens.colors.base300.toThemeHex(),
+                ThemeTokenColorKey.BaseContent to tokens.colors.baseContent.toThemeHex(),
+                ThemeTokenColorKey.Primary to tokens.colors.primary.toThemeHex(),
+                ThemeTokenColorKey.PrimaryContent to tokens.colors.primaryContent.toThemeHex(),
+                ThemeTokenColorKey.Secondary to tokens.colors.secondary.toThemeHex(),
+                ThemeTokenColorKey.SecondaryContent to tokens.colors.secondaryContent.toThemeHex(),
+                ThemeTokenColorKey.Accent to tokens.colors.accent.toThemeHex(),
+                ThemeTokenColorKey.AccentContent to tokens.colors.accentContent.toThemeHex(),
+                ThemeTokenColorKey.Neutral to tokens.colors.neutral.toThemeHex(),
+                ThemeTokenColorKey.NeutralContent to tokens.colors.neutralContent.toThemeHex(),
+                ThemeTokenColorKey.Info to tokens.colors.info.toThemeHex(),
+                ThemeTokenColorKey.Success to tokens.colors.success.toThemeHex(),
+                ThemeTokenColorKey.Warning to tokens.colors.warning.toThemeHex(),
+                ThemeTokenColorKey.Error to tokens.colors.error.toThemeHex(),
+            ),
+            metrics = mapOf(
+                ThemeTokenMetricKey.RadiusSelector to tokens.radius.selector,
+                ThemeTokenMetricKey.RadiusField to tokens.radius.field,
+                ThemeTokenMetricKey.RadiusBox to tokens.radius.box,
+                ThemeTokenMetricKey.SpacingPage to tokens.spacing.page,
+                ThemeTokenMetricKey.SpacingSection to tokens.spacing.section,
+                ThemeTokenMetricKey.SpacingItem to tokens.spacing.item,
+                ThemeTokenMetricKey.SpacingControl to tokens.spacing.control,
+                ThemeTokenMetricKey.BorderWidth to tokens.border.width,
+                ThemeTokenMetricKey.BorderOpacity to tokens.border.opacity,
+                ThemeTokenMetricKey.Depth to tokens.depth.level,
             ),
         )
     }

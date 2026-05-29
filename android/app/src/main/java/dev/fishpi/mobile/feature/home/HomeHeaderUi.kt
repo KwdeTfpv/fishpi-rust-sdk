@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.feature.home
 
 import dev.fishpi.mobile.ui.components.FishPiPillButton
+import dev.fishpi.mobile.FishPiTheme
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -96,9 +97,9 @@ internal fun HomeQuickEntry(
         Box(
             modifier = Modifier
                 .size(50.dp)
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusBox + 4.dp))
                 .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.66f))
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f), RoundedCornerShape(18.dp)),
+                .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f), RoundedCornerShape(FishPiTheme.radiusBox + 4.dp)),
             contentAlignment = Alignment.Center,
         ) {
             icon()
@@ -119,17 +120,29 @@ internal fun HomeGreetingCard(
     val dark = colors.background.luminance() < 0.5f
     val onAccent = colors.onPrimary
     val greetingGradient = if (dark) {
-        Brush.linearGradient(listOf(Color(0xFF173629), Color(0xFF255846), Color(0xFF2D6B56)))
+        Brush.linearGradient(
+            listOf(
+                colors.primary.copy(alpha = 0.92f),
+                FishPiTheme.accent.copy(alpha = 0.74f),
+                colors.primary.copy(alpha = 0.78f),
+            ),
+        )
     } else {
-        Brush.linearGradient(listOf(Color(0xFFE9F7EC), Color(0xFFDDF3E5), Color(0xFFF8FCF6)))
+        Brush.linearGradient(
+            listOf(
+                FishPiTheme.accent.copy(alpha = 0.12f),
+                colors.primary.copy(alpha = 0.10f),
+                FishPiTheme.surface.copy(alpha = 0.98f),
+            ),
+        )
     }
-    val cardShape = RoundedCornerShape(26.dp)
+    val cardShape = RoundedCornerShape(FishPiTheme.radiusBox + 12.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(cardShape)
             .background(greetingGradient)
-            .border(1.dp, onAccent.copy(alpha = 0.24f), cardShape)
+            .border(FishPiTheme.borderWidth, onAccent.copy(alpha = 0.24f), cardShape)
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -176,7 +189,7 @@ internal fun HomeGreetingCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusBox + 4.dp))
                 .background(onAccent.copy(alpha = 0.14f))
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -190,10 +203,12 @@ internal fun HomeGreetingCard(
             color = onAccent.copy(alpha = 0.88f),
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusBox + 4.dp))
                 .background(onAccent.copy(alpha = 0.12f))
                 .padding(14.dp),
         )
     }
 }
+
+
 

@@ -125,7 +125,10 @@ private fun PluginUiSurface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(
+                        horizontal = FishPiTheme.spacingPage,
+                        vertical = FishPiTheme.spacingItem,
+                    ),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -161,8 +164,11 @@ private fun PluginUiSurface(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                    .padding(
+                        horizontal = FishPiTheme.spacingPage,
+                        vertical = FishPiTheme.spacingSection,
+                    ),
+                verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
             ) {
                 document.error?.let {
                     item { PluginErrorText(it) }
@@ -267,7 +273,7 @@ private fun PluginImage(node: PluginUiNode.Image) {
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 160.dp, max = 320.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusBox))
                 .background(MaterialTheme.colorScheme.surfaceContainer),
         )
         if (node.caption.isNotBlank()) {
@@ -277,7 +283,7 @@ private fun PluginImage(node: PluginUiNode.Image) {
 }
 
 @Composable private fun PluginJson(json: String) {
-    ContentCardSurface(modifier = Modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(10.dp)) {
+    ContentCardSurface(modifier = Modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(FishPiTheme.spacingControl)) {
         Text(
             text = json,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -291,7 +297,12 @@ private fun PluginImage(node: PluginUiNode.Image) {
 }
 
 @Composable private fun PluginEmptyText(text: String) {
-    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = FishPiTheme.spacingSection * 2f),
+        contentAlignment = Alignment.Center,
+    ) {
         Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -301,7 +312,7 @@ private fun PluginImage(node: PluginUiNode.Image) {
         modifier = Modifier
             .fillMaxWidth()
             .then(if (node.actionId.isNotBlank()) Modifier.clickable { dispatch(PluginUiAction.TriggerAction(node.actionId, node.id)) } else Modifier),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(FishPiTheme.spacingSection),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (node.title.isNotBlank()) Text(node.title, fontWeight = FontWeight.SemiBold, color = FishPiTheme.onSurface)
@@ -412,7 +423,7 @@ private fun PluginImage(node: PluginUiNode.Image) {
             ContentCardSurface(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = if (item.actionId.isNotBlank()) ({ dispatch(PluginUiAction.TriggerAction(item.actionId, item.id)) }) else null,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(FishPiTheme.spacingSection),
             ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -433,7 +444,7 @@ private fun PluginImage(node: PluginUiNode.Image) {
 }
 
 @Composable private fun PluginStat(node: PluginUiNode.Stat) {
-    ContentCardSurface(contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp)) {
+    ContentCardSurface(contentPadding = androidx.compose.foundation.layout.PaddingValues(FishPiTheme.spacingSection)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(node.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(node.value, color = FishPiTheme.onSurface, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -446,7 +457,7 @@ private fun PluginImage(node: PluginUiNode.Image) {
     ContentCardSurface(
         modifier = Modifier.fillMaxWidth(),
         onClick = if (node.actionId.isNotBlank()) ({ dispatch(PluginUiAction.TriggerAction(node.actionId, node.id)) }) else null,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(FishPiTheme.spacingSection),
     ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -469,7 +480,7 @@ private fun PluginImage(node: PluginUiNode.Image) {
     ContentCardSurface(
         modifier = Modifier.fillMaxWidth(),
         onClick = if (node.actionId.isNotBlank()) ({ dispatch(PluginUiAction.TriggerAction(node.actionId, node.id)) }) else null,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(FishPiTheme.spacingSection),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Icons.AutoMirrored.Rounded.Article, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -493,3 +504,4 @@ private fun PluginImage(node: PluginUiNode.Image) {
         }
     }
 }
+

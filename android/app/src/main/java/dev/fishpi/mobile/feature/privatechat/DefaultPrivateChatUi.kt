@@ -244,12 +244,6 @@ private val LocalPrivateChatUiEnvironment = staticCompositionLocalOf<PrivateChat
     error("PrivateChatUiEnvironment is not provided")
 }
 
-private val PrivateChatScreenPadding = 16.dp
-private val PrivateChatSectionGap = 12.dp
-private val PrivateChatInlineGap = 16.dp
-private val PrivateChatCardHorizontalPadding = 16.dp
-private val PrivateChatCardVerticalPadding = 12.dp
-private val PrivateChatCardRadius = 16.dp
 private val PrivateChatAvatarSize = 42
 
 @Composable
@@ -275,7 +269,7 @@ private fun PrivateSessionList(
     ) {
         listHeader?.invoke(this)
         error?.let {
-            Text(text = it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 14.dp))
+            Text(text = it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = FishPiTheme.spacingPage))
         }
         if (!isLoading && sessions.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -285,12 +279,12 @@ private fun PrivateSessionList(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
-                    start = PrivateChatScreenPadding,
+                    start = FishPiTheme.spacingPage,
                     top = 0.dp,
-                    end = PrivateChatScreenPadding,
-                    bottom = PrivateChatSectionGap,
+                    end = FishPiTheme.spacingPage,
+                    bottom = FishPiTheme.spacingSection,
                 ),
-                verticalArrangement = Arrangement.spacedBy(PrivateChatSectionGap),
+                verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
             ) {
                 items(sessions, key = { it.peer }) { item ->
                     PrivateSessionRow(item = item, onClick = { onOpen(item) })
@@ -310,18 +304,18 @@ private fun PrivateSessionRow(
             .fillMaxWidth()
             .height(88.dp)
             .clip(
-                RoundedCornerShape(PrivateChatCardRadius),
+                RoundedCornerShape(FishPiTheme.radiusBox),
             )
             .background(
                 MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
             )
             .clickable(onClick = onClick)
             .padding(
-                horizontal = PrivateChatCardHorizontalPadding,
-                vertical = PrivateChatCardVerticalPadding,
+                horizontal = FishPiTheme.spacingSection,
+                vertical = FishPiTheme.spacingControl + 2.dp,
             ),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(PrivateChatInlineGap),
+        horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
     ) {
         PrivateAvatar(url = item.avatar, name = item.peer, sizeDp = PrivateChatAvatarSize)
         Box(
@@ -370,7 +364,7 @@ private fun PrivateSessionRow(
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                         .background(MaterialTheme.colorScheme.primary)
                         .padding(horizontal = 7.dp, vertical = 2.dp),
                     contentAlignment = Alignment.Center,
@@ -521,7 +515,7 @@ private fun PrivateConversation(
             },
         )
         error?.let {
-            Text(text = it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 14.dp))
+            Text(text = it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = FishPiTheme.spacingPage))
         }
         if (isLoading) {
             LoadingScreen("加载私聊历史...")
@@ -650,10 +644,16 @@ private fun PrivateQuotePreviewBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .padding(
+                horizontal = FishPiTheme.spacingPage,
+                vertical = FishPiTheme.spacingItem * 0.5f,
+            )
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(MaterialTheme.colorScheme.primaryContainer)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(
+                horizontal = FishPiTheme.spacingControl,
+                vertical = FishPiTheme.spacingControl,
+            ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -678,5 +678,6 @@ private fun PrivateQuotePreviewBar(
         )
     }
 }
+
 
 

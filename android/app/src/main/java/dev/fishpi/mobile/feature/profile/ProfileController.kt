@@ -86,7 +86,7 @@ internal class ProfileController(
                 _state.update { it.copy(themeKey = action.key) }
                 emit(ProfileEffect.ChangeTheme(action.key))
             }
-            is ProfileAction.ImportTheme -> emit(ProfileEffect.ImportTheme(action.raw))
+            is ProfileAction.ImportThemePackage -> emit(ProfileEffect.ImportThemePackage(action.uri))
             is ProfileAction.SaveEditedTheme -> emit(ProfileEffect.SaveEditedTheme(action.raw))
             is ProfileAction.DeleteCustomTheme -> emit(ProfileEffect.DeleteCustomTheme(action.key))
             is ProfileAction.ChangeChatWallpaper -> {

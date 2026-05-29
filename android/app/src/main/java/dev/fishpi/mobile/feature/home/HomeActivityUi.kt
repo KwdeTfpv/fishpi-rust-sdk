@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.feature.home
 
 import dev.fishpi.mobile.ui.components.FishPiPillButton
+import dev.fishpi.mobile.FishPiTheme
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -91,9 +92,9 @@ internal fun HomeActivityCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox + 8.dp))
             .background(homeIslandSurfaceColor())
-            .border(1.dp, homeIslandBorderColor(), RoundedCornerShape(24.dp))
+            .border(FishPiTheme.borderWidth, homeIslandBorderColor(), RoundedCornerShape(FishPiTheme.radiusBox + 8.dp))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -155,7 +156,6 @@ internal fun HomeActivityCard(
     }
 }
 
-
 internal fun homeLivenessHint(liveness: Double?): String {
     val value = liveness ?: return "活跃度接口 10 分钟内只能刷新一次，稍后会自动更新；签到和昨日奖励状态会单独同步。"
     return when {
@@ -189,9 +189,9 @@ internal fun HomeRewardCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox + 8.dp))
             .background(homeRewardGradient())
-            .border(1.dp, homeIslandBorderColor(), RoundedCornerShape(24.dp))
+            .border(FishPiTheme.borderWidth, homeIslandBorderColor(), RoundedCornerShape(FishPiTheme.radiusBox + 8.dp))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -216,4 +216,6 @@ internal fun HomeRewardCard(
         }
     }
 }
+
+
 

@@ -19,11 +19,11 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -84,6 +84,8 @@ import androidx.compose.runtime.LaunchedEffect
 import dev.fishpi.mobile.feature.chat.ChatFilterSettingsOverlay
 import dev.fishpi.mobile.ui.components.AppBottomSheet
 import dev.fishpi.mobile.ui.components.AppSheetTitle
+import dev.fishpi.mobile.theme.ThemeOptionPreview
+import dev.fishpi.mobile.theme.ThemePreviewDeck
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -101,7 +103,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.widget.TextView
@@ -112,8 +113,13 @@ import dev.fishpi.mobile.data.SavedAccount
 import dev.fishpi.mobile.data.UserActivityView
 import dev.fishpi.mobile.data.MedalView
 import dev.fishpi.mobile.data.BreezemoonView
-import dev.fishpi.mobile.utils.EditableThemePalette
-import dev.fishpi.mobile.utils.ThemeColorSections
+import dev.fishpi.mobile.utils.EditableThemeTokens
+import dev.fishpi.mobile.utils.ThemeTokenColorKey
+import dev.fishpi.mobile.utils.ThemeTokenColorSections
+import dev.fishpi.mobile.utils.ThemeTokenColorSpec
+import dev.fishpi.mobile.utils.ThemeTokenMetricKey
+import dev.fishpi.mobile.utils.ThemeTokenMetricSections
+import dev.fishpi.mobile.utils.ThemeTokenMetricSpec
 import dev.fishpi.mobile.utils.copyUriToSingleFile
 import dev.fishpi.mobile.utils.isValidThemeHex
 import dev.fishpi.mobile.utils.themeHexFromRgb
@@ -291,10 +297,7 @@ internal fun DefaultProfileUi(
             themeKey = state.themeKey,
             chatWallpaperUri = state.chatWallpaperUri,
             onThemeChange = { dispatch(ProfileAction.ChangeTheme(it)) },
-            onImportTheme = {
-                dispatch(ProfileAction.ImportTheme(it))
-                Result.success("已提交")
-            },
+            onImportThemePackage = { dispatch(ProfileAction.ImportThemePackage(it)) },
             onEditTheme = { dispatch(ProfileAction.OpenThemeEditor) },
             onDeleteCustomTheme = {
                 dispatch(ProfileAction.DeleteCustomTheme(it))
@@ -368,7 +371,7 @@ private fun ProfileSettingsOverlay(
     themeKey: String,
     chatWallpaperUri: String,
     onThemeChange: (String) -> Unit,
-    onImportTheme: (String) -> Result<String>,
+    onImportThemePackage: (String) -> Unit,
     onEditTheme: () -> Unit,
     onDeleteCustomTheme: (String) -> Boolean,
     onChatWallpaperChange: (String) -> Unit,
@@ -416,7 +419,7 @@ private fun ProfileSettingsOverlay(
                     options = themeOptions,
                     selectedKey = themeKey,
                     onSelect = onThemeChange,
-                    onImportTheme = onImportTheme,
+                    onImportThemePackage = onImportThemePackage,
                     onEditTheme = onEditTheme,
                     onDeleteCustomTheme = onDeleteCustomTheme,
                     chatWallpaperUri = chatWallpaperUri,
@@ -451,7 +454,7 @@ private fun ThemeSettingsSection(
     options: List<FishPiThemeOption>,
     selectedKey: String,
     onSelect: (String) -> Unit,
-    onImportTheme: (String) -> Result<String>,
+    onImportThemePackage: (String) -> Unit,
     onEditTheme: () -> Unit,
     onDeleteCustomTheme: (String) -> Boolean,
     chatWallpaperUri: String,
@@ -462,17 +465,7 @@ private fun ThemeSettingsSection(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        val result = runCatching {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                input.bufferedReader().use { it.readText() }
-            }.orEmpty()
-        }.mapCatching { raw ->
-            onImportTheme(raw).getOrThrow()
-        }
-        result.fold(
-            onSuccess = { FishPiNotifier.success("已导入主题：$it") },
-            onFailure = { FishPiNotifier.error("主题导入失败：${it.message ?: "格式不正确"}") },
-        )
+        onImportThemePackage(uri.toString())
     }
     val wallpaperLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -490,7 +483,7 @@ private fun ThemeSettingsSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox + 4.dp))
             .background(FishPiTheme.surfaceContainer)
             .padding(vertical = 4.dp),
     ) {
@@ -502,7 +495,6 @@ private fun ThemeSettingsSection(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
         )
         options.forEach { option ->
-            val palette = option.palette
             val isCustom = option.builtinPreset == null && option.rawJson != null
             Row(
                 modifier = Modifier
@@ -514,17 +506,10 @@ private fun ThemeSettingsSection(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(Brush.linearGradient(palette.wallpaperColors)),
+                        .size(38.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(22.dp)
-                            .clip(CircleShape)
-                            .background(palette.accent),
-                    )
+                    ThemeOptionPreview(option = option, modifier = Modifier.fillMaxSize())
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
@@ -568,13 +553,13 @@ private fun ThemeSettingsSection(
         }
         ThemeActionRow(
             title = "编辑当前主题",
-            summary = "调整字体、弱文字、背景、消息框和强调色",
+            summary = "调整基础色、品牌色、状态色、圆角、边距和层级",
             onClick = onEditTheme,
         )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { importLauncher.launch(arrayOf("application/json", "text/*", "*/*")) }
+                .clickable { importLauncher.launch(arrayOf("application/octet-stream", "application/zip", "*/*")) }
                 .padding(horizontal = 14.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -593,8 +578,8 @@ private fun ThemeSettingsSection(
                 )
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(text = "导入主题文件", color = FishPiTheme.onSurface, fontWeight = FontWeight.SemiBold)
-                Text(text = "支持 JSON 主题文件，导入后自动应用", color = FishPiTheme.weakText)
+                Text(text = "导入主题包", color = FishPiTheme.onSurface, fontWeight = FontWeight.SemiBold)
+                Text(text = "选择 .fpt 文件，导入后自动应用", color = FishPiTheme.weakText)
             }
             Icon(imageVector = Icons.Rounded.ChevronRight, contentDescription = null, tint = FishPiTheme.weakText.copy(alpha = 0.5f))
         }
@@ -624,18 +609,17 @@ private fun ThemeEditorOverlay(
     onSave: (String) -> Result<String>,
     onDismiss: () -> Unit,
 ) {
-    val context = LocalContext.current
     var name by remember(option.key) { mutableStateOf(option.label) }
-    var editablePalette by remember(option.key) { mutableStateOf(EditableThemePalette.from(option.palette)) }
+    var editableTokens by remember(option.key) { mutableStateOf(EditableThemeTokens.from(option.tokens)) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    fun applyPalette(palette: FishPiPalette) {
-        editablePalette = EditableThemePalette.from(palette)
+    fun applyTokens(tokens: FishPiThemeTokens) {
+        editableTokens = EditableThemeTokens.from(tokens)
         error = null
     }
 
-    fun normalizedPalette(reportError: Boolean = false): FishPiPalette? {
-        if (!editablePalette.isValid()) {
+    fun normalizedTokens(reportError: Boolean = false): FishPiThemeTokens? {
+        if (!editableTokens.isValid()) {
             if (reportError) {
                 error = "颜色需要使用 #RRGGBB 格式"
             }
@@ -644,18 +628,17 @@ private fun ThemeEditorOverlay(
         if (reportError) {
             error = null
         }
-        return editablePalette.toPalette(option.palette)
+        return editableTokens.toTokens(option.tokens)
     }
 
-    val previewPalette by remember(
-        editablePalette,
-        option.palette,
+    val previewTokens by remember(
+        editableTokens,
+        option.tokens,
     ) {
         derivedStateOf {
-            normalizedPalette(reportError = false) ?: option.palette
+            normalizedTokens(reportError = false) ?: option.tokens
         }
     }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -665,17 +648,23 @@ private fun ThemeEditorOverlay(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(FishPiTheme.spacingPage),
+            verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "编辑主题",
-                    color = FishPiTheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        text = "编辑主题",
+                        color = FishPiTheme.onSurface,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                    )
+                    Text(
+                        text = "改完看预览，满意后保存应用。",
+                        color = FishPiTheme.weakText,
+                        fontSize = 12.sp,
+                    )
+                }
                 FishPiIconButton(
                     icon = Icons.Rounded.Close,
                     contentDescription = "关闭主题编辑",
@@ -684,29 +673,65 @@ private fun ThemeEditorOverlay(
                     iconSizeDp = 18,
                 )
             }
-            ThemePreviewCard(
-                palette = previewPalette,
+            ThemePreviewDeck(
+                tokens = previewTokens,
                 title = name.ifBlank { "应用内主题" },
             )
-            TextField(
-                value = name,
-                onValueChange = { name = it },
-                label = "主题名称",
-                placeholder = "例如：我的蓝色主题",
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            PresetChip("重置为夜间模式", onClick = { applyPalette(option.palette) })
-            ThemeColorSections.forEach { section ->
-                Text(
-                    text = section.label,
-                    color = FishPiTheme.weakText,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp,
+            ThemeEditorPanel(
+                title = "主题",
+                summary = "名称、明暗模式。",
+            ) {
+                TextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = "主题名称",
+                    placeholder = "例如：深蓝荧光绿",
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                section.colors.forEach { spec ->
-                    ThemeColorField(spec.label, editablePalette[spec.key]) {
-                        editablePalette = editablePalette.with(spec.key, it)
+                Row(horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem)) {
+                    PresetChip(
+                        "浅色",
+                        selected = editableTokens.colorScheme == FishPiThemeColorScheme.Light,
+                        onClick = { editableTokens = editableTokens.withScheme(FishPiThemeColorScheme.Light) },
+                    )
+                    PresetChip(
+                        "深色",
+                        selected = editableTokens.colorScheme == FishPiThemeColorScheme.Dark,
+                        onClick = { editableTokens = editableTokens.withScheme(FishPiThemeColorScheme.Dark) },
+                    )
+                    PresetChip("重置当前", onClick = { applyTokens(option.tokens) })
+                }
+            }
+
+            ThemeEditorPanel(
+                title = "颜色",
+                summary = "点一项就能改颜色。",
+            ) {
+                ThemeTokenColorSections.forEach { section ->
+                    ThemeEditorSectionTitle(section.label)
+                    Column(verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem)) {
+                        section.colors.forEach { spec ->
+                            ThemeTokenColorField(spec, editableTokens[spec.key]) {
+                                editableTokens = editableTokens.with(spec.key, it)
+                            }
+                        }
+                    }
+                }
+            }
+
+            ThemeEditorPanel(
+                title = "布局",
+                summary = "调整圆角、间距、边框和层级。",
+            ) {
+                ThemeTokenMetricSections.forEach { section ->
+                    ThemeEditorSectionTitle(section.label)
+                    Column(verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem)) {
+                        section.metrics.forEach { spec ->
+                            ThemeTokenMetricField(spec, editableTokens[spec.key]) {
+                                editableTokens = editableTokens.with(spec.key, it)
+                            }
+                        }
                     }
                 }
             }
@@ -715,14 +740,14 @@ private fun ThemeEditorOverlay(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(FishPiTheme.radiusBox))
                     .background(profileAccentSoft())
                     .clickable {
-                        val palette = normalizedPalette(reportError = true) ?: return@clickable
+                        val tokens = normalizedTokens(reportError = true) ?: return@clickable
                         val raw = buildEditableThemeJson(
                             label = name.ifBlank { "应用内主题" },
                             description = "应用内编辑主题",
-                            palette = palette,
+                            tokens = tokens,
                         )
                         val result = onSave(raw)
                         result.fold(
@@ -749,141 +774,64 @@ private fun ThemeEditorOverlay(
 @Composable
 private fun PresetChip(
     label: String,
+    selected: Boolean = false,
     onClick: () -> Unit,
 ) {
     Text(
         text = label,
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(FishPiTheme.surfaceContainer)
+            .clip(RoundedCornerShape(FishPiTheme.radiusField))
+            .background(if (selected) profileAccentSoft() else FishPiTheme.surfaceContainer)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 7.dp),
-        color = FishPiTheme.onSurface,
+        color = if (selected) profileAccentColor() else FishPiTheme.onSurface,
         fontWeight = FontWeight.Medium,
         fontSize = 13.sp,
     )
 }
 
 @Composable
-private fun ThemePreviewCard(
-    palette: FishPiPalette,
+private fun ThemeEditorPanel(
     title: String,
+    summary: String,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Brush.linearGradient(palette.wallpaperColors))
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(text = "鱼友", color = palette.userName, fontWeight = FontWeight.Bold)
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(palette.clientBackground)
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-            ) {
-                Text(text = "Android", color = palette.clientText)
-            }
-            Text(text = title, color = palette.onSurface, fontWeight = FontWeight.Bold)
-        }
-        Box(
+        Text(text = title, color = FishPiTheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Text(text = summary, color = FishPiTheme.weakText, fontSize = 12.sp, lineHeight = 17.sp)
+        Column(
             modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(palette.incomingBubble)
-                .padding(horizontal = 12.dp, vertical = 9.dp),
-        ) {
-            Text(text = "别人发来的消息", color = palette.onSurface)
-        }
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(14.dp))
-                .background(palette.quoteBackground)
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 3.dp, height = 28.dp)
-                        .clip(CircleShape)
-                        .background(palette.quoteLine),
-                )
-                Text(text = "引用 @fishpi 和链接", color = palette.quoteText)
-            }
-        }
-        Box(
-            modifier = Modifier
-                .align(Alignment.End)
-                .clip(RoundedCornerShape(12.dp))
-                .background(palette.outgoingBubble)
-                .padding(horizontal = 12.dp, vertical = 9.dp),
-        ) {
-            Text(text = "自己发送的消息", color = palette.onSurface)
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(palette.surface)
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-            ) {
-                Text(text = "surface 页面卡片底色", color = palette.onSurface)
-            }
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(palette.surfaceContainer)
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-            ) {
-                Text(text = "surfaceContainer 输入框/控件底色", color = palette.onSurface)
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "链接 / @用户", color = palette.linkText, fontWeight = FontWeight.SemiBold)
-            Text(text = "弱文字说明", color = palette.weakText)
-        }
-        Text(text = "消息时间 12:34", color = palette.timeText)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ThemeToolDot("相册", palette.toolGallery)
-            ThemeToolDot("拍照", palette.toolCamera)
-            ThemeToolDot("红包", palette.toolRedPacket)
-        }
-    }
-}
-
-@Composable
-private fun ThemeToolDot(label: String, color: Color) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(color.copy(alpha = 0.14f))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(color),
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(FishPiTheme.radiusBox))
+                .background(FishPiTheme.surface.copy(alpha = 0.72f))
+                .padding(FishPiTheme.spacingSection),
+            verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
+            content = content,
         )
-        Text(text = label, color = color, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
 @Composable
-private fun ThemeColorField(
-    label: String,
+private fun ThemeEditorSectionTitle(label: String) {
+    Text(
+        text = label,
+        color = FishPiTheme.weakText,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 13.sp,
+    )
+}
+
+@Composable
+private fun ThemeTokenColorField(
+    spec: ThemeTokenColorSpec,
     value: String,
     onValueChange: (String) -> Unit,
 ) {
+    val label = themeColorTitle(spec.key)
+    val token = themeColorToken(spec)
     var pickerOpen by remember(label) { mutableStateOf(false) }
     var red by remember(label) { mutableStateOf(255f) }
     var green by remember(label) { mutableStateOf(255f) }
@@ -902,32 +850,38 @@ private fun ThemeColorField(
     val isValidHex = hexInput.isValidThemeHex()
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(FishPiTheme.radiusField))
+            .clickable {
+                resetPickerFromCurrentValue()
+                pickerOpen = true
+            }
+            .padding(vertical = FishPiTheme.spacingItem * 0.5f),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
     ) {
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(34.dp)
                 .clip(CircleShape)
                 .background(if (value.isValidThemeHex()) value.toThemeColor() else FishPiTheme.surfaceContainer)
-                .then(
-                    if (value.isValidThemeHex()) {
-                        Modifier.clickable {
-                            resetPickerFromCurrentValue()
-                            pickerOpen = true
-                        }
-                    } else Modifier
-                ),
         )
-        TextField(
-            value = value,
-            onValueChange = onValueChange,
-            label = label,
-            placeholder = "#FFFFFF",
-            singleLine = true,
-            isError = value.isNotBlank() && !value.isValidThemeHex(),
-            modifier = Modifier.weight(1f),
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(text = label, color = FishPiTheme.onSurface, fontWeight = FontWeight.SemiBold)
+            Text(text = themeColorVariable(spec.key), color = FishPiTheme.weakText, fontSize = 11.sp)
+        }
+        Text(
+            text = value.uppercase(),
+            color = if (value.isValidThemeHex()) FishPiTheme.weakText else FishPiErrorRed,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Icon(
+            imageVector = Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = FishPiTheme.weakText.copy(alpha = 0.46f),
+            modifier = Modifier.size(18.dp),
         )
     }
 
@@ -939,7 +893,7 @@ private fun ThemeColorField(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(FishPiTheme.radiusBox))
                     .background(currentColor.toThemeColor()),
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -976,7 +930,7 @@ private fun ThemeColorField(
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusBox))
                         .background(FishPiTheme.surfaceContainer)
                         .clickable { pickerOpen = false }
                         .padding(14.dp),
@@ -987,7 +941,7 @@ private fun ThemeColorField(
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusBox))
                         .background(profileAccentSoft())
                         .clickable {
                             onValueChange(currentColor)
@@ -1001,6 +955,131 @@ private fun ThemeColorField(
             }
         }
     }
+}
+
+@Composable
+private fun ThemeTokenMetricField(
+    spec: ThemeTokenMetricSpec,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
+            .background(FishPiTheme.surfaceContainer.copy(alpha = 0.72f))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(text = themeMetricTitle(spec.key), color = FishPiTheme.onSurface, fontWeight = FontWeight.Medium)
+                    Text(text = themeMetricVariable(spec.key), color = FishPiTheme.weakText, fontSize = 11.sp)
+                }
+                Text(
+                    text = themeMetricSubtitle(spec.key),
+                    color = FishPiTheme.weakText,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                )
+            }
+            Text(
+                text = if (spec.suffix.isBlank()) "%.2f".format(value) else "%.0f%s".format(value, spec.suffix),
+                color = FishPiTheme.weakText,
+                fontSize = 12.sp,
+            )
+        }
+        Slider(
+            value = value.coerceIn(spec.range.start, spec.range.endInclusive),
+            onValueChange = { onValueChange(it.coerceIn(spec.range.start, spec.range.endInclusive)) },
+            valueRange = spec.range.start..spec.range.endInclusive,
+            colors = SliderDefaults.colors(
+                thumbColor = FishPiTheme.accent,
+                activeTrackColor = FishPiTheme.accent,
+            ),
+        )
+    }
+}
+
+private fun themeColorToken(spec: ThemeTokenColorSpec): String =
+    spec.label.substringBefore(" ")
+
+private fun themeColorVariable(key: ThemeTokenColorKey): String = when (key) {
+    ThemeTokenColorKey.Base100 -> "--color-base-100"
+    ThemeTokenColorKey.Base200 -> "--color-base-200"
+    ThemeTokenColorKey.Base300 -> "--color-base-300"
+    ThemeTokenColorKey.BaseContent -> "--color-base-content"
+    ThemeTokenColorKey.Primary -> "--color-primary"
+    ThemeTokenColorKey.PrimaryContent -> "--color-primary-content"
+    ThemeTokenColorKey.Secondary -> "--color-secondary"
+    ThemeTokenColorKey.SecondaryContent -> "--color-secondary-content"
+    ThemeTokenColorKey.Accent -> "--color-accent"
+    ThemeTokenColorKey.AccentContent -> "--color-accent-content"
+    ThemeTokenColorKey.Neutral -> "--color-neutral"
+    ThemeTokenColorKey.NeutralContent -> "--color-neutral-content"
+    ThemeTokenColorKey.Info -> "--color-info"
+    ThemeTokenColorKey.Success -> "--color-success"
+    ThemeTokenColorKey.Warning -> "--color-warning"
+    ThemeTokenColorKey.Error -> "--color-error"
+}
+
+private fun themeColorTitle(key: ThemeTokenColorKey): String = when (key) {
+    ThemeTokenColorKey.Base100 -> "页面背景"
+    ThemeTokenColorKey.Base200 -> "内容底色"
+    ThemeTokenColorKey.Base300 -> "控件底色"
+    ThemeTokenColorKey.BaseContent -> "正文文字"
+    ThemeTokenColorKey.Primary -> "主色"
+    ThemeTokenColorKey.PrimaryContent -> "主色上的文字"
+    ThemeTokenColorKey.Secondary -> "链接和用户名"
+    ThemeTokenColorKey.SecondaryContent -> "链接色上的文字"
+    ThemeTokenColorKey.Accent -> "强调点"
+    ThemeTokenColorKey.AccentContent -> "强调色上的文字"
+    ThemeTokenColorKey.Neutral -> "辅助文字"
+    ThemeTokenColorKey.NeutralContent -> "辅助色上的文字"
+    ThemeTokenColorKey.Info -> "信息"
+    ThemeTokenColorKey.Success -> "成功 / 已连接"
+    ThemeTokenColorKey.Warning -> "警告 / 重连中"
+    ThemeTokenColorKey.Error -> "错误 / 红包"
+}
+
+private fun themeMetricVariable(key: ThemeTokenMetricKey): String = when (key) {
+    ThemeTokenMetricKey.RadiusSelector -> "--radius-selector"
+    ThemeTokenMetricKey.RadiusField -> "--radius-field"
+    ThemeTokenMetricKey.RadiusBox -> "--radius-box"
+    ThemeTokenMetricKey.SpacingPage -> "app-spacing-page"
+    ThemeTokenMetricKey.SpacingSection -> "app-spacing-section"
+    ThemeTokenMetricKey.SpacingItem -> "app-spacing-item"
+    ThemeTokenMetricKey.SpacingControl -> "app-spacing-control"
+    ThemeTokenMetricKey.BorderWidth -> "--border"
+    ThemeTokenMetricKey.BorderOpacity -> "app-border-opacity"
+    ThemeTokenMetricKey.Depth -> "--depth"
+}
+
+private fun themeMetricTitle(key: ThemeTokenMetricKey): String = when (key) {
+    ThemeTokenMetricKey.RadiusSelector -> "小标签圆角"
+    ThemeTokenMetricKey.RadiusField -> "输入框圆角"
+    ThemeTokenMetricKey.RadiusBox -> "卡片圆角"
+    ThemeTokenMetricKey.SpacingPage -> "页面边距"
+    ThemeTokenMetricKey.SpacingSection -> "区块间距"
+    ThemeTokenMetricKey.SpacingItem -> "条目间距"
+    ThemeTokenMetricKey.SpacingControl -> "控件内距"
+    ThemeTokenMetricKey.BorderWidth -> "边框粗细"
+    ThemeTokenMetricKey.BorderOpacity -> "边框强度"
+    ThemeTokenMetricKey.Depth -> "层级强度"
+}
+
+private fun themeMetricSubtitle(key: ThemeTokenMetricKey): String = when (key) {
+    ThemeTokenMetricKey.RadiusSelector -> "胶囊、状态标签"
+    ThemeTokenMetricKey.RadiusField -> "输入框、按钮、控制条"
+    ThemeTokenMetricKey.RadiusBox -> "卡片、气泡、浮层"
+    ThemeTokenMetricKey.SpacingPage -> "页面左右留白"
+    ThemeTokenMetricKey.SpacingSection -> "大块之间的距离"
+    ThemeTokenMetricKey.SpacingItem -> "图标、文字、列表项"
+    ThemeTokenMetricKey.SpacingControl -> "按钮和输入框内部"
+    ThemeTokenMetricKey.BorderWidth -> "线条粗细"
+    ThemeTokenMetricKey.BorderOpacity -> "线条明显程度"
+    ThemeTokenMetricKey.Depth -> "整体层级感"
 }
 
 @Composable
@@ -1068,7 +1147,7 @@ private fun AccountSwitchCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox + 4.dp))
             .background(FishPiTheme.surfaceContainer)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -1094,7 +1173,7 @@ private fun AccountSwitchCard(
         Row(
             modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(profileAccentSoft())
             .clickable(onClick = onAddAccount)
             .padding(horizontal = 12.dp, vertical = 11.dp),
@@ -1117,7 +1196,7 @@ private fun ProfileActionSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox + 4.dp))
             .background(FishPiTheme.surfaceContainer)
             .padding(vertical = 4.dp),
     ) {
@@ -1200,7 +1279,7 @@ private fun AccountRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(if (selected) profileAccentSoft() else FishPiTheme.surface)
             .clickable(enabled = !selected, onClick = onClick)
             .padding(horizontal = 11.dp, vertical = 8.dp),
@@ -1244,7 +1323,7 @@ private fun ProfileHero(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(
                 Brush.linearGradient(
                     listOf(
@@ -1410,20 +1489,18 @@ private fun ProfileOverviewPage(
                     onRefresh = onRefresh,
                     onOpenAbout = onOpenAbout,
                 )
-                ControlSurface {
-                    Text(
-                        text = "退出登录",
-                        color = FishPiErrorRed,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(999.dp))
-                            .clickable(onClick = onLogout)
-                            .padding(vertical = 9.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    )
-                }
+                Text(
+                    text = "退出登录",
+                    color = FishPiErrorRed,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
+                        .clickable(onClick = onLogout)
+                        .padding(vertical = FishPiTheme.spacingControl),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
             }
         }
     }
@@ -1449,7 +1526,7 @@ private fun ProfileOverviewCard(
     ) {
         ContentCardSurface(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(12.dp),
+            contentPadding = PaddingValues(FishPiTheme.spacingSection),
         ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -1539,19 +1616,16 @@ private fun ProfileActionGrid(
     onRefresh: () -> Unit,
     onOpenAbout: () -> Unit,
 ) {
-    ContentCardSurface(
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 12.dp),
-    ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = FishPiTheme.spacingItem, vertical = FishPiTheme.spacingItem),
         horizontalArrangement = Arrangement.SpaceAround,
     ) {
         ProfileActionItem(Icons.AutoMirrored.Rounded.Article, "我的帖子", onOpenPosts)
         ProfileActionItem(Icons.Rounded.Notifications, "消息通知", onOpenNotice, badge = noticeUnread)
         ProfileActionItem(Icons.Rounded.Refresh, "检查更新", onRefresh)
         ProfileActionItem(Icons.Rounded.Info, "关于APP", onOpenAbout)
-    }
     }
 }
 
@@ -1566,7 +1640,7 @@ private fun ProfileHeaderAction(
     ControlSurface(
         modifier = modifier
             .clickable(enabled = enabled, onClick = onClick),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(FishPiTheme.radiusField),
         contentPadding = PaddingValues(horizontal = if (label == null) 14.dp else 16.dp, vertical = 10.dp),
     ) {
     Row(
@@ -1642,7 +1716,7 @@ private fun ProfileActionItem(
 ) {
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .clickable(onClick = onClick)
             .padding(horizontal = 5.dp, vertical = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1701,14 +1775,10 @@ private fun formatProfileNumber(value: Long): String = value.toString()
 
 @Composable
 private fun ProfileStatsStrip(user: FishPiUser) {
-    ControlSurface(
-        modifier = Modifier
-            .fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        contentPadding = PaddingValues(vertical = 9.dp),
-    ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = FishPiTheme.spacingItem),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ProfileStatColumn(value = formatProfileNumber(user.points), label = "积分", modifier = Modifier.weight(1f))
@@ -1718,7 +1788,6 @@ private fun ProfileStatsStrip(user: FishPiUser) {
         ProfileStatColumn(value = formatProfileNumber(user.follower), label = "粉丝", modifier = Modifier.weight(1f))
         ProfileStatDivider()
         ProfileStatColumn(value = formatProfileNumber(user.onlineMinutes), label = "总在线/分钟", modifier = Modifier.weight(1f))
-    }
     }
 }
 
@@ -1769,14 +1838,11 @@ private fun ProfileBadgeWall(
 ) {
     var expanded by remember(user.userName, medals.size) { mutableStateOf(false) }
     val visibleMedals = if (expanded) medals else medals.take(6)
-    ContentCardSurface(
-        modifier = Modifier
-            .fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 13.dp),
-    ) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = FishPiTheme.spacingItem),
+        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -1792,7 +1858,7 @@ private fun ProfileBadgeWall(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                         .clickable { expanded = !expanded }
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                 )
@@ -1826,7 +1892,6 @@ private fun ProfileBadgeWall(
                 }
             }
         }
-    }
     }
 }
 
@@ -1887,7 +1952,7 @@ private fun ProfileArticleLoadMore(
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.66f))
             .clickable(enabled = !isLoading, onClick = onLoadMore)
             .padding(horizontal = 14.dp, vertical = 9.dp),
     )
@@ -1996,7 +2061,7 @@ private fun ProfileArticleRow(article: ArticleSummary, onClick: () -> Unit) {
 @Composable
 private fun ProfileBreezemoonRow(item: BreezemoonView) {
     val textColor = FishPiTheme.onSurface.toArgb()
-    val accent = if (isSystemInDarkTheme()) Color(0xFFD4B96A) else Color(0xFFC9A44F)
+    val accent = FishPiTheme.accent
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2076,7 +2141,7 @@ private fun ProfileInfoCard(user: FishPiUser) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(FishPiTheme.surface.copy(alpha = 0.80f))
             .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -2119,6 +2184,7 @@ private fun formatProfileLivenessValue(value: Double): String {
         "%.2f".format(java.util.Locale.US, normalized).trimEnd('0').trimEnd('.')
     }
 }
+
 
 
 

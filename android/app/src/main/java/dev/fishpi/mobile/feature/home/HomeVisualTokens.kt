@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.feature.home
 
 import dev.fishpi.mobile.ui.components.FishPiPillButton
+import dev.fishpi.mobile.FishPiTheme
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -112,9 +113,15 @@ internal fun homeIslandBorderColor(): Color {
 internal fun homeRewardGradient(): Brush {
     val colors = MaterialTheme.colorScheme
     return if (colors.background.luminance() < 0.5f) {
-        Brush.linearGradient(listOf(Color(0xFF173629), Color(0xFF214B39)))
+        Brush.linearGradient(listOf(colors.primary.copy(alpha = 0.92f), FishPiTheme.accent.copy(alpha = 0.72f)))
     } else {
-        Brush.linearGradient(listOf(Color(0xFFF3FAF1), Color(0xFFE7F5EA), Color(0xFFF9FCF6)))
+        Brush.linearGradient(
+            listOf(
+                FishPiTheme.accent.copy(alpha = 0.10f),
+                colors.primary.copy(alpha = 0.08f),
+                colors.surface.copy(alpha = 0.96f),
+            ),
+        )
     }
 }
 
