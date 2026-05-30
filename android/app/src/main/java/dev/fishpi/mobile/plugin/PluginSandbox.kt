@@ -141,7 +141,13 @@ var storage={
     set:function(key,val){__bridge.setStorage(key,JSON.stringify(val));}
 };
 var ui={
-    toast:function(text){__bridge.call('systemMessage',JSON.stringify({text:text}));}
+    toast:function(text){__bridge.call('systemMessage',JSON.stringify({text:text}));},
+    notify:function(textOrOptions,type){
+        var payload=typeof textOrOptions==='object'&&textOrOptions!==null
+            ? Object.assign({},textOrOptions)
+            : {text:String(textOrOptions||''),type:type||'info'};
+        return fishpi.call('app.notify',payload);
+    }
 };
 fishpi.ui=(function(){
     var callbacks={};

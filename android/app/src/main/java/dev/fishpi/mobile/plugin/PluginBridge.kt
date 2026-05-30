@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.plugin
 
+import android.util.Log
 import android.webkit.JavascriptInterface
 import org.json.JSONObject
 
@@ -21,6 +22,7 @@ internal class PluginBridge(
 
     @JavascriptInterface
     fun log(message: String) {
+        Log.d("FishPiPlugin", "[$pluginId] $message")
     }
 
     @JavascriptInterface

@@ -1150,4 +1150,3 @@ private fun HomePulseMetric(icon: ImageVector, value: Long) {
         Text(text = value.toString(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
     }
 }
-

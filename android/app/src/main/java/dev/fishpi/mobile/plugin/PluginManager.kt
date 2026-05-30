@@ -12,6 +12,8 @@ import android.provider.Settings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.fishpi.mobile.FishPiNoticeType
+import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.data.FishPiNative
 import dev.fishpi.mobile.feature.pluginui.PluginUiController
 import org.json.JSONArray
@@ -190,6 +192,23 @@ class PluginManager private constructor(context: Context) {
             val text = args.optString("text", "")
             mainHandler.post { onSystemMessage?.invoke(text) }
             return JSONObject("{}")
+        }
+        if (action == "app.notify") {
+            val text = args.optString("text", "").ifBlank { args.optString("message", "") }
+            val title = args.optString("title", "")
+            val message = listOf(title, text).filter(String::isNotBlank).joinToString("：")
+            val type = args.optString("type", "info").toFishPiNoticeType()
+            val durationMs = args.optLong("durationMs", 2_200L).coerceIn(800L, 10_000L)
+            val avatarUrl = args.optString("avatarUrl", "")
+            mainHandler.post {
+                FishPiNotifier.show(
+                    message = message,
+                    type = type,
+                    durationMs = durationMs,
+                    avatarUrl = avatarUrl,
+                )
+            }
+            return JSONObject().put("ok", true)
         }
         when (action) {
             "toolbar.register" -> return registerToolbarEntry(pluginId, args)
@@ -418,6 +437,53 @@ class PluginManager private constructor(context: Context) {
         } ?: throw IOException("无法读取所选文件")
         reloadPlugin(finalName)
         return finalName
+    }
+
+    private fun String.toFishPiNoticeType(): FishPiNoticeType =
+        when (trim().lowercase()) {
+            "success", "ok" -> FishPiNoticeType.Success
+            "warning", "warn" -> FishPiNoticeType.Warning
+            "error", "danger" -> FishPiNoticeType.Error
+            else -> FishPiNoticeType.Info
+        }
+
+    fun installPluginFromSource(source: String, preferredName: String, enable: Boolean = true): String {
+        pluginDir.mkdirs()
+        val header = PluginHeaderParser.parse(source)
+            ?: throw IOException("插件缺少 FishPiPlugin 元信息")
+        val finalName = storePluginFileName(preferredName.ifBlank { header.name })
+        val target = File(pluginDir, finalName)
+        target.writeText(source, Charsets.UTF_8)
+        if (enable) {
+            togglePlugin(finalName, enable = true)
+        } else {
+            val prefs = storageFor("__manager")
+            val disabled = disabledFileNames().toMutableSet()
+            disabled.add(finalName)
+            prefs.edit().putStringSet("disabled", disabled).apply()
+            destroyPlugin(finalName)
+            getState(finalName).status = PluginStatus.Disabled
+        }
+        return finalName
+    }
+
+    fun storePluginInfo(preferredName: String): PluginInfo? {
+        val finalName = storePluginFileName(preferredName)
+        return pluginInfos().firstOrNull { it.fileName == finalName }
+    }
+
+    fun storePluginMatchesSource(preferredName: String, source: String): Boolean {
+        val finalName = storePluginFileName(preferredName)
+        val target = File(pluginDir, finalName)
+        return target.exists() && target.readText(Charsets.UTF_8) == source
+    }
+
+    fun storePluginFileName(preferredName: String): String {
+        val safeBase = preferredName
+            .replace(Regex("[^A-Za-z0-9._-]"), "_")
+            .trim('_', '.', '-')
+            .ifBlank { "store-plugin" }
+        return if (safeBase.endsWith(".js", ignoreCase = true)) safeBase else "$safeBase.js"
     }
 
     fun readPluginSource(fileName: String): String {

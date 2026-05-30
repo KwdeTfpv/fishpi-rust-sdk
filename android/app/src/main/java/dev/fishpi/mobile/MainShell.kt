@@ -103,6 +103,7 @@ import dev.fishpi.mobile.feature.chat.ChatController
 import dev.fishpi.mobile.feature.chat.ChatRealtimeRouteLifecycle
 import dev.fishpi.mobile.feature.chat.ChatRoute
 import dev.fishpi.mobile.feature.chat.blocksChatMessage
+import dev.fishpi.mobile.extension.ExtensionStoreScreen
 import dev.fishpi.mobile.shared.message.toRenderHints
 import dev.fishpi.mobile.feature.home.HomeRoute
 import dev.fishpi.mobile.feature.pluginui.PluginUiRoute
@@ -136,6 +137,7 @@ private enum class HomePane {
     Breezemoon,
     Notice,
     Fun,
+    Store,
 }
 
 private enum class ChatPane {
@@ -157,6 +159,8 @@ internal fun MainShell(
     onThemeChange: (String) -> Unit,
     onImportThemePackage: suspend (String) -> Result<String>,
     onSaveEditedTheme: (String) -> Result<String>,
+    onSaveStoreTheme: (String) -> Result<String>,
+    isStoreThemeSaved: (String) -> Boolean,
     onDeleteCustomTheme: (String) -> Boolean,
     chatWallpaperUri: String,
     onChatWallpaperChange: (String) -> Unit,
@@ -428,6 +432,10 @@ internal fun MainShell(
             chatPane = ChatPane.Home
             return@BackHandler
         }
+        if (tab == FishTab.Home && homePane == HomePane.Store) {
+            homePane = HomePane.Fun
+            return@BackHandler
+        }
         if (tab == FishTab.Home && homePane != HomePane.Home) {
             homePane = HomePane.Home
             return@BackHandler
@@ -520,7 +528,14 @@ internal fun MainShell(
                                 openArticleTabByJump(articleId)
                             },
                         )
-                        HomePane.Fun -> FunApiScreen()
+                        HomePane.Fun -> FunApiScreen(
+                            onOpenStore = { homePane = HomePane.Store },
+                        )
+                        HomePane.Store -> ExtensionStoreScreen(
+                            apiKey = session.apiKey,
+                            onImportTheme = onSaveStoreTheme,
+                            isThemeApplied = isStoreThemeSaved,
+                        )
                     }
                 }
                 if (tab != FishTab.Home) {

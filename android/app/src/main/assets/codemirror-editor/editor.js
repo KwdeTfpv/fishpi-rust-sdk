@@ -25,7 +25,7 @@
   
 });`},{label:"off",type:"function",detail:"\u79FB\u9664\u63D2\u4EF6\u4E8B\u4EF6",apply:"off('', handler)"},{label:"log",type:"function",detail:"\u8F93\u51FA\u5230 FishPiPlugin logcat",apply:"log('')"},{label:"fishpi.call",type:"function",detail:"\u8C03\u7528 SDK API",apply:"fishpi.call('', {})"},{label:"fishpi.hook",type:"function",detail:"\u6CE8\u518C hook",apply:`fishpi.hook('', function(value) {
   return value;
-});`},{label:"storage.get",type:"function",detail:"\u8BFB\u53D6\u63D2\u4EF6\u79C1\u6709\u5B58\u50A8",apply:"storage.get('', null)"},{label:"storage.set",type:"function",detail:"\u5199\u5165\u63D2\u4EF6\u79C1\u6709\u5B58\u50A8",apply:"storage.set('', null)"},{label:"ui.toast",type:"function",detail:"\u63D2\u5165\u7CFB\u7EDF\u63D0\u793A",apply:"ui.toast('')"},F(`// ==FishPiPlugin==
+});`},{label:"storage.get",type:"function",detail:"\u8BFB\u53D6\u63D2\u4EF6\u79C1\u6709\u5B58\u50A8",apply:"storage.get('', null)"},{label:"storage.set",type:"function",detail:"\u5199\u5165\u63D2\u4EF6\u79C1\u6709\u5B58\u50A8",apply:"storage.set('', null)"},{label:"ui.toast",type:"function",detail:"\u63D2\u5165\u7CFB\u7EDF\u63D0\u793A",apply:"ui.toast('')"},{label:"ui.notify",type:"function",detail:"\u663E\u793A\u5E94\u7528\u5185\u901A\u77E5",apply:"ui.notify('')"},F(`// ==FishPiPlugin==
 // @name         \${name}
 // @author       \${author}
 // @version      1.0.0

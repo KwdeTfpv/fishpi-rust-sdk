@@ -3,11 +3,13 @@ package dev.fishpi.mobile.feature.profile
 import android.content.Context
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.FishPiApiClient
+import dev.fishpi.mobile.data.FishPiWebLoginClient
 import dev.fishpi.mobile.data.FishPiUser
 import dev.fishpi.mobile.data.SavedAccount
 import dev.fishpi.mobile.data.SessionStore
 import dev.fishpi.mobile.data.UNKNOWN_LIVENESS
 import dev.fishpi.mobile.data.UserActivityView
+import dev.fishpi.mobile.data.parseWebLoginTarget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 internal class ProfileController(
     context: Context,
@@ -28,6 +31,7 @@ internal class ProfileController(
     private val sessionUser: FishPiUser,
     initialChatFilters: ChatFilterConfig,
     private val api: FishPiApiClient = FishPiApiClient.shared,
+    private val webLoginClient: FishPiWebLoginClient = FishPiWebLoginClient(),
 ) {
     private val store = SessionStore(context.applicationContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -93,7 +97,56 @@ internal class ProfileController(
                 _state.update { it.copy(chatWallpaperUri = action.uri) }
                 emit(ProfileEffect.ChangeChatWallpaper(action.uri))
             }
+            is ProfileAction.WebLoginQrScanned -> handleWebLoginQr(action.raw)
+            ProfileAction.ConfirmWebLogin -> confirmWebLogin()
+            ProfileAction.DismissWebLoginConfirm -> _state.update {
+                it.copy(webLoginTargetId = null, isWebLoginAuthorizing = false)
+            }
             ProfileAction.CloseProfile -> emit(ProfileEffect.CloseProfile)
+        }
+    }
+
+    private fun handleWebLoginQr(raw: String) {
+        val targetId = parseWebLoginTarget(raw)
+        if (targetId.isNullOrBlank()) {
+            emit(ProfileEffect.ShowError("请扫描网页版登录二维码"))
+            return
+        }
+        _state.update { it.copy(webLoginTargetId = targetId, isWebLoginAuthorizing = false) }
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    withTimeout(8_000L) { webLoginClient.notifyScanned(targetId) }
+                }
+            }.onFailure { throwable ->
+                emit(ProfileEffect.ShowError(throwable.message ?: "网页登录二维码已失效"))
+                _state.update {
+                    if (it.webLoginTargetId == targetId) {
+                        it.copy(webLoginTargetId = null, isWebLoginAuthorizing = false)
+                    } else {
+                        it
+                    }
+                }
+            }
+        }
+    }
+
+    private fun confirmWebLogin() {
+        val targetId = _state.value.webLoginTargetId ?: return
+        if (_state.value.isWebLoginAuthorizing) return
+        _state.update { it.copy(isWebLoginAuthorizing = true) }
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    withTimeout(10_000L) { webLoginClient.authorize(targetId, apiKey) }
+                }
+            }.onSuccess {
+                _state.update { it.copy(webLoginTargetId = null, isWebLoginAuthorizing = false) }
+                emit(ProfileEffect.ShowMessage("已授权网页版登录"))
+            }.onFailure { throwable ->
+                _state.update { it.copy(isWebLoginAuthorizing = false) }
+                emit(ProfileEffect.ShowError(throwable.message ?: "网页登录授权失败"))
+            }
         }
     }
 

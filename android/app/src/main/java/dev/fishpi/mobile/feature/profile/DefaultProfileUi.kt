@@ -18,6 +18,7 @@ import android.webkit.MimeTypeMap
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -54,9 +55,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Article
 import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Block
@@ -145,7 +148,13 @@ internal fun DefaultProfileUi(
     val user = state.user
     val articlePage = state.articles
     val breezePage = state.breezemoons
-    val isOverlayOpen = state.settingsOpen || state.filterSettingsOpen || state.themeEditorOpen || state.aboutOpen
+    var showWebLoginScanner by remember { mutableStateOf(false) }
+    val isOverlayOpen = state.settingsOpen ||
+        state.filterSettingsOpen ||
+        state.themeEditorOpen ||
+        state.aboutOpen ||
+        state.webLoginTargetId != null ||
+        showWebLoginScanner
 
     if (!isOverlayOpen) {
         if (state.contentOpen) {
@@ -225,6 +234,7 @@ internal fun DefaultProfileUi(
                         onRefresh = { dispatch(ProfileAction.CheckUpdate) },
                         onOpenAbout = { dispatch(ProfileAction.OpenAbout) },
                         onOpenSettings = { dispatch(ProfileAction.OpenSettings) },
+                        onScanWebLogin = { showWebLoginScanner = true },
                         isSelfProfile = state.isSelfProfile,
                         isFollowingUser = state.isFollowingUser,
                         isFollowRunning = state.isFollowRunning,
@@ -341,6 +351,48 @@ internal fun DefaultProfileUi(
         )
     }
 
+    state.webLoginTargetId?.let {
+        AlertDialog(
+            onDismissRequest = {
+                if (!state.isWebLoginAuthorizing) dispatch(ProfileAction.DismissWebLoginConfirm)
+            },
+            title = { Text("网页登录确认") },
+            text = { Text("确认使用当前账号登录网页版摸鱼派？") },
+            confirmButton = {
+                Button(
+                    onClick = { dispatch(ProfileAction.ConfirmWebLogin) },
+                    enabled = !state.isWebLoginAuthorizing,
+                ) {
+                    Text(if (state.isWebLoginAuthorizing) "授权中..." else "确认登录")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { dispatch(ProfileAction.DismissWebLoginConfirm) },
+                    enabled = !state.isWebLoginAuthorizing,
+                ) {
+                    Text("取消")
+                }
+            },
+        )
+    }
+
+    if (showWebLoginScanner) {
+        QrScannerScreen(
+            onResult = { raw ->
+                showWebLoginScanner = false
+                dispatch(ProfileAction.WebLoginQrScanned(raw))
+            },
+            onClose = { showWebLoginScanner = false },
+        )
+    }
+
+    BackHandler(enabled = active && showWebLoginScanner) {
+        showWebLoginScanner = false
+    }
+    BackHandler(enabled = active && state.webLoginTargetId != null && !state.isWebLoginAuthorizing) {
+        dispatch(ProfileAction.DismissWebLoginConfirm)
+    }
     BackHandler(enabled = active && (state.closeOnBack || !state.isSelfProfile) && !isOverlayOpen) {
         dispatch(ProfileAction.CloseProfile)
     }
@@ -1420,6 +1472,7 @@ private fun ProfileOverviewPage(
     onRefresh: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenSettings: () -> Unit,
+    onScanWebLogin: () -> Unit,
     isSelfProfile: Boolean,
     isFollowingUser: Boolean,
     isFollowRunning: Boolean,
@@ -1480,6 +1533,7 @@ private fun ProfileOverviewPage(
                 onPrivateChat = onPrivateChat,
                 onTransfer = onTransfer,
                 onOpenSettings = onOpenSettings,
+                onScanWebLogin = onScanWebLogin,
             )
             if (isSelfProfile) {
                 ProfileActionGrid(
@@ -1519,6 +1573,7 @@ private fun ProfileOverviewCard(
     onPrivateChat: () -> Unit,
     onTransfer: () -> Unit,
     onOpenSettings: () -> Unit,
+    onScanWebLogin: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -1547,6 +1602,11 @@ private fun ProfileOverviewCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (isSelfProfile) {
+                    AnimalIconButton(
+                        icon = Icons.Filled.QrCodeScanner,
+                        contentDescription = "扫码登录网页版",
+                        onClick = onScanWebLogin,
+                    )
                     AnimalIconButton(
                         icon = Icons.Rounded.Settings,
                         contentDescription = "设置",

@@ -159,6 +159,7 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-gif:3.4.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
     implementation("io.coil-kt.coil3:coil-svg:3.4.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     val markwonVersion = "4.6.2"
     implementation("io.noties.markwon:core:$markwonVersion")
     implementation("io.noties.markwon:html:$markwonVersion")

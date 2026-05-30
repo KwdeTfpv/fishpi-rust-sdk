@@ -532,16 +532,21 @@ storage.set('delaySec', 2.5);
 ## ui 与 log
 
 ```javascript
-ui.toast('提示文字');
+ui.toast('聊天室系统提示');
+ui.notify('应用内通知');
+ui.notify({ title: '插件提醒', text: '任务完成', type: 'success', durationMs: 3000 });
 log('调试信息');
 ```
 
 | API | 说明 |
 |-----|------|
 | `ui.toast(text)` | 在聊天室插入一条系统消息 |
+| `ui.notify(textOrOptions, type?)` | 显示 App 顶部应用内通知。可传字符串，或对象 `{ title, text, type, durationMs, avatarUrl }`；`type` 支持 `info`、`success`、`warning`、`error` |
 | `ui.dialog(title)` | 创建一个原生插件对话框 |
 | `ui.page(title)` | 创建一个原生插件页面 |
 | `log(text)` | 输出到 `adb logcat -s FishPiPlugin:D` |
+
+`ui.toast` 适合在聊天室内插入系统提示；`ui.notify` 适合显示应用级提示，不会创建 Android 系统通知。
 
 ## 插件生成原生 UI
 

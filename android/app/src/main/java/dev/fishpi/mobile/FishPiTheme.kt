@@ -579,58 +579,87 @@ private fun FishPiPalette.isDarkPalette(): Boolean {
     return lum < 0.5f
 }
 
-internal fun FishPiPalette.toM3ColorScheme(): androidx.compose.material3.ColorScheme {
-    return if (isDarkPalette()) {
+internal fun FishPiThemeTokens.toM3ColorScheme(palette: FishPiPalette): androidx.compose.material3.ColorScheme {
+    val c = colors
+    val isDark = colorScheme == FishPiThemeColorScheme.Dark || palette.isDarkPalette()
+    return if (isDark) {
         darkColorScheme(
-            primary = accent,
-            onPrimary = M3Neutral100,
-            primaryContainer = accent.copy(alpha = 0.2f),
-            onPrimaryContainer = accent,
-            secondary = accent,
-            onSecondary = M3Neutral100,
-            tertiary = M3Tertiary40,
-            onTertiary = M3Neutral100,
-            error = FishPiErrorRed,
+            primary = c.primary,
+            onPrimary = c.primaryContent,
+            primaryContainer = c.base300,
+            onPrimaryContainer = c.baseContent,
+            secondary = c.secondary,
+            onSecondary = c.secondaryContent,
+            secondaryContainer = c.base300,
+            onSecondaryContainer = c.baseContent,
+            tertiary = c.accent,
+            onTertiary = c.accentContent,
+            tertiaryContainer = c.base300,
+            onTertiaryContainer = c.baseContent,
+            error = c.error,
             onError = M3Neutral100,
-            background = background,
-            onBackground = onSurface,
-            surface = surface,
-            onSurface = onSurface,
-            surfaceVariant = surfaceContainer,
-            onSurfaceVariant = weakText,
-            outline = outline,
-            surfaceContainerLowest = background,
-            surfaceContainerLow = surface,
-            surfaceContainer = surfaceContainer,
-            surfaceContainerHigh = surfaceElevated,
-            surfaceContainerHighest = surfaceElevated,
+            errorContainer = c.error.copy(alpha = 0.22f),
+            onErrorContainer = c.error,
+            background = palette.background,
+            onBackground = c.baseContent,
+            surface = palette.surface,
+            onSurface = c.baseContent,
+            surfaceVariant = palette.surfaceContainer,
+            onSurfaceVariant = c.neutral,
+            outline = palette.outline,
+            outlineVariant = palette.outline.copy(alpha = 0.62f),
+            inverseSurface = c.primary,
+            inverseOnSurface = c.primaryContent,
+            inversePrimary = c.primaryContent,
+            surfaceTint = c.primary,
+            surfaceContainerLowest = palette.background,
+            surfaceContainerLow = c.base200,
+            surfaceContainer = c.base300,
+            surfaceContainerHigh = c.base300,
+            surfaceContainerHighest = c.base300,
         )
     } else {
         lightColorScheme(
-            primary = accent,
-            onPrimary = M3Neutral100,
-            primaryContainer = accent.copy(alpha = 0.12f),
-            onPrimaryContainer = accent,
-            secondary = accent,
-            onSecondary = M3Neutral100,
-            tertiary = M3Tertiary40,
-            onTertiary = M3Neutral100,
-            error = FishPiErrorRed,
+            primary = c.primary,
+            onPrimary = c.primaryContent,
+            primaryContainer = c.base300,
+            onPrimaryContainer = c.baseContent,
+            secondary = c.secondary,
+            onSecondary = c.secondaryContent,
+            secondaryContainer = c.base300,
+            onSecondaryContainer = c.baseContent,
+            tertiary = c.accent,
+            onTertiary = c.accentContent,
+            tertiaryContainer = c.base300,
+            onTertiaryContainer = c.baseContent,
+            error = c.error,
             onError = M3Neutral100,
-            background = background,
-            onBackground = onSurface,
-            surface = surface,
-            onSurface = onSurface,
-            surfaceVariant = surfaceContainer,
-            onSurfaceVariant = weakText,
-            outline = outline,
-            surfaceContainerLowest = M3Neutral100,
-            surfaceContainerLow = M3Neutral96,
-            surfaceContainer = surfaceContainer,
-            surfaceContainerHigh = surfaceElevated,
-            surfaceContainerHighest = M3Neutral90,
+            errorContainer = c.error.copy(alpha = 0.14f),
+            onErrorContainer = c.error,
+            background = palette.background,
+            onBackground = c.baseContent,
+            surface = palette.surface,
+            onSurface = c.baseContent,
+            surfaceVariant = palette.surfaceContainer,
+            onSurfaceVariant = c.neutral,
+            outline = palette.outline,
+            outlineVariant = palette.outline.copy(alpha = 0.62f),
+            inverseSurface = c.baseContent,
+            inverseOnSurface = c.base100,
+            inversePrimary = c.primaryContent,
+            surfaceTint = c.primary,
+            surfaceContainerLowest = c.base200,
+            surfaceContainerLow = c.base200,
+            surfaceContainer = c.base300,
+            surfaceContainerHigh = c.base200,
+            surfaceContainerHighest = c.base300,
         )
     }
+}
+
+internal fun FishPiPalette.toM3ColorScheme(): androidx.compose.material3.ColorScheme {
+    val tokens = if (isDarkPalette()) IslandFishPiThemeTokens else DeepBlueNeonFishPiThemeTokens
+    return tokens.toM3ColorScheme(this)
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -648,12 +677,12 @@ internal fun FishPiM3BridgedTheme(
 ) {
     val context = LocalContext.current
     val paletteIsDark = remember(palette) { palette.isDarkPalette() }
-    val colorScheme = remember(palette, dynamicColor, context, paletteIsDark) {
+    val colorScheme = remember(palette, tokens, dynamicColor, context, paletteIsDark) {
         if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (paletteIsDark) dynamicDarkColorScheme(context)
             else dynamicLightColorScheme(context)
         } else {
-            palette.toM3ColorScheme()
+            tokens.toM3ColorScheme(palette)
         }
     }
 

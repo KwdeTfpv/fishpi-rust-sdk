@@ -1,6 +1,7 @@
 package dev.fishpi.mobile
 
 import android.content.Context
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Storefront
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -68,7 +70,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 @Composable
-internal fun FunApiScreen() {
+internal fun FunApiScreen(
+    onOpenStore: () -> Unit,
+) {
     val context = LocalContext.current
     val store = remember { FunApiStore(context.applicationContext) }
     val scope = rememberCoroutineScope()
@@ -107,7 +111,7 @@ internal fun FunApiScreen() {
         )
     }
 
-    val entries = remember(customEntries) { FunApiDefaults + customEntries }
+    val entries = remember(customEntries) { listOf(FishPiExtensionMarketEntry) + FunApiDefaults + customEntries }
 
     Column(
         modifier = Modifier
@@ -131,7 +135,7 @@ internal fun FunApiScreen() {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "趣味API",
+                    text = "工具",
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.ExtraBold,
@@ -150,7 +154,7 @@ internal fun FunApiScreen() {
                     showEditor = true
                 },
             ) {
-                Icon(Icons.Rounded.Add, contentDescription = "新增趣味API")
+                Icon(Icons.Rounded.Add, contentDescription = "新增工具接口")
             }
         }
         Spacer(modifier = Modifier.height(36.dp))
@@ -173,7 +177,9 @@ internal fun FunApiScreen() {
                                 entry = entry,
                                 modifier = Modifier.weight(1f),
                                 onClick = {
-                                    if (entry.url.isBlank()) {
+                                    if (entry.id == FishPiExtensionMarketEntry.id) {
+                                        onOpenStore()
+                                    } else if (entry.url.isBlank()) {
                                         FishPiNotifier.show("${entry.title} 还没有配置接口")
                                     } else {
                                         selectedEntry = entry
@@ -203,7 +209,7 @@ internal fun FunApiScreen() {
             }
             item {
                 Text(
-                    text = "声明：本页面提供的所有内容均来自第三方公开API接口，仅供娱乐和学习交流使用，不代表摸鱼派观点和立场，不保证内容的准确性、安全性和合法性，使用者需自行承担风险。",
+                    text = "声明：公开接口工具的内容来自第三方 API，仅供娱乐和学习交流使用；扩展集市内容由对应作者发布，请按需安装与使用。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                     style = MaterialTheme.typography.bodyMedium,
                     lineHeight = 25.sp,
@@ -226,47 +232,48 @@ private fun FunApiMenuCard(
 ) {
     Card(
         onClick = onClick,
-        modifier = modifier.height(120.dp),
+        modifier = modifier.height(92.dp),
         shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = entry.color),
-        elevation = CardDefaults.cardElevation(defaultElevation = 5.dp, pressedElevation = 1.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(36.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color.White.copy(alpha = 0.14f)),
+                        .background(entry.color.copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         imageVector = entry.icon,
                         contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp),
+                        tint = entry.color,
+                        modifier = Modifier.size(22.dp),
                     )
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = entry.title,
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = 1,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = entry.summary,
-                        color = Color.White.copy(alpha = 0.82f),
-                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -280,12 +287,12 @@ private fun FunApiMenuCard(
                 ) {
                     onEdit?.let {
                         IconButton(onClick = it, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Rounded.Edit, contentDescription = "编辑${entry.title}", tint = Color.White)
+                            Icon(Icons.Rounded.Edit, contentDescription = "编辑${entry.title}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     onDelete?.let {
                         IconButton(onClick = it, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Rounded.Delete, contentDescription = "删除${entry.title}", tint = Color.White)
+                            Icon(Icons.Rounded.Delete, contentDescription = "删除${entry.title}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -439,7 +446,7 @@ private fun FunApiEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "新增趣味API" else "编辑趣味API") },
+        title = { Text(if (initial == null) "新增工具接口" else "编辑工具接口") },
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item {
@@ -528,7 +535,7 @@ private fun FunApiEditorDialog(
                         FunApiEntry(
                             id = initial?.id ?: "custom-${System.currentTimeMillis()}",
                             title = title.trim(),
-                            summary = summary.trim().ifBlank { "自定义接口" },
+                            summary = summary.trim().ifBlank { "自定义工具接口" },
                             url = url.trim(),
                             method = method,
                             responseType = responseType,
@@ -619,7 +626,7 @@ private class FunApiStore(context: Context) {
                         FunApiEntry(
                             id = item.optString("id").ifBlank { "custom-$index" },
                             title = item.optString("title"),
-                            summary = item.optString("summary").ifBlank { "自定义接口" },
+                            summary = item.optString("summary").ifBlank { "自定义工具接口" },
                             url = item.optString("url"),
                             method = item.optString("method").toMethod(),
                             responseType = responseType,
@@ -711,6 +718,17 @@ private val FunApiDefaults = listOf(
         color = FunApiPalette[3],
         icon = Icons.Rounded.CalendarMonth,
     ),
+)
+
+private val FishPiExtensionMarketEntry = FunApiEntry(
+    id = "fishpi-extension-market",
+    title = "鱼排扩展集市",
+    summary = "插件、主题和应用增强",
+    url = "",
+    method = FunApiMethod.Get,
+    responseType = FunApiResponseType.Text,
+    color = Color(0xFF2563EB),
+    icon = Icons.Rounded.Storefront,
 )
 
 private fun FunApiResponseType.defaultIcon(): ImageVector = when (this) {

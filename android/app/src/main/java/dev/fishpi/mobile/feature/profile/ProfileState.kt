@@ -46,6 +46,8 @@ internal data class ProfileState(
     val chatWallpaperUri: String = "",
     val noticeUnread: Long = 0L,
     val closeOnBack: Boolean = false,
+    val webLoginTargetId: String? = null,
+    val isWebLoginAuthorizing: Boolean = false,
 ) {
     companion object {
         fun initial(

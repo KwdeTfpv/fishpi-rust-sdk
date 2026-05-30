@@ -59,6 +59,16 @@ fun FishPiApp() {
             applyThemeKey(custom.key)
             custom.label
         }
+    fun saveThemeOnly(rawJson: String): Result<String> =
+        runCatching {
+            val custom = parseCustomFishPiTheme(rawJson)
+            val nextThemes = (importedThemes.filterNot { it.key == custom.key } + custom)
+            importedThemes = nextThemes
+            store.saveImportedThemeJsons(nextThemes.map { it.rawJson })
+            custom.label
+        }
+    fun isStoreThemeSaved(rawJson: String): Boolean =
+        importedThemes.any { it.rawJson == rawJson }
     suspend fun importThemePackage(uri: String): Result<String> =
         runCatching {
             val custom = withContext(Dispatchers.IO) {
@@ -176,6 +186,8 @@ fun FishPiApp() {
                     onThemeChange = { applyThemeKey(it) },
                     onImportThemePackage = { importThemePackage(it) },
                     onSaveEditedTheme = { importTheme(it) },
+                    onSaveStoreTheme = { saveThemeOnly(it) },
+                    isStoreThemeSaved = { isStoreThemeSaved(it) },
                     onDeleteCustomTheme = { deleteCustomTheme(it) },
                     chatWallpaperUri = chatWallpaperUri,
                     onChatWallpaperChange = { applyChatWallpaper(it) },

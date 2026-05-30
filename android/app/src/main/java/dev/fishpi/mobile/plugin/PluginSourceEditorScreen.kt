@@ -345,10 +345,25 @@ private fun PluginSourcePreview(
     source: String,
     modifier: Modifier = Modifier,
 ) {
+    PluginCodePreview(
+        source = source,
+        language = "javascript",
+        contentKeyPrefix = "plugin-source",
+        modifier = modifier,
+    )
+}
+
+@Composable
+internal fun PluginCodePreview(
+    source: String,
+    language: String,
+    contentKeyPrefix: String,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val cache = remember { ChatMarkdownRenderCache(maxEntries = 20, maxChars = 300_000) }
-    val markdown = remember(source) { source.toJavaScriptCodeFence() }
+    val markdown = remember(source, language) { source.toCodeFence(language) }
     val style = MarkwonContentStyle(
         textColor = MaterialTheme.colorScheme.onSurface.toArgb(),
         weakTextColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb(),
@@ -388,7 +403,7 @@ private fun PluginSourcePreview(
                 renderJob?.cancel()
                 renderJob = renderer.renderInto(
                     textView = view,
-                    contentKey = "plugin-source-${source.hashCode()}",
+                    contentKey = "$contentKeyPrefix-${language}-${source.hashCode()}",
                     markdown = markdown,
                 )
             },
@@ -401,7 +416,7 @@ private fun PluginSourcePreview(
     }
 }
 
-private fun String.toJavaScriptCodeFence(): String {
+private fun String.toCodeFence(language: String): String {
     val fence = "````"
-    return "$fence javascript\n$this\n$fence"
+    return "$fence $language\n$this\n$fence"
 }

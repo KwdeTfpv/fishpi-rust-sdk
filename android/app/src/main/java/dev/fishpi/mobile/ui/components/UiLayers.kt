@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.LocalFishPiPalette
+import dev.fishpi.mobile.LocalFishPiThemeTokens
 
 internal object UiLayerTokens {
     const val ZPage = 0f
@@ -140,6 +141,7 @@ internal fun ActionChipButton(
     leadingDot: Boolean = false,
 ) {
     val palette = LocalFishPiPalette.current
+    val themeColors = LocalFishPiThemeTokens.current.colors
     val shape = RoundedCornerShape(FishPiTheme.radiusSelector)
     val bg = when {
         selected -> palette.accent
@@ -147,7 +149,7 @@ internal fun ActionChipButton(
         else -> palette.surfaceContainer.copy(alpha = 0.48f)
     }
     val fg = when {
-        selected -> Color.White
+        selected -> themeColors.primaryContent
         enabled -> palette.onSurface
         else -> palette.weakText.copy(alpha = 0.62f)
     }
@@ -157,7 +159,7 @@ internal fun ActionChipButton(
             .background(bg)
             .border(
                 FishPiTheme.borderWidth,
-                if (selected) palette.toolDefault.copy(alpha = 0.42f) else palette.outline.copy(alpha = 0.18f),
+                if (selected) fg.copy(alpha = 0.28f) else palette.outline.copy(alpha = 0.18f),
                 shape,
             )
             .clickable(enabled = enabled, onClick = onClick)
@@ -170,7 +172,7 @@ internal fun ActionChipButton(
                 modifier = Modifier
                     .size(5.dp)
                     .clip(CircleShape)
-                    .background(if (selected) palette.toolDefault else palette.accent.copy(alpha = 0.68f)),
+                    .background(if (selected) fg.copy(alpha = 0.82f) else palette.accent.copy(alpha = 0.68f)),
             )
         }
         Text(text = text, color = fg, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)

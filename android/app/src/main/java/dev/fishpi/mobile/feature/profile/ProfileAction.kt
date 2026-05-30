@@ -47,5 +47,8 @@ internal sealed interface ProfileAction {
     data class SaveEditedTheme(val raw: String) : ProfileAction
     data class DeleteCustomTheme(val key: String) : ProfileAction
     data class ChangeChatWallpaper(val uri: String) : ProfileAction
+    data class WebLoginQrScanned(val raw: String) : ProfileAction
+    data object ConfirmWebLogin : ProfileAction
+    data object DismissWebLoginConfirm : ProfileAction
     data object CloseProfile : ProfileAction
 }
