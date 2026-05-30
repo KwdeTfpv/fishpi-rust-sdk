@@ -55,7 +55,8 @@ impl_str_enum!(UserBagType{
 });
 
 /// 用户背包信息
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Default, Clone, Debug, Deserialize)]
+#[serde(default)]
 #[allow(non_snake_case)]
 pub struct UserBag {
     /// 免签卡
