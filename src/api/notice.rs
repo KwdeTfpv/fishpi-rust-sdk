@@ -130,11 +130,11 @@ impl Clone for Notice {
 }
 
 impl Notice {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             connection: WsConnection::new(),
             handler: NoticeHandler::new(parse_notice_message, None, "notice"),
-            api_key,
+            api_key: api_key.into(),
         }
     }
 

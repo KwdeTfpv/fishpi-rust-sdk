@@ -1,11 +1,12 @@
 use std::str::FromStr;
 
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
 use crate::{impl_str_enum, utils::error::Error};
 
 /// 猜拳类型
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum GestureType {
     /// 石
@@ -32,98 +33,206 @@ pub enum RedPacketType {
 }
 
 /// 红包数据
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct RedPacket {
     /// 红包类型
+    #[serde(rename = "type", serialize_with = "serialize_redpacket_type")]
     pub r#type: RedPacketType,
     /// 红包积分
     pub money: u32,
     /// 红包个数
     pub count: u32,
     /// 祝福语
-    pub msg: String,
+    #[serde(rename = "msg")]
+    pub message: String,
     /// 接收者, 专属红包有效
-    pub recivers: Vec<String>,
+    #[serde(rename = "recivers")]
+    pub receivers: Vec<String>,
     /// 出拳, 猜拳红包有效
+    #[serde(serialize_with = "serialize_gesture")]
     pub gesture: Option<GestureType>,
 }
 
 /// 红包领取者信息
-#[derive(Clone, Debug)]
-#[allow(non_snake_case)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct RedPacketGot {
     /// 用户ID
-    pub userId: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
     /// 用户名
-    pub userName: String,
+    #[serde(rename = "userName")]
+    pub user_name: String,
     /// 用户头像
     pub avatar: String,
     /// 领取到的积分
-    pub userMoney: u32,
+    #[serde(
+        rename = "userMoney",
+        alias = "money",
+        default,
+        deserialize_with = "deserialize_u32"
+    )]
+    pub user_money: u32,
     /// 领取时间
     pub time: String,
 }
 
 /// 红包历史信息
-#[derive(Clone, Debug)]
-#[allow(non_snake_case)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct RedPacketMessage {
     /// 消息类型，固定为redPacket
-    pub msgType: String,
+    #[serde(rename = "msgType")]
+    pub msg_type: String,
     /// 红包数
+    #[serde(deserialize_with = "deserialize_u32")]
     pub count: u32,
     /// 领取数
+    #[serde(deserialize_with = "deserialize_u32")]
     pub got: u32,
     /// 内含积分
+    #[serde(deserialize_with = "deserialize_u32")]
     pub money: u32,
     /// 祝福语
-    pub msg: String,
+    #[serde(rename = "msg")]
+    pub message: String,
     /// 发送者ID
-    pub senderId: String,
+    #[serde(rename = "senderId")]
+    pub sender_id: String,
     /// 出拳，猜拳红包有效
-    pub GestureType: Option<GestureType>,
+    #[serde(
+        rename = "GestureType",
+        alias = "gesture",
+        default,
+        deserialize_with = "deserialize_optional_gesture"
+    )]
+    pub gesture: Option<GestureType>,
     /// 接收者，专属红包有效
-    pub recivers: Vec<String>,
+    #[serde(
+        rename = "recivers",
+        alias = "receivers",
+        default,
+        deserialize_with = "deserialize_string_vec"
+    )]
+    pub receivers: Vec<String>,
     /// 已领取者列表
+    #[serde(default, deserialize_with = "deserialize_got_vec")]
     pub who: Vec<RedPacketGot>,
 }
 
 /// 红包基本信息
-#[derive(Clone, Debug)]
-#[allow(non_snake_case)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct RedPacketBase {
     /// 数量
+    #[serde(deserialize_with = "deserialize_u32")]
     pub count: u32,
     /// 猜拳类型
+    #[serde(default, deserialize_with = "deserialize_optional_gesture")]
     pub gesture: Option<GestureType>,
     /// 领取数
+    #[serde(deserialize_with = "deserialize_u32")]
     pub got: u32,
     /// 祝福语
-    pub msg: String,
+    #[serde(rename = "msg")]
+    pub message: String,
     /// 发送者用户名
-    pub userName: String,
+    #[serde(rename = "userName")]
+    pub user_name: String,
     /// 用户头像
-    pub userAvatarURL: String,
+    #[serde(rename = "userAvatarURL")]
+    pub user_avatar_url: String,
 }
 
 /// 红包信息
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct RedPacketInfo {
     pub info: RedPacketBase,
-    pub recivers: Vec<String>,
+    #[serde(
+        rename = "recivers",
+        alias = "receivers",
+        default,
+        deserialize_with = "deserialize_string_vec"
+    )]
+    pub receivers: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_got_vec")]
     pub who: Vec<RedPacketGot>,
 }
 
 fn parse_string_list(data: &Value, primary_key: &str, fallback_key: &str) -> Vec<String> {
     data.get(primary_key)
         .or_else(|| data.get(fallback_key))
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(ToString::to_string))
-                .collect()
-        })
+        .map(value_to_string_vec)
         .unwrap_or_default()
+}
+
+fn serialize_redpacket_type<S>(value: &RedPacketType, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(value.as_str())
+}
+
+fn serialize_gesture<S>(value: &Option<GestureType>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match value {
+        Some(gesture) => serializer.serialize_some(&(*gesture as u8)),
+        None => serializer.serialize_none(),
+    }
+}
+
+fn deserialize_u32<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+    value_to_u32(&value).ok_or_else(|| serde::de::Error::custom("Expected u32 or numeric string"))
+}
+
+fn value_to_u32(value: &Value) -> Option<u32> {
+    value
+        .as_u64()
+        .or_else(|| {
+            value
+                .as_i64()
+                .and_then(|n| if n >= 0 { Some(n as u64) } else { None })
+        })
+        .or_else(|| value.as_str().and_then(|s| s.trim().parse::<u64>().ok()))
+        .and_then(|n| u32::try_from(n).ok())
+}
+
+fn deserialize_optional_gesture<'de, D>(deserializer: D) -> Result<Option<GestureType>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    let Some(value) = value else {
+        return Ok(None);
+    };
+
+    let parsed = if let Some(index) = value.as_u64() {
+        match index {
+            0 => Some(GestureType::Rock),
+            1 => Some(GestureType::Scissors),
+            2 => Some(GestureType::Paper),
+            _ => {
+                return Err(serde::de::Error::custom("Invalid gesture index"));
+            }
+        }
+    } else if let Some(text) = value.as_str() {
+        match text {
+            "0" => Some(GestureType::Rock),
+            "1" => Some(GestureType::Scissors),
+            "2" => Some(GestureType::Paper),
+            _ => Some(
+                GestureType::from_str(text)
+                    .map_err(|_| serde::de::Error::custom("Invalid gesture"))?,
+            ),
+        }
+    } else {
+        return Err(serde::de::Error::custom("Invalid gesture value"));
+    };
+
+    Ok(parsed)
 }
 
 fn parse_gesture(
@@ -156,98 +265,92 @@ fn parse_gesture(
     }
 }
 
-fn parse_who_list(data: &Value) -> Result<Vec<RedPacketGot>, Error> {
-    let Some(who_array) = data.get("who").and_then(|v| v.as_array()) else {
-        return Ok(Vec::new());
-    };
-
-    let mut got_list = Vec::with_capacity(who_array.len());
-    for item in who_array {
-        let user_money = item
-            .get("userMoney")
-            .or_else(|| item.get("money"))
-            .and_then(|v| {
-                v.as_u64()
-                    .or_else(|| {
-                        v.as_i64()
-                            .and_then(|n| if n >= 0 { Some(n as u64) } else { None })
-                    })
-                    .or_else(|| v.as_str().and_then(|s| s.parse::<u64>().ok()))
-            })
-            .unwrap_or(0) as u32;
-        got_list.push(RedPacketGot {
-            userId: item["userId"].as_str().unwrap_or("").to_string(),
-            userName: item["userName"].as_str().unwrap_or("").to_string(),
-            avatar: item["avatar"].as_str().unwrap_or("").to_string(),
-            userMoney: user_money,
-            time: item["time"].as_str().unwrap_or("").to_string(),
-        });
+fn value_from_maybe_json_string(value: Value) -> Value {
+    match value {
+        Value::String(text) => {
+            let trimmed = text.trim();
+            if trimmed.starts_with('[') || trimmed.starts_with('{') {
+                serde_json::from_str(trimmed).unwrap_or(Value::String(text))
+            } else {
+                Value::String(text)
+            }
+        }
+        value => value,
     }
+}
 
-    Ok(got_list)
+fn value_to_string_vec(value: &Value) -> Vec<String> {
+    let normalized = value_from_maybe_json_string(value.clone());
+    match normalized {
+        Value::Array(items) => items
+            .into_iter()
+            .filter_map(|item| item.as_str().map(ToString::to_string))
+            .collect(),
+        Value::String(item) if item.trim().is_empty() => Vec::new(),
+        Value::String(item) => vec![item],
+        Value::Null => Vec::new(),
+        _ => Vec::new(),
+    }
 }
 
 /// 红包状态信息
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 #[allow(non_snake_case)]
 pub struct RedPacketStatusMsg {
+    #[serde(rename = "oId")]
     pub oId: String,
+    #[serde(deserialize_with = "deserialize_u32")]
     pub count: u32,
+    #[serde(deserialize_with = "deserialize_u32")]
     pub got: u32,
-    pub whoGive: String,
-    pub whoGot: Vec<String>,
-    pub avatarURL20: String,
-    pub avatarURL48: String,
-    pub avatarURL210: String,
+    #[serde(rename = "whoGive")]
+    pub who_give: String,
+    #[serde(
+        rename = "whoGot",
+        default,
+        deserialize_with = "deserialize_string_vec"
+    )]
+    pub who_got: Vec<String>,
+    #[serde(rename = "userAvatarURL20")]
+    pub user_avatar_url20: String,
+    #[serde(rename = "userAvatarURL48")]
+    pub user_avatar_url48: String,
+    #[serde(rename = "userAvatarURL210")]
+    pub user_avatar_url210: String,
 }
 
 impl RedPacketStatusMsg {
     pub fn from_value(data: &Value) -> Result<Self, Error> {
-        Ok(RedPacketStatusMsg {
-            oId: data["oId"]
-                .as_str()
-                .ok_or_else(|| Error::Parse("Missing oId in RedPacketStatusMsg".to_string()))?
-                .to_string(),
-            count: data["count"].as_u64().ok_or_else(|| {
-                Error::Parse("Missing or invalid count in RedPacketStatusMsg".to_string())
-            })? as u32,
-            got: data["got"].as_u64().ok_or_else(|| {
-                Error::Parse("Missing or invalid got in RedPacketStatusMsg".to_string())
-            })? as u32,
-            whoGive: data["whoGive"]
-                .as_str()
-                .ok_or_else(|| Error::Parse("Missing whoGive in RedPacketStatusMsg".to_string()))?
-                .to_string(),
-            whoGot: if let Some(who_got_array) = data["whoGot"].as_array() {
-                who_got_array
-                    .iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            } else {
-                data["whoGot"]
-                    .as_str()
-                    .map(|s| vec![s.to_string()])
-                    .unwrap_or_default()
-            },
-            avatarURL20: data["userAvatarURL20"]
-                .as_str()
-                .ok_or_else(|| {
-                    Error::Parse("Missing userAvatarURL20 in RedPacketStatusMsg".to_string())
-                })?
-                .to_string(),
-            avatarURL48: data["userAvatarURL48"]
-                .as_str()
-                .ok_or_else(|| {
-                    Error::Parse("Missing userAvatarURL48 in RedPacketStatusMsg".to_string())
-                })?
-                .to_string(),
-            avatarURL210: data["userAvatarURL210"]
-                .as_str()
-                .ok_or_else(|| {
-                    Error::Parse("Missing userAvatarURL210 in RedPacketStatusMsg".to_string())
-                })?
-                .to_string(),
-        })
+        serde_json::from_value(data.clone())
+            .map_err(|e| Error::Parse(format!("Failed to parse RedPacketStatusMsg: {}", e)))
+    }
+}
+
+fn deserialize_string_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    Ok(value.map(|v| value_to_string_vec(&v)).unwrap_or_default())
+}
+
+fn deserialize_got_vec<'de, D>(deserializer: D) -> Result<Vec<RedPacketGot>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    let Some(value) = value else {
+        return Ok(Vec::new());
+    };
+
+    match value_from_maybe_json_string(value) {
+        Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(serde::de::Error::custom),
+        Value::Null => Ok(Vec::new()),
+        _ => Err(serde::de::Error::custom("Expected red packet user list")),
     }
 }
 
@@ -257,14 +360,18 @@ impl Default for RedPacket {
             r#type: RedPacketType::Random,
             money: 32,
             count: 1,
-            msg: "摸鱼者, 事竟成!".to_string(),
-            recivers: Vec::new(),
+            message: "摸鱼者, 事竟成!".to_string(),
+            receivers: Vec::new(),
             gesture: None,
         }
     }
 }
 
 impl RedPacket {
+    pub fn to_value(&self) -> Value {
+        serde_json::to_value(self).expect("RedPacket serialization should not fail")
+    }
+
     pub fn from_value(data: &Value) -> Result<Self, Error> {
         Ok(RedPacket {
             r#type: RedPacketType::from_str(
@@ -281,86 +388,40 @@ impl RedPacket {
                 .as_u64()
                 .ok_or_else(|| Error::Parse("Missing or invalid count in RedPacket".to_string()))?
                 as u32,
-            msg: data["msg"]
+            message: data["msg"]
                 .as_str()
                 .ok_or_else(|| Error::Parse("Missing msg in RedPacket".to_string()))?
                 .to_string(),
-            recivers: parse_string_list(data, "recivers", "receivers"),
+            receivers: parse_string_list(data, "recivers", "receivers"),
             gesture: parse_gesture(data, "gesture", "GestureType", "RedPacket")?,
         })
     }
 }
 
+impl From<&RedPacket> for RedPacket {
+    fn from(value: &RedPacket) -> Self {
+        value.clone()
+    }
+}
+
 impl RedPacketMessage {
     pub fn from_value(data: &Value) -> Result<Self, Error> {
-        Ok(RedPacketMessage {
-            msgType: data["msgType"]
-                .as_str()
-                .ok_or_else(|| Error::Parse("Missing msgType in RedPacketMessage".to_string()))?
-                .to_string(),
-            count: data["count"].as_u64().ok_or_else(|| {
-                Error::Parse("Missing or invalid count in RedPacketMessage".to_string())
-            })? as u32,
-            got: data["got"].as_u64().ok_or_else(|| {
-                Error::Parse("Missing or invalid got in RedPacketMessage".to_string())
-            })? as u32,
-            money: data["money"].as_u64().ok_or_else(|| {
-                Error::Parse("Missing or invalid money in RedPacketMessage".to_string())
-            })? as u32,
-            msg: data["msg"]
-                .as_str()
-                .ok_or_else(|| Error::Parse("Missing msg in RedPacketMessage".to_string()))?
-                .to_string(),
-            senderId: data["senderId"]
-                .as_str()
-                .ok_or_else(|| Error::Parse("Missing senderId in RedPacketMessage".to_string()))?
-                .to_string(),
-            GestureType: parse_gesture(data, "gesture", "GestureType", "RedPacketMessage")?,
-            recivers: parse_string_list(data, "recivers", "receivers"),
-            who: parse_who_list(data)?,
-        })
+        serde_json::from_value(data.clone())
+            .map_err(|e| Error::Parse(format!("Failed to parse RedPacketMessage: {}", e)))
     }
 }
 
 impl RedPacketBase {
     pub fn from_value(data: &Value) -> Result<Self, Error> {
-        Ok(RedPacketBase {
-            count: data["count"].as_u64().ok_or_else(|| {
-                Error::Parse("Missing or invalid count in RedPacketBase".to_string())
-            })? as u32,
-            gesture: parse_gesture(data, "gesture", "GestureType", "RedPacketBase")?,
-            got: data["got"].as_u64().ok_or_else(|| {
-                Error::Parse("Missing or invalid got in RedPacketBase".to_string())
-            })? as u32,
-            msg: data["msg"]
-                .as_str()
-                .ok_or_else(|| Error::Parse("Missing msg in RedPacketBase".to_string()))?
-                .to_string(),
-            userName: data["userName"]
-                .as_str()
-                .ok_or_else(|| Error::Parse("Missing userName in RedPacketBase".to_string()))?
-                .to_string(),
-            userAvatarURL: data["userAvatarURL"]
-                .as_str()
-                .ok_or_else(|| Error::Parse("Missing userAvatarURL in RedPacketBase".to_string()))?
-                .to_string(),
-        })
+        serde_json::from_value(data.clone())
+            .map_err(|e| Error::Parse(format!("Failed to parse RedPacketBase: {}", e)))
     }
 }
 
 impl RedPacketInfo {
     pub fn from_value(data: &Value) -> Result<Self, Error> {
-        let info_data = &data["info"];
-        let info = RedPacketBase::from_value(info_data)?;
-
-        let recivers = parse_string_list(data, "recivers", "receivers");
-        let who = parse_who_list(data)?;
-
-        Ok(RedPacketInfo {
-            info,
-            recivers,
-            who,
-        })
+        serde_json::from_value(data.clone())
+            .map_err(|e| Error::Parse(format!("Failed to parse RedPacketInfo: {}", e)))
     }
 }
 

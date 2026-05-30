@@ -1,3 +1,4 @@
+use crate::chatroom::apply_redpacket_client_config;
 use crate::jni_utils::{string_arg, to_jstring};
 use crate::mappers::*;
 use crate::runtime::runtime_json;
@@ -63,7 +64,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendRedPacket(
             "rockPaperScissors" => RedPacketType::RockPaperScissors,
             _ => RedPacketType::Random,
         };
-        let recivers = receiver_text
+        let receivers = receiver_text
             .split(|c: char| c == ',' || c == '，' || c.is_whitespace())
             .map(str::trim)
             .filter(|s| !s.is_empty())
@@ -72,12 +73,13 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendRedPacket(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let redpacket = &user.redpacket;
+                let mut redpacket = user.redpacket;
+                apply_redpacket_client_config(&mut redpacket);
                 let packet = RedPacket {
                     r#type: packet_type.clone(),
                     money: money as u32,
                     count: count as u32,
-                    msg: if msg.trim().is_empty() {
+                    message: if msg.trim().is_empty() {
                         match packet_type {
                             RedPacketType::RockPaperScissors => "剪刀石头布!".to_string(),
                             RedPacketType::Specify => "看看是不是给你的".to_string(),
@@ -86,7 +88,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendRedPacket(
                     } else {
                         msg.trim().to_string()
                     },
-                    recivers,
+                    receivers,
                     gesture: gesture_from_index(gesture),
                 };
                 redpacket

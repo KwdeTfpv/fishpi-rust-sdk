@@ -117,8 +117,10 @@ pub struct Article {
 }
 
 impl Article {
-    pub fn new(api_key: String) -> Self {
-        Self { api_key }
+    pub fn new(api_key: impl Into<String>) -> Self {
+        Self {
+            api_key: api_key.into(),
+        }
     }
 
     /// 给帖子添加/切换/取消 emoji reaction。
@@ -126,8 +128,8 @@ impl Article {
     /// 再次发送相同 value 表示取消；发送不同 value 表示切换。
     pub async fn reaction(
         &self,
-        article_id: &str,
-        value: &str,
+        article_id: impl Into<String>,
+        value: impl Into<String>,
     ) -> Result<ReactionMutationResult, Error> {
         crate::api::reaction::Reaction::new(self.api_key.clone())
             .article(article_id, value)
@@ -139,9 +141,13 @@ impl Article {
     /// * `data` 文章信息 [ArticlePost]
     ///
     /// 返回文章 Id
-    pub async fn post_article(&self, data: &ArticlePost) -> Result<String, Error> {
+    pub async fn post_article<P>(&self, data: P) -> Result<String, Error>
+    where
+        P: Into<ArticlePost>,
+    {
         let url = "article".to_string();
 
+        let data = data.into();
         let mut data_json = data.to_json()?;
         data_json["apiKey"] = Value::String(self.api_key.clone());
 
@@ -167,9 +173,14 @@ impl Article {
     /// * `data` 文章信息 [ArticlePost]
     ///
     /// 返回文章 Id
-    pub async fn update_article(&self, id: &str, data: &ArticlePost) -> Result<String, Error> {
+    pub async fn update_article<P>(&self, id: impl Into<String>, data: P) -> Result<String, Error>
+    where
+        P: Into<ArticlePost>,
+    {
+        let id = id.into();
         let url = format!("article/{}", id);
 
+        let data = data.into();
         let mut data_json = data.to_json()?;
         data_json["apiKey"] = Value::String(self.api_key.clone());
 
@@ -209,7 +220,11 @@ impl Article {
     }
 
     /// 新建或更新当前用户的文章草稿。
-    pub async fn save_draft(&self, data: &ArticleDraftSave) -> Result<ArticleDraftSummary, Error> {
+    pub async fn save_draft<P>(&self, data: P) -> Result<ArticleDraftSummary, Error>
+    where
+        P: Into<ArticleDraftSave>,
+    {
+        let data = data.into();
         let mut data_json = data.to_json()?;
         data_json["apiKey"] = Value::String(self.api_key.clone());
         let rsp = post("api/article-drafts", Some(data_json)).await?;
@@ -224,7 +239,8 @@ impl Article {
     }
 
     /// 查询指定文章草稿详情。
-    pub async fn draft_detail(&self, id: &str) -> Result<ArticleDraftDetail, Error> {
+    pub async fn draft_detail(&self, id: impl Into<String>) -> Result<ArticleDraftDetail, Error> {
+        let id = id.into();
         let url = build_http_path(
             &format!("api/article-drafts/{}", id),
             &[("apiKey", self.api_key.clone())],
@@ -241,7 +257,8 @@ impl Article {
     }
 
     /// 删除指定文章草稿。
-    pub async fn delete_draft(&self, id: &str) -> Result<String, Error> {
+    pub async fn delete_draft(&self, id: impl Into<String>) -> Result<String, Error> {
+        let id = id.into();
         let url = build_http_path(
             &format!("api/article-drafts/{}", id),
             &[("apiKey", self.api_key.clone())],
@@ -254,7 +271,7 @@ impl Article {
             ));
         }
 
-        Ok(rsp["data"]["id"].as_str().unwrap_or(id).to_string())
+        Ok(rsp["data"]["id"].as_str().unwrap_or(&id).to_string())
     }
 
     /// 查询文章列表
@@ -313,10 +330,11 @@ impl Article {
     /// 返回文章列表
     pub async fn list_by_user(
         &self,
-        user: &str,
+        user: impl Into<String>,
         page: u32,
         size: u32,
     ) -> Result<ArticleList, Error> {
+        let user = user.into();
         let url = build_http_path(
             &format!("api/user/{}/articles", user),
             &[
@@ -343,7 +361,8 @@ impl Article {
     /// - `p` 评论页码
     ///
     /// 返回文章详情 [ArticleDetail]
-    pub async fn detail(&self, id: &str, p: u32) -> Result<ArticleDetail, Error> {
+    pub async fn detail(&self, id: impl Into<String>, p: u32) -> Result<ArticleDetail, Error> {
+        let id = id.into();
         let url = build_http_path(
             &format!("api/article/{}", id),
             &[("p", p.to_string()), ("apiKey", self.api_key.clone())],
@@ -370,7 +389,8 @@ impl Article {
     /// - `id` 文章 id
     ///
     /// 返回 `/api/article/md/{articleId}` 提供的 Markdown 源文本。
-    pub async fn markdown_source(&self, id: &str) -> Result<String, Error> {
+    pub async fn markdown_source(&self, id: impl Into<String>) -> Result<String, Error> {
+        let id = id.into();
         let url = build_http_path(
             &format!("api/article/md/{}", id),
             &[("apiKey", self.api_key.clone())],
@@ -385,7 +405,8 @@ impl Article {
     /// - `like` 点赞类型，true 为点赞，false 为点踩
     ///
     /// 返回文章点赞状态，true 为点赞，false 为点踩
-    pub async fn vote(&self, id: &str, like: bool) -> Result<bool, Error> {
+    pub async fn vote(&self, id: impl Into<String>, like: bool) -> Result<bool, Error> {
+        let id = id.into();
         let url = format!("vote/{}/article", if like { "up" } else { "down" });
 
         let data = json!({
@@ -409,7 +430,8 @@ impl Article {
     /// - `id` 文章id
     ///
     /// 返回执行结果
-    pub async fn thank(&self, id: &str) -> Result<ResponseResult, Error> {
+    pub async fn thank(&self, id: impl Into<String>) -> Result<ResponseResult, Error> {
+        let id = id.into();
         let url = build_http_path(
             "article/thank",
             &[
@@ -428,7 +450,8 @@ impl Article {
     /// - `id` 文章id
     ///
     /// 返回执行结果
-    pub async fn follow(&self, id: &str) -> Result<ResponseResult, Error> {
+    pub async fn follow(&self, id: impl Into<String>) -> Result<ResponseResult, Error> {
+        let id = id.into();
         let url = "follow/article".to_string();
 
         let data = json!({
@@ -446,7 +469,8 @@ impl Article {
     /// - `id` 文章 id
     ///
     /// 返回执行结果
-    pub async fn unfollow(&self, id: &str) -> Result<ResponseResult, Error> {
+    pub async fn unfollow(&self, id: impl Into<String>) -> Result<ResponseResult, Error> {
+        let id = id.into();
         let data = json!({
             "apiKey": self.api_key,
             "followingId": id,
@@ -462,7 +486,8 @@ impl Article {
     /// - `followingId` 文章id
     ///
     /// 返回执行结果
-    pub async fn watch(&self, following_id: &str) -> Result<ResponseResult, Error> {
+    pub async fn watch(&self, following_id: impl Into<String>) -> Result<ResponseResult, Error> {
+        let following_id = following_id.into();
         let url = "follow/article-watch".to_string();
 
         let data = json!({
@@ -480,7 +505,8 @@ impl Article {
     /// - `id` 文章id
     ///
     /// 返回执行结果
-    pub async fn reward(&self, id: &str) -> Result<ResponseResult, Error> {
+    pub async fn reward(&self, id: impl Into<String>) -> Result<ResponseResult, Error> {
+        let id = id.into();
         let url = build_http_path("article/reward", &[("articleId", id.to_string())]);
 
         let data = json!({
@@ -497,7 +523,8 @@ impl Article {
     /// - `id` 文章id
     ///
     /// 返回在线人数
-    pub async fn heat(&self, id: &str) -> Result<u32, Error> {
+    pub async fn heat(&self, id: impl Into<String>) -> Result<u32, Error> {
+        let id = id.into();
         let rsp = post(
             &format!("api/article/heat/{}", id),
             Some(json!({ "apiKey": self.api_key })),
@@ -529,10 +556,11 @@ impl Article {
     /// 返回 WebSocketClient
     pub async fn add_listener(
         &self,
-        id: &str,
+        id: impl Into<String>,
         type_: ArticleType,
         callback: ArticleListener,
     ) -> Result<WebSocketClient, Error> {
+        let id = id.into();
         let url = build_ws_url(
             "fishpi.cn",
             "article-channel",

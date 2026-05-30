@@ -3,6 +3,7 @@ use crate::mappers::*;
 use crate::runtime::runtime_json;
 use crate::session::current_user;
 use fishpi_sdk::api::chatroom::ChatRoom;
+use fishpi_sdk::api::redpacket::Redpacket;
 use fishpi_sdk::api::ws::build_ws_url;
 use fishpi_sdk::model::chatroom::{ChatContentType, ChatRoomMessageType, ChatRoomMsg, ClientType};
 use jni::JNIEnv;
@@ -25,6 +26,15 @@ fn apply_chatroom_client_config(chatroom: &mut ChatRoom) {
     };
     if let Some((client, version)) = guard.as_ref() {
         chatroom.set_client_type(client.clone(), Some(version.clone()));
+    }
+}
+
+pub(crate) fn apply_redpacket_client_config(redpacket: &mut Redpacket) {
+    let Ok(guard) = chatroom_client_config().lock() else {
+        return;
+    };
+    if let Some((client, version)) = guard.as_ref() {
+        redpacket.set_client_type(client.clone(), Some(version.clone()));
     }
 }
 
@@ -326,10 +336,10 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_reactChatRoomMes
                     .await
                     .map_err(|err| format!("贴表情失败: {err}"))?;
                 Ok(json!({
-                    "targetId": result.targetId,
-                    "targetType": result.targetType,
-                    "groupType": result.groupType,
-                    "currentUserReaction": result.currentUserReaction,
+                                            "targetId": result.target_id,
+                                            "targetType": result.target_type,
+                                            "groupType": result.group_type,
+                                            "currentUserReaction": result.current_user_reaction,
                     "summary": result.summary,
                 }))
             })

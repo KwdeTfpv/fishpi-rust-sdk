@@ -29,8 +29,8 @@
 //!         r#type: RedPacketType::Random,
 //!         money: 32,
 //!         count: 5,
-//!         msg: "古德古德".to_string(),
-//!         recivers: vec![],
+//!         message: "古德古德".to_string(),
+//!         receivers: vec![],
 //!         gesture: Some(GestureType::Rock),
 //!     };
 //!     redpacket.send(&rp).await?;
@@ -45,6 +45,7 @@
 use serde_json::json;
 
 use crate::api::chatroom::ChatRoom;
+use crate::model::chatroom::ClientType;
 use crate::model::redpacket::{GestureType, RedPacket, RedPacketInfo};
 use crate::utils::error::Error;
 use crate::utils::post;
@@ -56,11 +57,17 @@ pub struct Redpacket {
 }
 
 impl Redpacket {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: impl Into<String>) -> Self {
+        let api_key = api_key.into();
         Self {
             api_key: api_key.clone(),
             chatroom: ChatRoom::new(api_key),
         }
+    }
+
+    /// 设置发送聊天室消息时使用的客户端类型。
+    pub fn set_client_type(&mut self, client: ClientType, version: Option<String>) {
+        self.chatroom.set_client_type(client, version);
     }
 
     /// 打开一个红包
@@ -71,10 +78,11 @@ impl Redpacket {
     /// [RedPacketInfo]返回红包信息
     pub async fn open(
         &self,
-        oid: &str,
+        oid: impl Into<String>,
         gesture: Option<GestureType>,
     ) -> Result<RedPacketInfo, Error> {
         let url = "chat-room/red-packet/open".to_string();
+        let oid = oid.into();
 
         let data = json!({
             "oId": oid,
@@ -100,16 +108,13 @@ impl Redpacket {
     ///
     /// #### 参数
     /// * `redpacket` 红包对象 [RedPacket]
-    pub async fn send(&self, redpacket: &RedPacket) -> Result<(), Error> {
-        let data = json!({
-            "type": redpacket.r#type.as_str(),
-            "money": redpacket.money,
-            "count": redpacket.count,
-            "msg": redpacket.msg,
-            "recivers": redpacket.recivers,
-            "gesture": redpacket.gesture.clone().map(|g| g as u8),
-            "apiKey": self.api_key
-        });
+    pub async fn send<P>(&self, redpacket: P) -> Result<(), Error>
+    where
+        P: Into<RedPacket>,
+    {
+        let redpacket = redpacket.into();
+        let mut data = redpacket.to_value();
+        data["apiKey"] = json!(self.api_key);
 
         self.chatroom
             .send(format!("[redpacket]{}[/redpacket]", data))

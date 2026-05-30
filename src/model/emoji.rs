@@ -14,9 +14,11 @@ pub struct EmojiGroup {
     /// 排序值。
     pub sort: i64,
     /// 是否为“全部”等默认分组。
-    pub isDefault: bool,
+    #[serde(rename = "isDefault")]
+    pub is_default: bool,
     /// 分组内表情数量。
-    pub emojiCnt: u64,
+    #[serde(rename = "emojiCnt")]
+    pub emoji_count: u64,
     /// 兼容服务端新增字段。
     #[serde(flatten)]
     pub extra: HashMap<String, Value>,
@@ -32,8 +34,8 @@ impl EmojiGroup {
             oId: pick_string(value, &["oId", "groupId", "id", "fileId"]),
             name: pick_string(value, &["name", "groupName"]),
             sort: pick_i64(value, &["sort"]),
-            isDefault: pick_bool(value, &["isDefault", "default", "isAll"]),
-            emojiCnt: pick_u64(value, &["emojiCnt", "count", "emojiCount"]),
+            is_default: pick_bool(value, &["isDefault", "default", "isAll"]),
+            emoji_count: pick_u64(value, &["emojiCnt", "count", "emojiCount"]),
             extra: object.clone().into_iter().collect(),
         })
     }
@@ -56,7 +58,8 @@ pub struct EmojiItem {
     /// 条目 ID。
     pub oId: String,
     /// 所属分组 ID。
-    pub groupId: String,
+    #[serde(rename = "groupId")]
+    pub group_id: String,
     /// 表情名称。
     pub name: String,
     /// 表情图片 URL。
@@ -76,7 +79,7 @@ impl EmojiItem {
 
         Ok(Self {
             oId: pick_string(value, &["oId", "emojiId", "id", "fileId"]),
-            groupId: pick_string(value, &["groupId", "gid"]),
+            group_id: pick_string(value, &["groupId", "gid"]),
             name: pick_string(value, &["name", "fileName"]),
             url: pick_string(
                 value,

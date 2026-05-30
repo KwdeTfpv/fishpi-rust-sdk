@@ -21,7 +21,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_searchAtUsers(
                     .map_err(|err| format!("加载@补全失败: {err}"))?;
                 let names = users
                     .into_iter()
-                    .map(|user| user.userName.trim().to_string())
+                    .map(|user| user.user_name.trim().to_string())
                     .filter(|name| !name.is_empty())
                     .fold(Vec::<String>::new(), |mut acc, name| {
                         if !acc.iter().any(|x| x.eq_ignore_ascii_case(&name)) {

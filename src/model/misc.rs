@@ -20,10 +20,14 @@ pub struct LoginData {
 }
 
 impl LoginData {
-    pub fn new(username: &str, password: &str, mfa_code: Option<String>) -> Self {
+    pub fn new(
+        username: impl Into<String>,
+        password: impl AsRef<str>,
+        mfa_code: Option<String>,
+    ) -> Self {
         LoginData {
-            username: username.to_string(),
-            password: to_md5(password),
+            username: username.into(),
+            password: to_md5(password.as_ref()),
             mfa_code,
         }
     }

@@ -33,7 +33,7 @@
 //!
 //! ```rust,no_run
 //! use fishpi_sdk::{FishPi, model::misc::LoginData};
-//! use fishpi_sdk::model::user::UpdateUserInfoParams;
+//! use fishpi_sdk::model::user::UserProfileUpdate;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -53,14 +53,14 @@
 //!     user.transfer("target_user", 100, "Gift").await?;
 //!
 //!     // 修改用户信息
-//!     let params = UpdateUserInfoParams {
-//!         nickName: Some("New Name".to_string()),
-//!         userUrl: Some("https://example.com".to_string()),
-//!         userIntro: Some("New intro".to_string()),
-//!         userTag: Some("tag".to_string()),
+//!     let params = UserProfileUpdate {
+//!         nickname: Some("New Name".to_string()),
+//!         url: Some("https://example.com".to_string()),
+//!         intro: Some("New intro".to_string()),
+//!         tags: Some("tag".to_string()),
 //!         mbti: None,
 //!     };
-//!     user.update_user_info(params).await?;
+//!     user.update_profile(params).await?;
 //!
 //!     Ok(())
 //! }
@@ -73,7 +73,7 @@ use crate::api::comment::Comment;
 use crate::api::notice::Notice;
 use crate::api::redpacket::Redpacket;
 use crate::model::misc::{Report, UploadResult};
-use crate::model::user::{UpdateUserInfoParams, UserInfo, UserPoint};
+use crate::model::user::{UserInfo, UserPoint, UserProfileUpdate};
 use crate::utils::error::Error;
 use crate::utils::{ResponseResult, build_http_path, get, post, upload_files};
 use serde_json::{Value, json};
@@ -91,7 +91,8 @@ pub struct User {
 }
 
 impl User {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: impl Into<String>) -> Self {
+        let api_key = api_key.into();
         Self {
             api_key: api_key.clone(),
             chatroom: ChatRoom::new(api_key.clone()),
@@ -109,7 +110,8 @@ impl User {
     }
 
     /// 重新设置请求token
-    pub fn set_token(&mut self, token: String) {
+    pub fn set_token(&mut self, token: impl Into<String>) {
+        let token = token.into();
         self.api_key = token.clone();
         self.chatroom.set_api_key(token.clone());
         self.chat = Chat::new(token.clone());
@@ -242,7 +244,14 @@ impl User {
     }
 
     /// 转账
-    pub async fn transfer(&self, username: &str, amount: u32, memo: &str) -> Result<bool, Error> {
+    pub async fn transfer(
+        &self,
+        username: impl Into<String>,
+        amount: u32,
+        memo: impl Into<String>,
+    ) -> Result<bool, Error> {
+        let username = username.into();
+        let memo = memo.into();
         let data = json!({
             "userName": username,
             "amount": amount,
@@ -262,7 +271,8 @@ impl User {
     }
 
     /// 关注用户
-    pub async fn follow(&self, following_id: &str) -> Result<bool, Error> {
+    pub async fn follow(&self, following_id: impl Into<String>) -> Result<bool, Error> {
+        let following_id = following_id.into();
         let data = json!({
             "followingId": following_id,
             "apiKey": self.api_key,
@@ -280,7 +290,8 @@ impl User {
     }
 
     /// 取消关注用户
-    pub async fn unfollow(&self, following_id: &str) -> Result<bool, Error> {
+    pub async fn unfollow(&self, following_id: impl Into<String>) -> Result<bool, Error> {
+        let following_id = following_id.into();
         let data = json!({
             "followingId": following_id,
             "apiKey": self.api_key,
@@ -298,7 +309,8 @@ impl User {
     }
 
     /// 获取用户勋章列表。
-    pub async fn medals(&self, user_name: &str) -> Result<Value, Error> {
+    pub async fn medals(&self, user_name: impl Into<String>) -> Result<Value, Error> {
+        let user_name = user_name.into();
         let data = json!({
             "apiKey": self.api_key,
             "userName": user_name,
@@ -316,7 +328,8 @@ impl User {
     }
 
     /// 修改用户头像
-    pub async fn update_avatar(&self, avatar_url: &str) -> Result<bool, Error> {
+    pub async fn update_avatar(&self, avatar_url: impl Into<String>) -> Result<bool, Error> {
+        let avatar_url = avatar_url.into();
         let data = json!({
             "userAvatarURL": avatar_url,
             "apiKey": self.api_key
@@ -336,13 +349,18 @@ impl User {
     /// 修改用户信息
     ///
     /// #### 参数
-    /// * `params` 用户信息参数 [UpdateUserInfoParams]
-    pub async fn update_user_info(&self, params: UpdateUserInfoParams) -> Result<bool, Error> {
+    /// * `params` 用户信息参数 [UserProfileUpdate]
+    pub async fn update_profile<P>(&self, params: P) -> Result<bool, Error>
+    where
+        P: Into<UserProfileUpdate>,
+    {
+        let params = params.into();
         let data = json!({
-            "userNickname": params.nickName,
-            "userURL": params.userUrl,
-            "userIntro": params.userIntro,
-            "userTag": params.userTag,
+            "userNickname": params.nickname,
+            "userURL": params.url,
+            "userIntro": params.intro,
+            "userTag": params.tags,
+            "mbti": params.mbti,
             "apiKey": self.api_key,
         });
 
@@ -362,7 +380,8 @@ impl User {
     /// - `username` 用户名
     ///
     /// 返回用户信息
-    pub async fn get_user(&self, username: &str) -> Result<UserInfo, Error> {
+    pub async fn get_user(&self, username: impl Into<String>) -> Result<UserInfo, Error> {
+        let username = username.into();
         let url = build_http_path(
             &format!("user/{}", username),
             &[("apiKey", self.api_key.clone())],
@@ -401,7 +420,12 @@ impl User {
     /// - `files` 文件路径列表
     ///
     /// 返回上传结果
-    pub async fn upload(&self, files: Vec<String>) -> Result<UploadResult, Error> {
+    pub async fn upload<I, P>(&self, files: I) -> Result<UploadResult, Error>
+    where
+        I: IntoIterator<Item = P>,
+        P: Into<String>,
+    {
+        let files = files.into_iter().map(Into::into).collect::<Vec<_>>();
         // 检查文件是否存在
         for file in &files {
             if !std::path::Path::new(file).exists() {
@@ -425,7 +449,8 @@ impl User {
     ///
     /// - `username` 用户名
     ///   返回用户积分信息 [UserPoint]
-    pub async fn get_points(&self, username: &str) -> Result<UserPoint, Error> {
+    pub async fn get_points(&self, username: impl Into<String>) -> Result<UserPoint, Error> {
+        let username = username.into();
         let resp = get(&format!("user/{}/point", username)).await?;
 
         if resp.get("code").and_then(|c| c.as_i64()).unwrap_or(-1) != 0 {

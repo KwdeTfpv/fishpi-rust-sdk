@@ -10,7 +10,7 @@ pub struct BreezemoonContent {
     /// 发布者用户名
     #[serde(rename = "breezemoonAuthorName")]
     #[serde(default, deserialize_with = "de_string_lossy")]
-    pub authorName: String,
+    pub author_name: String,
     /// 最后更新时间
     #[serde(rename = "breezemoonUpdated")]
     #[serde(default, deserialize_with = "de_string_lossy")]
@@ -25,10 +25,10 @@ pub struct BreezemoonContent {
     /// 发布者头像URL
     #[serde(rename = "breezemoonAuthorThumbnailURL48")]
     #[serde(default, deserialize_with = "de_string_lossy")]
-    pub thumbnailURL48: String,
+    pub thumbnail_url48: String,
     /// 发布时间
-    #[serde(default, deserialize_with = "de_string_lossy")]
-    pub timeAgo: String,
+    #[serde(rename = "timeAgo", default, deserialize_with = "de_string_lossy")]
+    pub time_ago: String,
     /// 正文
     #[serde(rename = "breezemoonContent")]
     #[serde(default, deserialize_with = "de_string_lossy")]
@@ -36,7 +36,7 @@ pub struct BreezemoonContent {
     /// 创建时间
     #[serde(rename = "breezemoonCreateTime")]
     #[serde(default, deserialize_with = "de_string_lossy")]
-    pub createTime: String,
+    pub create_time: String,
     /// 发布城市（可能为空）
     #[serde(rename = "breezemoonCity")]
     #[serde(default, deserialize_with = "de_string_lossy")]

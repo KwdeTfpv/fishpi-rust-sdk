@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -77,6 +78,7 @@ import androidx.compose.material.icons.rounded.FormatBold
 import androidx.compose.material.icons.rounded.FormatItalic
 import androidx.compose.material.icons.rounded.InsertEmoticon
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.LocalOffer
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Preview
 import androidx.compose.material.icons.rounded.PushPin
@@ -1482,7 +1484,7 @@ private fun ArticleReaderHeader(
                         )
                     }
                     Text(
-                        text = listOf(detail.time, detail.tags.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · "),
+                        text = detail.time,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -1579,21 +1581,37 @@ private fun ArticleTagRow(tags: String) {
     if (tagList.isEmpty()) {
         return
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        tagList.forEach { tag ->
-            SuggestionChip(
-                onClick = {},
-                label = {
-                    Text(
-                        text = tag,
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                },
-                colors = SuggestionChipDefaults.suggestionChipColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    labelColor = MaterialTheme.colorScheme.onSurface,
-                ),
-                border = null,
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.LocalOffer,
+            contentDescription = "标签",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(17.dp),
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = tagList.joinToString(separator = "   "),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.34f)
+                    .height(2.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)),
             )
         }
     }

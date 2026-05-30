@@ -11,16 +11,20 @@ pub struct Reaction {
 }
 
 impl Reaction {
-    pub fn new(api_key: String) -> Self {
-        Self { api_key }
+    pub fn new(api_key: impl Into<String>) -> Self {
+        Self {
+            api_key: api_key.into(),
+        }
     }
 
     /// 给帖子添加/切换/取消 emoji reaction。
     pub async fn article(
         &self,
-        article_id: &str,
-        value: &str,
+        article_id: impl Into<String>,
+        value: impl Into<String>,
     ) -> Result<ReactionMutationResult, Error> {
+        let article_id = article_id.into();
+        let value = value.into();
         self.post_reaction(
             "article/reaction",
             json!({
@@ -36,9 +40,11 @@ impl Reaction {
     /// 给评论添加/切换/取消 emoji reaction。
     pub async fn comment(
         &self,
-        comment_id: &str,
-        value: &str,
+        comment_id: impl Into<String>,
+        value: impl Into<String>,
     ) -> Result<ReactionMutationResult, Error> {
+        let comment_id = comment_id.into();
+        let value = value.into();
         self.post_reaction(
             "comment/reaction",
             json!({
@@ -54,9 +60,11 @@ impl Reaction {
     /// 给聊天室消息添加/切换/取消 emoji reaction。
     pub async fn chat_room(
         &self,
-        o_id: &str,
-        value: &str,
+        o_id: impl Into<String>,
+        value: impl Into<String>,
     ) -> Result<ReactionMutationResult, Error> {
+        let o_id = o_id.into();
+        let value = value.into();
         self.post_reaction(
             "chat-room/reaction",
             json!({

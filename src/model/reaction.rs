@@ -4,19 +4,20 @@ use serde_json::Value;
 
 /// Emoji Reaction 用户详情。
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[allow(non_snake_case)]
 pub struct ReactionUserDetail {
     /// 用户名。
-    pub userName: String,
+    #[serde(rename = "userName")]
+    pub user_name: String,
     /// 显示名，例如：只有午安(Kirito)。
-    pub displayName: String,
+    #[serde(rename = "displayName")]
+    pub display_name: String,
     /// 头像地址。
-    pub avatarURL: String,
+    #[serde(rename = "avatarURL")]
+    pub avatar_url: String,
 }
 
 /// Emoji Reaction 汇总项。
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[allow(non_snake_case)]
 pub struct ReactionSummaryItem {
     /// 表情值，例如 thumbsup。
     pub value: String,
@@ -30,20 +31,19 @@ pub struct ReactionSummaryItem {
     #[serde(default)]
     pub users: Vec<String>,
     /// 点过该表情的用户详情列表。
-    #[serde(default)]
-    pub userDetails: Vec<ReactionUserDetail>,
+    #[serde(rename = "userDetails", default)]
+    pub user_details: Vec<ReactionUserDetail>,
 }
 
 /// Emoji Reaction 通用返回数据。
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[allow(non_snake_case)]
 pub struct ReactionState {
     /// Reaction 汇总列表。
-    #[serde(default)]
-    pub reactionSummary: Vec<ReactionSummaryItem>,
+    #[serde(rename = "reactionSummary", default)]
+    pub reaction_summary: Vec<ReactionSummaryItem>,
     /// 当前登录用户选中的表情值，没有则为空字符串。
-    #[serde(default)]
-    pub currentUserReaction: String,
+    #[serde(rename = "currentUserReaction", default)]
+    pub current_user_reaction: String,
 }
 
 impl ReactionState {
@@ -55,16 +55,19 @@ impl ReactionState {
 
 /// Emoji Reaction 写入接口返回数据。
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[allow(non_snake_case)]
 pub struct ReactionMutationResult {
     /// 目标对象 oId。
-    pub targetId: String,
+    #[serde(rename = "targetId")]
+    pub target_id: String,
     /// 目标类型：article/comment/chat。
-    pub targetType: String,
+    #[serde(rename = "targetType")]
+    pub target_type: String,
     /// Reaction 分组，目前为 emoji。
-    pub groupType: String,
+    #[serde(rename = "groupType")]
+    pub group_type: String,
     /// 当前登录用户最终选中的表情值，没有则为空字符串。
-    pub currentUserReaction: String,
+    #[serde(rename = "currentUserReaction")]
+    pub current_user_reaction: String,
     /// 目标对象最新的表情汇总。
     #[serde(default)]
     pub summary: Vec<ReactionSummaryItem>,

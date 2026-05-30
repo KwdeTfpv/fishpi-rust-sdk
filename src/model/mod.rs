@@ -17,16 +17,18 @@ use crate::{
 use serde::{Deserialize, Deserializer};
 
 #[derive(Clone, Debug, Default, Deserialize)]
-#[allow(non_snake_case)]
 pub struct MuteItem {
     /// 解除禁言时间戳
     pub time: u64,
     /// 用户头像
-    pub userAvatarURL: String,
+    #[serde(rename = "userAvatarURL")]
+    pub user_avatar_url: String,
     /// 用户名
-    pub userName: String,
+    #[serde(rename = "userName")]
+    pub user_name: String,
     /// 用户昵称
-    pub userNickname: String,
+    #[serde(rename = "userNickname")]
+    pub user_nickname: String,
 }
 
 impl MuteItem {

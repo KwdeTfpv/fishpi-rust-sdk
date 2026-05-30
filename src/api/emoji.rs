@@ -13,8 +13,10 @@ pub struct Emoji {
 }
 
 impl Emoji {
-    pub fn new(api_key: String) -> Self {
-        Self { api_key }
+    pub fn new(api_key: impl Into<String>) -> Self {
+        Self {
+            api_key: api_key.into(),
+        }
     }
 
     /// 获取表情分组列表。
@@ -25,18 +27,17 @@ impl Emoji {
     }
 
     /// 获取指定分组内的表情。
-    pub async fn group_emojis(&self, group_id: &str) -> Result<Vec<EmojiItem>, Error> {
-        let path = build_http_path(
-            "api/emoji/group/emojis",
-            &[("groupId", group_id.to_string())],
-        );
+    pub async fn group_emojis(&self, group_id: impl Into<String>) -> Result<Vec<EmojiItem>, Error> {
+        let group_id = group_id.into();
+        let path = build_http_path("api/emoji/group/emojis", &[("groupId", group_id)]);
         let resp = get_with_body(&path, Some(self.api_key_body())).await?;
         ensure_success(&resp, "Emoji group items API error")?;
         parse_items(&resp)
     }
 
     /// 上传 URL 到“全部”分组。
-    pub async fn upload_url(&self, url: &str) -> Result<EmojiItem, Error> {
+    pub async fn upload_url(&self, url: impl Into<String>) -> Result<EmojiItem, Error> {
+        let url = url.into();
         let resp = post(
             "api/emoji/upload",
             Some(json!({
@@ -50,7 +51,12 @@ impl Emoji {
     }
 
     /// 创建分组。
-    pub async fn create_group(&self, name: &str, sort: i64) -> Result<EmojiGroup, Error> {
+    pub async fn create_group(
+        &self,
+        name: impl Into<String>,
+        sort: i64,
+    ) -> Result<EmojiGroup, Error> {
+        let name = name.into();
         let resp = post(
             "api/emoji/group/create",
             Some(json!({
@@ -67,10 +73,12 @@ impl Emoji {
     /// 更新分组。
     pub async fn update_group(
         &self,
-        group_id: &str,
-        name: &str,
+        group_id: impl Into<String>,
+        name: impl Into<String>,
         sort: i64,
     ) -> Result<EmojiGroup, Error> {
+        let group_id = group_id.into();
+        let name = name.into();
         let resp = post(
             "api/emoji/group/update",
             Some(json!({
@@ -86,7 +94,8 @@ impl Emoji {
     }
 
     /// 删除分组。
-    pub async fn delete_group(&self, group_id: &str) -> Result<(), Error> {
+    pub async fn delete_group(&self, group_id: impl Into<String>) -> Result<(), Error> {
+        let group_id = group_id.into();
         let resp = post(
             "api/emoji/group/delete",
             Some(json!({
@@ -101,11 +110,13 @@ impl Emoji {
     /// 分组添加已有表情。
     pub async fn add_emoji(
         &self,
-        group_id: &str,
-        emoji_id: &str,
+        group_id: impl Into<String>,
+        emoji_id: impl Into<String>,
         sort: i64,
         name: Option<&str>,
     ) -> Result<EmojiItem, Error> {
+        let group_id = group_id.into();
+        let emoji_id = emoji_id.into();
         let mut data = json!({
             "apiKey": self.api_key,
             "groupId": group_id,
@@ -122,11 +133,13 @@ impl Emoji {
     /// 分组添加 URL 表情。
     pub async fn add_url_emoji(
         &self,
-        group_id: &str,
-        url: &str,
+        group_id: impl Into<String>,
+        url: impl Into<String>,
         sort: i64,
         name: Option<&str>,
     ) -> Result<EmojiItem, Error> {
+        let group_id = group_id.into();
+        let url = url.into();
         let mut data = json!({
             "apiKey": self.api_key,
             "groupId": group_id,
@@ -141,7 +154,13 @@ impl Emoji {
     }
 
     /// 从分组移除表情。若 groupId 为“全部”，服务端会同时从所有分组移除。
-    pub async fn remove_emoji(&self, group_id: &str, emoji_id: &str) -> Result<(), Error> {
+    pub async fn remove_emoji(
+        &self,
+        group_id: impl Into<String>,
+        emoji_id: impl Into<String>,
+    ) -> Result<(), Error> {
+        let group_id = group_id.into();
+        let emoji_id = emoji_id.into();
         let resp = post(
             "api/emoji/group/remove-emoji",
             Some(json!({
@@ -157,11 +176,14 @@ impl Emoji {
     /// 更新表情项（重命名/排序）。
     pub async fn update_emoji(
         &self,
-        o_id: &str,
-        group_id: &str,
-        name: &str,
+        o_id: impl Into<String>,
+        group_id: impl Into<String>,
+        name: impl Into<String>,
         sort: i64,
     ) -> Result<EmojiItem, Error> {
+        let o_id = o_id.into();
+        let group_id = group_id.into();
+        let name = name.into();
         let resp = post(
             "api/emoji/emoji/update",
             Some(json!({

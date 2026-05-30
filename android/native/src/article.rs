@@ -429,13 +429,13 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_publishArticle(
             content: string_arg(&mut env, content)?,
             tags: string_arg(&mut env, tags)?,
             commentable: commentable != 0,
-            notifyFollowers: notify_followers != 0,
+            notify_followers: notify_followers != 0,
             type_: ArticleType::Normal,
-            showInList: show_in_list.max(0) as u32,
-            rewardContent: blank_to_none(string_arg(&mut env, reward_content)?),
-            rewardPoint: reward_point_or_none(string_arg(&mut env, reward_point)?),
+            show_in_list: show_in_list.max(0) as u32,
+            reward_content: blank_to_none(string_arg(&mut env, reward_content)?),
+            reward_point: reward_point_or_none(string_arg(&mut env, reward_point)?),
             anonymous: Some(anonymous != 0),
-            offerPoint: qna_offer_or_none(qna_offer_point),
+            offer_point: qna_offer_or_none(qna_offer_point),
             is_good_article: if is_good_article != 0 {
                 Some("yes".to_string())
             } else {
@@ -477,14 +477,14 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendArticleComme
                 let user = current_user(&token).await?;
                 let comment = &user.comment;
                 let payload = CommentPost {
-                    articleId: id,
-                    isAnonymous: false,
+                    article_id: id,
+                    anonymous: false,
                     // commentVisible=true 会触发“仅作者和楼主可见”，默认评论应公开显示。
-                    isVisible: false,
+                    visible: false,
                     content: text,
-                    replyId: reply,
+                    reply_id: reply,
                 };
-                let result = timeout(Duration::from_secs(15), comment.send(&payload))
+                let result = timeout(Duration::from_secs(15), comment.send(payload))
                     .await
                     .map_err(|_| "发送评论超时".to_string())?
                     .map_err(|err| format!("发送评论失败: {err}"))?;

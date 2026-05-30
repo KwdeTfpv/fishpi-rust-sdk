@@ -5,30 +5,30 @@ use serde_json::Value;
 #[derive(Clone, Debug, Deserialize)]
 #[allow(non_snake_case)]
 pub struct ChatData {
-    #[serde(default)]
-    pub toId: String,
+    #[serde(default, rename = "toId")]
+    pub to_id: String,
     #[serde(default)]
     pub preview: String,
     #[serde(default)]
     pub user_session: String,
-    #[serde(default)]
-    pub senderAvatar: String,
+    #[serde(default, rename = "senderAvatar")]
+    pub sender_avatar: String,
     #[serde(default)]
     pub markdown: String,
-    #[serde(default)]
-    pub receiverAvatar: String,
+    #[serde(default, rename = "receiverAvatar")]
+    pub receiver_avatar: String,
     #[serde(default)]
     pub oId: String,
     #[serde(default)]
     pub time: String,
-    #[serde(default)]
-    pub fromId: String,
-    #[serde(default)]
-    pub senderUserName: String,
+    #[serde(default, rename = "fromId")]
+    pub from_id: String,
+    #[serde(default, rename = "senderUserName")]
+    pub sender_user_name: String,
     #[serde(default)]
     pub content: String,
-    #[serde(default)]
-    pub receiverUserName: String,
+    #[serde(default, rename = "receiverUserName")]
+    pub receiver_user_name: String,
 }
 impl ChatData {
     pub fn from_value(data: &Value) -> Result<Self, Error> {
@@ -38,13 +38,15 @@ impl ChatData {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[allow(non_snake_case)]
 pub struct ChatNotice {
     pub command: String,
-    pub userId: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
     pub preview: String,
-    pub senderAvatar: String,
-    pub senderUserName: String,
+    #[serde(rename = "senderAvatar")]
+    pub sender_avatar: String,
+    #[serde(rename = "senderUserName")]
+    pub sender_user_name: String,
 }
 
 impl ChatNotice {

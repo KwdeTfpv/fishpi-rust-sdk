@@ -59,6 +59,7 @@ data class ChatRoomMessage(
     val reactionSummary: List<ReactionSummaryItem> = emptyList(),
     val currentUserReaction: String = "",
     val redPacket: RedPacketPreview? = null,
+    val music: MusicPreview? = null,
     val quote: ChatQuotePreview? = null,
 ) {
     val isBarrager: Boolean
@@ -117,6 +118,14 @@ data class ChatRoomMessage(
                 put("who", org.json.JSONArray(packet.who.map { it.toJson() }))
             })
         }
+        music?.let { item ->
+            put("music", org.json.JSONObject().apply {
+                put("coverURL", item.coverUrl)
+                put("source", item.source)
+                put("title", item.title)
+                put("from", item.from)
+            })
+        }
         quote?.let { quoteItem ->
             put("quote", org.json.JSONObject().apply {
                 put("text", quoteItem.text)
@@ -125,6 +134,13 @@ data class ChatRoomMessage(
         }
     }
 }
+
+data class MusicPreview(
+    val coverUrl: String = "",
+    val source: String = "",
+    val title: String = "",
+    val from: String = "",
+)
 
 data class ChatQuotePreview(
     val text: String,

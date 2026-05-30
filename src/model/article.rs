@@ -81,7 +81,7 @@ where
 }
 
 /// 发帖信息
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize)]
 #[allow(non_snake_case)]
 pub struct ArticlePost {
     /// 帖子标题
@@ -101,39 +101,40 @@ pub struct ArticlePost {
     pub commentable: bool,
     /// 是否通知帖子关注者
     #[serde(rename = "articleNotifyFollowers")]
-    pub notifyFollowers: bool,
+    pub notify_followers: bool,
     /// 帖子类型，ArticleType
     #[serde(rename = "articleType")]
     pub type_: ArticleType,
     /// 是否在列表展示
     #[serde(rename = "articleShowInList")]
-    pub showInList: u32,
+    pub show_in_list: u32,
     /// 打赏内容
     #[serde(rename = "articleRewardContent")]
-    pub rewardContent: Option<String>,
+    pub reward_content: Option<String>,
     /// 打赏积分
     #[serde(rename = "articleRewardPoint")]
-    pub rewardPoint: Option<String>,
+    pub reward_point: Option<String>,
     /// 是否匿名
     #[serde(rename = "articleAnonymous")]
     pub anonymous: Option<bool>,
     /// 提问悬赏积分
     #[serde(rename = "articleQnAOfferPoint")]
-    pub offerPoint: Option<u32>,
+    pub offer_point: Option<u32>,
     /// 是否作为好帖领取奖励，传入 yes 时服务端按好帖处理。
     #[serde(rename = "isGoodArticle", skip_serializing_if = "Option::is_none")]
     pub is_good_article: Option<String>,
 }
 
 impl ArticlePost {
-    pub fn from_value(data: &Value) -> Result<Self, Error> {
-        serde_json::from_value(data.clone())
-            .map_err(|e| Error::Parse(format!("Failed to parse ArticlePost: {}", e)))
-    }
-
     pub fn to_json(&self) -> Result<Value, Error> {
         serde_json::to_value(self)
             .map_err(|e| Error::Parse(format!("Failed to serialize ArticlePost: {}", e)))
+    }
+}
+
+impl From<&ArticlePost> for ArticlePost {
+    fn from(value: &ArticlePost) -> Self {
+        value.clone()
     }
 }
 
@@ -184,26 +185,33 @@ impl ArticleDraftSave {
     }
 }
 
+impl From<&ArticleDraftSave> for ArticleDraftSave {
+    fn from(value: &ArticleDraftSave) -> Self {
+        value.clone()
+    }
+}
+
 /// 文章草稿列表项。
 #[derive(Clone, Debug, Deserialize)]
 #[allow(non_snake_case)]
 pub struct ArticleDraftSummary {
     pub oId: String,
-    pub articleDraftTitle: String,
-    #[serde(default)]
-    pub articleDraftSummary: String,
-    #[serde(default)]
-    pub articleDraftTags: String,
-    #[serde(default)]
-    pub articleDraftType: u32,
-    #[serde(default)]
-    pub articleDraftColumnId: String,
-    #[serde(default)]
-    pub articleDraftColumnTitle: String,
-    #[serde(default)]
-    pub articleDraftChapterNo: String,
-    #[serde(default)]
-    pub articleDraftUpdatedTime: u64,
+    #[serde(rename = "articleDraftTitle")]
+    pub title: String,
+    #[serde(rename = "articleDraftSummary", default)]
+    pub summary: String,
+    #[serde(rename = "articleDraftTags", default)]
+    pub tags: String,
+    #[serde(rename = "articleDraftType", default)]
+    pub type_: u32,
+    #[serde(rename = "articleDraftColumnId", default)]
+    pub column_id: String,
+    #[serde(rename = "articleDraftColumnTitle", default)]
+    pub column_title: String,
+    #[serde(rename = "articleDraftChapterNo", default)]
+    pub chapter_no: String,
+    #[serde(rename = "articleDraftUpdatedTime", default)]
+    pub updated_time: u64,
 }
 
 impl ArticleDraftSummary {
@@ -217,39 +225,40 @@ impl ArticleDraftSummary {
 #[allow(non_snake_case)]
 pub struct ArticleDraftDetail {
     pub oId: String,
-    pub articleDraftTitle: String,
-    #[serde(default)]
-    pub articleDraftContent: String,
-    #[serde(default)]
-    pub articleDraftThoughtContent: String,
-    #[serde(default)]
-    pub articleDraftTags: String,
-    #[serde(default)]
-    pub articleDraftType: u32,
-    #[serde(default)]
-    pub articleDraftColumnId: String,
-    #[serde(default)]
-    pub articleDraftColumnTitle: String,
-    #[serde(default)]
-    pub articleDraftChapterNo: String,
-    #[serde(default)]
-    pub articleDraftRewardContent: String,
-    #[serde(default)]
-    pub articleDraftRewardPoint: String,
-    #[serde(default)]
-    pub articleDraftQnAOfferPoint: u32,
-    #[serde(default)]
-    pub articleDraftCommentable: bool,
-    #[serde(default)]
-    pub articleDraftAnonymous: bool,
-    #[serde(default)]
-    pub articleDraftNotifyFollowers: bool,
-    #[serde(default)]
-    pub articleDraftShowInList: u32,
-    #[serde(default)]
-    pub articleDraftStatement: u32,
-    #[serde(default)]
-    pub articleDraftUpdatedTime: u64,
+    #[serde(rename = "articleDraftTitle")]
+    pub title: String,
+    #[serde(rename = "articleDraftContent", default)]
+    pub content: String,
+    #[serde(rename = "articleDraftThoughtContent", default)]
+    pub thought_content: String,
+    #[serde(rename = "articleDraftTags", default)]
+    pub tags: String,
+    #[serde(rename = "articleDraftType", default)]
+    pub type_: u32,
+    #[serde(rename = "articleDraftColumnId", default)]
+    pub column_id: String,
+    #[serde(rename = "articleDraftColumnTitle", default)]
+    pub column_title: String,
+    #[serde(rename = "articleDraftChapterNo", default)]
+    pub chapter_no: String,
+    #[serde(rename = "articleDraftRewardContent", default)]
+    pub reward_content: String,
+    #[serde(rename = "articleDraftRewardPoint", default)]
+    pub reward_point: String,
+    #[serde(rename = "articleDraftQnAOfferPoint", default)]
+    pub qna_offer_point: u32,
+    #[serde(rename = "articleDraftCommentable", default)]
+    pub commentable: bool,
+    #[serde(rename = "articleDraftAnonymous", default)]
+    pub anonymous: bool,
+    #[serde(rename = "articleDraftNotifyFollowers", default)]
+    pub notify_followers: bool,
+    #[serde(rename = "articleDraftShowInList", default)]
+    pub show_in_list: u32,
+    #[serde(rename = "articleDraftStatement", default)]
+    pub statement: u32,
+    #[serde(rename = "articleDraftUpdatedTime", default)]
+    pub updated_time: u64,
 }
 
 impl ArticleDraftDetail {
@@ -272,52 +281,52 @@ pub struct ArticleTag {
     pub description: String,
     /// icon 地址
     #[serde(rename = "tagIconPath")]
-    pub iconPath: String,
+    pub icon_path: String,
     /// 标签地址
     #[serde(rename = "tagURI")]
     pub uri: String,
     /// 标签自定义 CSS
     #[serde(rename = "tagCSS")]
-    pub diyCSS: String,
+    pub diy_css: String,
     /// 反对数
     #[serde(rename = "tagBadCnt")]
-    pub badCnt: u64,
+    pub bad_count: u64,
     /// 标签回帖计数
     #[serde(rename = "tagCommentCount")]
-    pub commentCnt: u32,
+    pub comment_count: u32,
     /// 关注数
     #[serde(rename = "tagFollowerCount")]
-    pub followerCnt: u32,
+    pub follower_count: u32,
     /// 点赞数
     #[serde(rename = "tagGoodCnt")]
-    pub goodCnt: u64,
+    pub good_count: u64,
     /// 引用计数
     #[serde(rename = "tagReferenceCount")]
-    pub referenceCnt: u32,
+    pub reference_count: u32,
     /// 标签相关链接计数
     #[serde(rename = "tagLinkCount")]
-    pub linkCnt: u32,
+    pub link_count: u32,
     /// 标签 SEO 描述
     #[serde(rename = "tagSeoDesc")]
-    pub seoDesc: String,
+    pub seo_desc: String,
     /// 标签关键字
     #[serde(rename = "tagSeoKeywords")]
-    pub seoKeywords: String,
+    pub seo_keywords: String,
     /// 标签 SEO 标题
     #[serde(rename = "tagSeoTitle")]
-    pub seoTitle: String,
+    pub seo_title: String,
     /// 标签广告内容
     #[serde(rename = "tagAd")]
-    pub tagAd: String,
+    pub tag_ad: String,
     /// 是否展示广告
     #[serde(rename = "tagShowSideAd")]
-    pub showSideAd: u32,
+    pub show_side_ad: u32,
     /// 标签状态
     #[serde(rename = "tagStatus")]
     pub status: u32,
     /// 标签随机数
     #[serde(rename = "tagRandomDouble")]
-    pub randomDouble: f64,
+    pub random_double: f64,
 }
 
 impl ArticleTag {
@@ -404,157 +413,162 @@ where
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
+#[serde(rename_all = "camelCase")]
 #[allow(non_snake_case)]
 pub struct ArticleAuthor {
     /// 用户是否在线
-    pub isOnline: bool,
+    pub is_online: bool,
     /// 用户在线时长
     #[serde(deserialize_with = "non_negative_u64")]
-    pub onlineMinute: u64,
+    pub online_minute: u64,
     /// 是否公开积分列表
     #[serde(deserialize_with = "bool_from_zero")]
-    pub pointStatus: bool,
+    pub point_status: bool,
     /// 是否公开关注者列表
     #[serde(deserialize_with = "bool_from_zero")]
-    pub followerStatus: bool,
+    pub follower_status: bool,
     /// 用户完成新手指引步数
-    pub guideStep: u64,
+    pub guide_step: u64,
     /// 是否公开在线状态
     #[serde(deserialize_with = "bool_from_zero")]
-    pub onlineStatus: bool,
+    pub online_status: bool,
     /// 当前连续签到起始日
-    pub currentCheckinStreakStart: u64,
+    pub current_checkin_streak_start: u64,
     /// 是否聊天室图片自动模糊
     #[serde(deserialize_with = "bool_from_int")] // == 1
-    pub isAutoBlur: bool,
+    pub is_auto_blur: bool,
     /// 用户标签
     pub tags: String,
     /// 是否公开回帖列表
     #[serde(deserialize_with = "bool_from_zero")]
-    pub commentStatus: bool,
+    pub comment_status: bool,
     /// 用户时区
     pub timezone: String,
     /// 用户个人主页
-    pub homePage: String,
+    pub home_page: String,
     /// 是否启用站外链接跳转页面
     #[serde(deserialize_with = "bool_from_int")] // == 1
-    pub isEnableForwardPage: bool,
+    pub is_enable_forward_page: bool,
     /// 是否公开 UA 信息
+    #[serde(rename = "userUAStatus")]
     #[serde(deserialize_with = "bool_from_zero")]
-    pub userUAStatus: bool,
+    pub user_ua_status: bool,
     /// 自定义首页跳转地址
-    pub userIndexRedirectURL: String,
+    #[serde(rename = "userIndexRedirectURL")]
+    pub user_index_redirect_url: String,
     /// 最近发帖时间
-    pub latestArticleTime: u64,
+    pub latest_article_time: u64,
     /// 标签计数
-    pub tagCount: u64,
+    pub tag_count: u64,
     /// 昵称
     pub nickname: String,
     /// 回帖浏览模式
-    pub listViewMode: u64,
+    pub list_view_mode: u64,
     /// 最长连续签到
-    pub longestCheckinStreak: u64,
+    pub longest_checkin_streak: u64,
     /// 用户头像类型
-    pub avatarType: String,
+    pub avatar_type: String,
     /// 用户确认邮件发送时间
-    pub subMailSendTime: u64,
+    pub sub_mail_send_time: u64,
     /// 用户最后更新时间
-    pub updateTime: u64,
+    pub update_time: u64,
     /// userSubMailStatus
     #[serde(deserialize_with = "bool_from_zero")]
-    pub subMailStatus: bool,
+    pub sub_mail_status: bool,
     /// 是否加入积分排行
     #[serde(deserialize_with = "bool_from_zero")]
-    pub isJoinPointRank: bool,
+    pub is_join_point_rank: bool,
     /// 用户最后登录时间
-    pub latestLoginTime: u64,
+    pub latest_login_time: u64,
     /// 应用角色
-    pub userAppRole: u64,
+    pub user_app_role: u64,
     /// 头像查看模式
-    pub userAvatarViewMode: u64,
+    pub user_avatar_view_mode: u64,
     /// 用户状态
-    pub userStatus: u64,
+    pub user_status: u64,
     /// 用户上次最长连续签到日期
-    pub longestCheckinStreakEnd: u64,
+    pub longest_checkin_streak_end: u64,
     /// 是否公开关注帖子列表
     #[serde(deserialize_with = "bool_from_zero")]
-    pub watchingArticleStatus: bool,
+    pub watching_article_status: bool,
     /// 上次回帖时间
-    pub latestCmtTime: u64,
+    pub latest_comment_time: u64,
     /// 用户省份
     pub province: String,
     /// 用户当前连续签到计数
-    pub currentCheckinStreak: u64,
+    pub current_checkin_streak: u64,
     /// 用户编号
-    pub userNo: u64,
+    pub user_no: u64,
     /// 用户头像
-    pub avatarURL: String,
+    #[serde(rename = "avatarURL")]
+    pub avatar_url: String,
     /// 是否公开关注标签列表
     #[serde(deserialize_with = "bool_from_zero")]
-    pub followingTagStatus: bool,
+    pub following_tag_status: bool,
     /// 用户语言
-    pub userLanguage: String,
+    pub user_language: String,
     /// 是否加入消费排行
     #[serde(deserialize_with = "bool_from_zero")]
-    pub isJoinUsedPointRank: bool,
+    pub is_join_used_point_rank: bool,
     /// 上次签到日期
-    pub currentCheckinStreakEnd: u64,
+    pub current_checkin_streak_end: u64,
     /// 是否公开收藏帖子列表
     #[serde(deserialize_with = "bool_from_zero")]
-    pub followingArticleStatus: bool,
+    pub following_article_status: bool,
     /// 是否启用键盘快捷键
     #[serde(deserialize_with = "bool_from_zero")]
-    pub keyboardShortcutsStatus: bool,
+    pub keyboard_shortcuts_status: bool,
     /// 是否回帖后自动关注帖子
     #[serde(deserialize_with = "bool_from_zero")]
-    pub replyWatchArticleStatus: bool,
+    pub reply_watch_article_status: bool,
     /// 回帖浏览模式
-    pub commentViewMode: u64,
+    pub comment_view_mode: u64,
     /// 是否公开清风明月列表
     #[serde(deserialize_with = "bool_from_zero")]
-    pub breezemoonStatus: bool,
+    pub breezemoon_status: bool,
     /// 用户上次签到时间
-    pub userCheckinTime: u64,
+    pub user_checkin_time: u64,
     /// 用户消费积分
-    pub usedPoint: u64,
+    pub used_point: u64,
     /// 是否公开发帖列表
     #[serde(deserialize_with = "bool_from_zero")]
-    pub articleStatus: bool,
+    pub article_status: bool,
     /// 用户积分
     #[serde(deserialize_with = "non_negative_u64")]
-    pub userPoint: u64,
+    pub user_point: u64,
     /// 用户回帖数
-    pub commentCount: u64,
+    pub comment_count: u64,
     /// 用户个性签名
-    pub userIntro: String,
+    pub user_intro: String,
     /// 移动端主题
-    pub userMobileSkin: String,
+    pub user_mobile_skin: String,
     /// 分页每页条目
-    pub listPageSize: u64,
+    pub list_page_size: u64,
     /// 文章 Id
     pub oId: String,
     /// 用户名
-    pub userName: String,
+    #[serde(rename = "userName")]
+    pub user_name: String,
     /// 是否公开 IP 地理信息
     #[serde(deserialize_with = "bool_from_zero")]
-    pub geoStatus: bool,
+    pub geo_status: bool,
     /// 最长连续签到起始日
-    pub longestCheckinStreakStart: u64,
+    pub longest_checkin_streak_start: u64,
     /// 用户主题
-    pub userSkin: String,
+    pub user_skin: String,
     /// 是否启用 Web 通知
     #[serde(deserialize_with = "bool_from_zero")]
-    pub notifyStatus: bool,
+    pub notify_status: bool,
     /// 公开关注用户列表
     #[serde(deserialize_with = "bool_from_zero")]
-    pub followingUserStatus: bool,
+    pub following_user_status: bool,
     /// 文章数
-    pub articleCount: u64,
+    pub article_count: u64,
     /// 用户角色
-    pub userRole: String,
+    pub user_role: String,
     /// 徽章
-    #[serde(deserialize_with = "deserialize_sys_metal")]
-    pub sysMetal: Vec<Metal>,
+    #[serde(rename = "sysMetal", deserialize_with = "deserialize_sys_metal")]
+    pub sys_metal: Vec<Metal>,
 }
 
 impl ArticleAuthor {
@@ -572,58 +586,58 @@ pub type CommentAuthor = ArticleAuthor;
 pub struct ArticleComment {
     /// 是否优评
     #[serde(rename = "commentNice")]
-    pub isNice: bool,
+    pub is_nice: bool,
     /// 评论创建时间字符串
     #[serde(rename = "commentCreateTimeStr")]
-    pub createTimeStr: String,
+    pub create_time_str: String,
     /// 评论作者 id
     #[serde(rename = "commentAuthorId")]
-    pub authorId: String,
+    pub author_id: String,
     /// 评论分数
     #[serde(deserialize_with = "deserialize_score")]
     pub score: String,
     /// 评论创建时间
     #[serde(rename = "commentCreateTime")]
-    pub createTime: String,
+    pub create_time: String,
     /// 评论作者头像
     #[serde(rename = "commentAuthorURL")]
-    pub authorURL: String,
+    pub author_url: String,
     /// 评论状态
     #[serde(deserialize_with = "deserialize_vote")]
     pub vote: VoteStatus,
     /// 评论引用数
     #[serde(rename = "commentRevisionCount")]
-    pub revisionCount: u64,
+    pub revision_count: u64,
     /// 评论经过时间
     #[serde(rename = "timeAgo")]
-    pub timeAgo: String,
+    pub time_ago: String,
     /// 回复评论 id
     #[serde(rename = "commentOriginalCommentId")]
-    pub replyId: String,
+    pub reply_id: String,
     /// 徽章
-    #[serde(deserialize_with = "deserialize_sys_metal")]
-    pub sysMetal: Vec<Metal>,
+    #[serde(rename = "sysMetal", deserialize_with = "deserialize_sys_metal")]
+    pub sys_metal: Vec<Metal>,
     /// 点赞数
     #[serde(rename = "commentGoodCnt")]
-    pub goodCnt: u64,
+    pub good_count: u64,
     /// 评论是否可见
     #[serde(deserialize_with = "bool_from_zero")]
     pub visible: bool,
     /// 文章 id
     #[serde(rename = "commentOnArticleId")]
-    pub articleId: String,
+    pub article_id: String,
     /// 评论感谢数
     #[serde(rename = "rewardedCnt")]
-    pub rewardedCnt: u64,
+    pub rewarded_count: u64,
     /// 评论地址
     #[serde(rename = "commentSharpURL")]
-    pub sharpURL: String,
+    pub sharp_url: String,
     /// 是否匿名
     #[serde(deserialize_with = "bool_from_int")]
-    pub isAnonymous: bool,
+    pub is_anonymous: bool,
     /// 评论回复数
     #[serde(rename = "commentReplyCnt")]
-    pub replyCnt: u64,
+    pub reply_count: u64,
     /// 评论 id
     #[serde(rename = "oId")]
     pub oId: String,
@@ -640,19 +654,19 @@ pub struct ArticleComment {
     pub author: String,
     /// 评论感谢数
     #[serde(rename = "commentThankCnt")]
-    pub thankCnt: u64,
+    pub thank_count: u64,
     /// 评论点踩数
     #[serde(rename = "commentBadCnt")]
-    pub badCnt: u64,
+    pub bad_count: u64,
     /// 是否已感谢
     #[serde(rename = "rewarded")]
     pub rewarded: bool,
     /// 评论作者头像
     #[serde(rename = "commentAuthorThumbnailURL")]
-    pub thumbnailURL: String,
+    pub thumbnail_url: String,
     /// 评论音频地址
     #[serde(rename = "commentAudioURL")]
-    pub audioURL: String,
+    pub audio_url: String,
     /// 评论是否采纳，1 表示采纳
     #[serde(rename = "commentQnAOffered")]
     pub offered: u64,
@@ -673,7 +687,7 @@ pub struct Pagination {
     pub count: u32,
     /// 建议分页页码
     #[serde(rename = "paginationPageNums")]
-    pub pageNums: Vec<u32>,
+    pub page_nums: Vec<u32>,
 }
 
 impl Pagination {
@@ -816,40 +830,40 @@ where
 pub struct ArticleDetail {
     /// 是否在列表展示
     #[serde(rename = "articleShowInList", deserialize_with = "bool_from_int")]
-    pub showInList: bool,
+    pub show_in_list: bool,
     /// 文章创建时间
     #[serde(rename = "articleCreateTime")]
-    pub createTime: String,
+    pub create_time: String,
     /// 发布者Id
     #[serde(rename = "articleAuthorId")]
-    pub authorId: String,
+    pub author_id: String,
     /// 反对数
     #[serde(rename = "articleBadCnt")]
-    pub badCnt: u32,
+    pub bad_count: u32,
     /// 文章最后评论时间
     #[serde(rename = "articleLatestCmtTime")]
-    pub latestCmtTime: String,
+    pub latest_comment_time: String,
     /// 赞同数
     #[serde(rename = "articleGoodCnt")]
-    pub goodCnt: u32,
+    pub good_count: u32,
     /// 悬赏积分
     #[serde(rename = "articleQnAOfferPoint")]
-    pub offerPoint: u64,
+    pub offer_point: u64,
     /// 文章缩略图
     #[serde(rename = "articleThumbnailURL")]
-    pub thumbnailURL: String,
+    pub thumbnail_url: String,
     /// 置顶序号
     #[serde(rename = "articleStickRemains")]
-    pub stickRemains: u64,
+    pub stick_remains: u64,
     /// 发布时间简写
     #[serde(rename = "timeAgo")]
-    pub timeAgo: String,
+    pub time_ago: String,
     /// 文章更新时间
     #[serde(rename = "articleUpdateTimeStr")]
-    pub updateTimeStr: String,
+    pub update_time_str: String,
     /// 作者用户名
     #[serde(rename = "articleAuthorName")]
-    pub authorName: String,
+    pub author_name: String,
     /// 文章类型
     #[serde(
         rename = "articleType",
@@ -862,40 +876,40 @@ pub struct ArticleDetail {
     pub offered: bool,
     /// 文章创建时间字符串
     #[serde(rename = "articleCreateTimeStr")]
-    pub createTimeStr: String,
+    pub create_time_str: String,
     /// 文章浏览数
     #[serde(rename = "articleViewCount")]
-    pub viewCnt: u64,
+    pub view_count: u64,
     /// 作者头像缩略图
     #[serde(rename = "articleAuthorThumbnailURL20")]
-    pub thumbnailURL20: String,
+    pub thumbnail_url20: String,
     /// 关注数
     #[serde(rename = "articleWatchCnt")]
-    pub watchCnt: u64,
+    pub watch_count: u64,
     /// 文章预览内容
     #[serde(rename = "articlePreviewContent")]
-    pub previewContent: String,
+    pub preview_content: String,
     /// 文章标题
     #[serde(rename = "articleTitleEmoj")]
-    pub titleEmoj: String,
+    pub title_emoji: String,
     /// 文章标题（Unicode 的 Emoji）
     #[serde(rename = "articleTitleEmojUnicode")]
-    pub titleEmojUnicode: String,
+    pub title_emoji_unicode: String,
     /// 文章标题
     #[serde(rename = "articleTitle")]
     pub title: String,
     /// 作者头像缩略图
     #[serde(rename = "articleAuthorThumbnailURL48")]
-    pub thumbnailURL48: String,
+    pub thumbnail_url48: String,
     /// 文章评论数
     #[serde(rename = "articleCommentCount")]
-    pub commentCnt: u64,
+    pub comment_count: u64,
     /// 收藏数
     #[serde(rename = "articleCollectCnt")]
-    pub collectCnt: u64,
+    pub collect_count: u64,
     /// 文章最后评论者
     #[serde(rename = "articleLatestCmterName")]
-    pub latestCmterName: String,
+    pub latest_commenter_name: String,
     /// 文章标签
     #[serde(rename = "articleTags")]
     pub tags: String,
@@ -904,7 +918,7 @@ pub struct ArticleDetail {
     pub oId: String,
     /// 最后评论时间简写
     #[serde(rename = "cmtTimeAgo")]
-    pub cmtTimeAgo: String,
+    pub comment_time_ago: String,
     /// 是否置顶
     #[serde(rename = "articleStick")]
     pub stick: u64,
@@ -914,19 +928,19 @@ pub struct ArticleDetail {
         default,
         deserialize_with = "deserialize_tag_objs"
     )]
-    pub tagObjs: Vec<ArticleTag>,
+    pub tag_objs: Vec<ArticleTag>,
     /// 文章最后评论时间
     #[serde(rename = "articleLatestCmtTimeStr")]
-    pub latestCmtTimeStr: String,
+    pub latest_comment_time_str: String,
     /// 是否匿名
     #[serde(rename = "articleAnonymous", deserialize_with = "bool_from_int")]
     pub anonymous: bool,
     /// 文章感谢数
     #[serde(rename = "articleThankCnt")]
-    pub thankCnt: u64,
+    pub thank_count: u64,
     /// 文章更新时间
     #[serde(rename = "articleUpdateTime")]
-    pub updateTime: String,
+    pub update_time: String,
     /// 文章状态
     #[serde(rename = "articleStatus", deserialize_with = "deserialize_status")]
     pub status: ArticleStatus,
@@ -938,7 +952,7 @@ pub struct ArticleDetail {
     pub perfect: bool,
     /// 作者头像缩略图
     #[serde(rename = "articleAuthorThumbnailURL210")]
-    pub thumbnailURL210: String,
+    pub thumbnail_url210: String,
     /// 文章固定链接
     #[serde(rename = "articlePermalink")]
     pub permalink: String,
@@ -950,14 +964,18 @@ pub struct ArticleDetail {
     )]
     pub author: ArticleAuthor,
     /// 文章感谢数
-    #[serde(rename = "thankedCnt")]
-    pub thankedCnt: u64,
+    #[serde(rename = "thankedCnt", default, deserialize_with = "non_negative_u64")]
+    pub thanked_count: u64,
     /// 文章匿名浏览量
-    #[serde(rename = "articleAnonymousView")]
-    pub anonymousView: u64,
+    #[serde(
+        rename = "articleAnonymousView",
+        default,
+        deserialize_with = "non_negative_u64"
+    )]
+    pub anonymous_view: u64,
     /// 文章浏览量简写
     #[serde(rename = "articleViewCntDisplayFormat")]
-    pub viewCntFormat: String,
+    pub view_count_format: String,
     /// 文章是否启用评论
     #[serde(rename = "articleCommentable")]
     pub commentable: bool,
@@ -966,28 +984,28 @@ pub struct ArticleDetail {
     pub rewarded: bool,
     /// 打赏人数
     #[serde(rename = "rewardedCnt")]
-    pub rewardedCnt: u64,
+    pub rewarded_count: u64,
     /// 文章打赏积分
     #[serde(rename = "articleRewardPoint")]
-    pub rewardPoint: u64,
+    pub reward_point: u64,
     /// 是否已收藏
     #[serde(rename = "isFollowing")]
-    pub isFollowing: bool,
+    pub is_following: bool,
     /// 是否已关注
     #[serde(rename = "isWatching")]
-    pub isWatching: bool,
+    pub is_watching: bool,
     /// 是否是我的文章
     #[serde(rename = "isMyArticle")]
-    pub isMyArticle: bool,
+    pub is_my_article: bool,
     /// 是否已感谢
     #[serde(rename = "thanked")]
     pub thanked: bool,
     /// 编辑器类型
     #[serde(rename = "articleEditorType")]
-    pub editorType: u64,
+    pub editor_type: u64,
     /// 文章音频地址
     #[serde(rename = "articleAudioURL")]
-    pub audioURL: String,
+    pub audio_url: String,
     /// 文章目录 HTML
     #[serde(rename = "articleToC")]
     pub table: String,
@@ -999,43 +1017,43 @@ pub struct ArticleDetail {
     pub source: String,
     /// 文章缩略图
     #[serde(rename = "articleImg1URL")]
-    pub img1URL: String,
+    pub img1_url: String,
     /// 文章点赞状态
     #[serde(rename = "articleVote", deserialize_with = "deserialize_vote")]
     pub vote: VoteStatus,
     /// 文章随机数
     #[serde(rename = "articleRandomDouble")]
-    pub randomDouble: f64,
+    pub random_double: f64,
     /// 作者签名
     #[serde(rename = "articleAuthorIntro")]
-    pub authorIntro: String,
+    pub author_intro: String,
     /// 发布城市
     #[serde(rename = "articleCity")]
     pub city: String,
     /// 发布者 IP
     #[serde(rename = "articleIP")]
-    pub IP: String,
+    pub ip: String,
     /// 作者首页地址
     #[serde(rename = "articleAuthorURL")]
-    pub authorURL: String,
+    pub author_url: String,
     /// 推送 Email 推送顺序
     #[serde(rename = "articlePushOrder")]
-    pub pushOrder: u64,
+    pub push_order: u64,
     /// 打赏内容
     #[serde(rename = "articleRewardContent")]
-    pub rewardContent: String,
+    pub reward_content: String,
     /// reddit分数
     #[serde(deserialize_with = "deserialize_reddit_score")]
-    pub redditScore: String,
+    pub reddit_score: String,
     /// 评论分页信息
     #[serde(default, deserialize_with = "deserialize_pagination")]
     pub pagination: Option<Pagination>,
     /// 评论是否可见
     #[serde(rename = "discussionViewable")]
-    pub commentViewable: bool,
+    pub comment_viewable: bool,
     /// 文章修改次数
     #[serde(rename = "articleRevisionCount")]
-    pub revisionCount: u64,
+    pub revision_count: u64,
     /// 文章的评论
     #[serde(
         rename = "articleComments",
@@ -1049,7 +1067,7 @@ pub struct ArticleDetail {
         default,
         deserialize_with = "deserialize_comments"
     )]
-    pub niceComments: Vec<ArticleComment>,
+    pub nice_comments: Vec<ArticleComment>,
 }
 
 impl ArticleDetail {
@@ -1170,34 +1188,46 @@ impl ArticleListType {
 }
 
 /// 评论发布
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize)]
 #[allow(non_snake_case)]
 pub struct CommentPost {
     /// 文章 Id
-    pub articleId: String,
+    #[serde(rename = "articleId")]
+    pub article_id: String,
     /// 是否匿名评论
     #[serde(rename = "commentAnonymous")]
-    pub isAnonymous: bool,
+    pub anonymous: bool,
     /// 评论是否楼主可见
     #[serde(rename = "commentVisible")]
-    pub isVisible: bool,
+    pub visible: bool,
     /// 评论内容
     #[serde(rename = "commentContent")]
     pub content: String,
     /// 回复评论 Id
     #[serde(rename = "commentOriginalCommentId")]
-    pub replyId: String,
+    pub reply_id: String,
 }
 
 impl CommentPost {
-    pub fn from_value(data: &Value) -> Result<Self, Error> {
-        serde_json::from_value(data.clone())
-            .map_err(|e| Error::Parse(format!("Failed to parse CommentPost: {}", e)))
+    pub fn new(article_id: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            article_id: article_id.into(),
+            anonymous: false,
+            visible: false,
+            content: content.into(),
+            reply_id: String::new(),
+        }
     }
 
     pub fn to_value(&self) -> Result<Value, Error> {
         serde_json::to_value(self)
             .map_err(|e| Error::Parse(format!("Failed to serialize CommentPost: {}", e)))
+    }
+}
+
+impl From<&CommentPost> for CommentPost {
+    fn from(value: &CommentPost) -> Self {
+        value.clone()
     }
 }
 
@@ -1213,6 +1243,6 @@ mod tests {
         }))
         .expect("negative onlineMinute should not fail ArticleAuthor parsing");
 
-        assert_eq!(author.onlineMinute, 0);
+        assert_eq!(author.online_minute, 0);
     }
 }

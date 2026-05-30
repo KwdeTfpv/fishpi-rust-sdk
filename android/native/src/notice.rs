@@ -39,10 +39,10 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getNoticeUnreadC
                     "point": count.point,
                     "at": count.at,
                     "broadcast": count.broadcast,
-                    "system": count.sysAnnounce,
+            "system": count.sys_announce,
                     "following": count.following,
                     "commented": count.commented,
-                    "newFollower": count.newFollower,
+            "newFollower": count.new_follower,
                 }))
             })
         }))

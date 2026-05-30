@@ -48,8 +48,10 @@ pub struct BreezeMoon {
 }
 
 impl BreezeMoon {
-    pub fn new(api_key: String) -> Self {
-        Self { api_key }
+    pub fn new(api_key: impl Into<String>) -> Self {
+        Self {
+            api_key: api_key.into(),
+        }
     }
 
     /// 获取清风明月列表
@@ -103,8 +105,9 @@ impl BreezeMoon {
     /// - `content` 内容
     ///
     /// 返回执行结果
-    pub async fn send(&self, content: &str) -> Result<ResponseResult, Error> {
+    pub async fn send(&self, content: impl Into<String>) -> Result<ResponseResult, Error> {
         let url = "breezemoon".to_string();
+        let content = content.into();
 
         let data_json = json!({
             "apiKey": self.api_key,

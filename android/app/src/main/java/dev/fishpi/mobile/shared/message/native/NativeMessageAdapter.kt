@@ -58,7 +58,6 @@ import dev.fishpi.mobile.utils.HtmlTagRegex
 import dev.fishpi.mobile.utils.MarkdownMediaType
 import dev.fishpi.mobile.utils.toFishPiGeneratedBadgeOrNull
 import kotlinx.coroutines.Job
-import org.json.JSONObject
 import kotlin.math.roundToInt
 
 internal class NativeMessageAdapter(
@@ -188,21 +187,12 @@ private val HtmlAnchorTextRegex = Regex(
     setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
 )
 private val MarkdownVisibleTextRegex = Regex("!?\\[([^]]*)]\\(([^)]*)\\)")
-private val MusicBlockRegex = Regex(
-    "\\[music](.*?)\\[/music]",
-    setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
-)
 
 private data class NativeMusicCard(
     val coverUrl: String,
     val sourceUrl: String,
     val title: String,
     val from: String,
-)
-
-private data class NativeMusicExtraction(
-    val cards: List<NativeMusicCard>,
-    val markdown: String,
 )
 
 private class ChatItemDiff(
@@ -747,11 +737,22 @@ internal class NativeMessageViewHolder(
     }
 
     private fun LinearLayout.addMarkdownContent(message: ChatRoomMessage, item: ChatListItem, isMine: Boolean, anchorView: View) {
-        val music = item.renderHints.markdownContent.extractMusicCards()
-        music.cards.forEach { card ->
-            addMusicCard(card, message, isMine, anchorView)
+        message.music?.let { music ->
+            addMusicCard(
+                card = NativeMusicCard(
+                    coverUrl = music.coverUrl.trim(),
+                    sourceUrl = music.source.trim(),
+                    title = music.title.trim(),
+                    from = music.from.trim(),
+                ),
+                message = message,
+                isMine = isMine,
+                anchorView = anchorView,
+            )
+            return
         }
-        val content = music.markdown
+
+        val content = item.renderHints.markdownContent.trim()
         if (content.isBlank()) return
         val tokens = content.extractImageTokens().take(4)
         if (tokens.isEmpty()) {
@@ -1687,81 +1688,6 @@ private fun String.isAnimatedImageUrl(): Boolean {
     val normalized = substringBefore('#').lowercase()
     val path = normalized.substringBefore('?')
     return path.endsWith(".gif") || normalized.contains("image/gif")
-}
-
-private fun String.extractMusicCards(): NativeMusicExtraction {
-    if (isBlank()) return NativeMusicExtraction(emptyList(), this)
-    val cards = mutableListOf<NativeMusicCard>()
-    var cursor = 0
-    val remaining = StringBuilder()
-    MusicBlockRegex.findAll(this).forEach { match ->
-        remaining.append(substring(cursor, match.range.first))
-        val json = match.groupValues.getOrNull(1).orEmpty()
-        val card = runCatching {
-            val payload = JSONObject(json)
-            NativeMusicCard(
-                coverUrl = payload.optString("coverURL").trim(),
-                sourceUrl = payload.optString("source").trim(),
-                title = payload.optString("title").trim(),
-                from = payload.optString("from").trim(),
-            )
-        }.getOrNull() ?: json.extractMusicCardFromBrokenHtml()
-        if (card != null) {
-            cards.add(card)
-        } else {
-            remaining.append(match.value)
-        }
-        cursor = match.range.last + 1
-    }
-    remaining.append(substring(cursor))
-    return NativeMusicExtraction(
-        cards = cards,
-        markdown = remaining.toString().trim(),
-    )
-}
-
-private fun String.extractMusicCardFromBrokenHtml(): NativeMusicCard? {
-    val source = jsonStringField("source")
-    val title = jsonStringField("title")
-    val cover = brokenMusicCoverUrl()
-    if (source.isBlank() && title.isBlank() && cover.isBlank()) return null
-    return NativeMusicCard(
-        coverUrl = cover,
-        sourceUrl = source,
-        title = title,
-        from = jsonStringField("from"),
-    )
-}
-
-private fun String.jsonStringField(name: String): String {
-    val pattern = Regex("\"${Regex.escape(name)}\"\\s*:\\s*\"([^\"]*)\"")
-    return pattern.find(this)
-        ?.groupValues
-        ?.getOrNull(1)
-        .orEmpty()
-        .decodeBasicHtmlEntities()
-        .trim()
-}
-
-private fun String.brokenMusicCoverUrl(): String {
-    val anchorVisibleUrl = Regex(
-        "<a\\b[^>]*>(https?://[^\"<]+)",
-        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
-    ).find(this)
-        ?.groupValues
-        ?.getOrNull(1)
-        .orEmpty()
-        .decodeBasicHtmlEntities()
-        .trim()
-    if (anchorVisibleUrl.isNotBlank()) return anchorVisibleUrl
-
-    return Regex("\"coverURL\"\\s*:\\s*\"(https?://[^\"]*)\"", RegexOption.IGNORE_CASE)
-        .find(this)
-        ?.groupValues
-        ?.getOrNull(1)
-        .orEmpty()
-        .decodeBasicHtmlEntities()
-        .trim()
 }
 
 internal class SharedAvatarDrawableStore {

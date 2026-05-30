@@ -179,11 +179,11 @@ impl Clone for Chat {
 }
 
 impl Chat {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             connection: WsConnection::new(),
             handler: ChatHandler::new(parse_chat_message, None, "chat"),
-            api_key,
+            api_key: api_key.into(),
         }
     }
 
@@ -338,11 +338,12 @@ impl Chat {
     /// 返回 私聊消息列表
     pub async fn history(
         &self,
-        user: String,
+        user: impl Into<String>,
         page: u32,
         size: u32,
         autoread: bool,
     ) -> Result<Vec<ChatData>, Error> {
+        let user = user.into();
         let url = build_http_path(
             "chat/get-message",
             &[
@@ -378,7 +379,8 @@ impl Chat {
     /// - `user` 用户名
     ///
     /// 返回 执行结果
-    pub async fn mark_as_read(&self, user: String) -> Result<bool, Error> {
+    pub async fn mark_as_read(&self, user: impl Into<String>) -> Result<bool, Error> {
+        let user = user.into();
         let to_user_url = build_http_path(
             "chat/mark-as-read",
             &[("toUser", user.clone()), ("apiKey", self.api_key.clone())],
@@ -465,13 +467,11 @@ impl Chat {
     /// - `msgId` 消息 ID
     ///
     /// 返回 执行结果
-    pub async fn revoke(&self, msg_id: &str) -> Result<bool, Error> {
+    pub async fn revoke(&self, msg_id: impl Into<String>) -> Result<bool, Error> {
+        let msg_id = msg_id.into();
         let url = build_http_path(
             "chat/revoke",
-            &[
-                ("apiKey", self.api_key.clone()),
-                ("oId", msg_id.to_string()),
-            ],
+            &[("apiKey", self.api_key.clone()), ("oId", msg_id)],
         );
         let resp = get(&url).await?;
 

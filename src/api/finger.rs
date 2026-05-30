@@ -13,8 +13,8 @@ pub struct Finger {
 }
 
 impl Finger {
-    pub fn new(key: String) -> Self {
-        Self { key }
+    pub fn new(key: impl Into<String>) -> Self {
+        Self { key: key.into() }
     }
 
     /// 上传摸鱼大闯关关卡数据
@@ -26,11 +26,13 @@ impl Finger {
     /// 返回执行结果
     pub async fn add_mofish_score(
         &self,
-        user_name: &str,
-        stage: &str,
+        user_name: impl Into<String>,
+        stage: impl Into<String>,
         time: Option<u64>,
     ) -> Result<ResponseResult, Error> {
         let url = "api/games/mofish/score".to_string();
+        let user_name = user_name.into();
+        let stage = stage.into();
 
         let time = time.unwrap_or_else(|| {
             std::time::SystemTime::now()
@@ -56,8 +58,12 @@ impl Finger {
     /// - `user_name` 用户在摸鱼派的用户名
     ///
     /// 返回用户IP信息
-    pub async fn query_latest_login_ip(&self, user_name: &str) -> Result<UserIP, Error> {
+    pub async fn query_latest_login_ip(
+        &self,
+        user_name: impl Into<String>,
+    ) -> Result<UserIP, Error> {
         let url = "user/query/latest-login-iP".to_string();
+        let user_name = user_name.into();
 
         let data = json!({
             "goldFingerKey": self.key,
@@ -83,15 +89,16 @@ impl Finger {
     /// 返回执行结果
     pub async fn add_metal(
         &self,
-        user_name: &str,
+        user_name: impl Into<String>,
         metal: &MetalBase,
     ) -> Result<ResponseResult, Error> {
         let url = "user/edit/give-metal".to_string();
+        let user_name = user_name.into();
 
         let mut data = serde_json::to_value(metal)
             .map_err(|e| Error::Parse(format!("Failed to serialize MetalBase: {}", e)))?;
         data["goldFingerKey"] = Value::String(self.key.clone());
-        data["userName"] = Value::String(user_name.to_string());
+        data["userName"] = Value::String(user_name);
         data["attr"] = Value::String(metal.attr.to_string());
 
         let rsp = post(&url, Some(data)).await?;
@@ -105,8 +112,14 @@ impl Finger {
     /// - `name` 勋章名称
     ///
     /// 返回执行结果
-    pub async fn delete_metal(&self, user_name: &str, name: &str) -> Result<ResponseResult, Error> {
+    pub async fn delete_metal(
+        &self,
+        user_name: impl Into<String>,
+        name: impl Into<String>,
+    ) -> Result<ResponseResult, Error> {
         let url = "user/edit/remove-metal".to_string();
+        let user_name = user_name.into();
+        let name = name.into();
 
         let data = json!({
             "goldFingerKey": self.key,
@@ -127,10 +140,12 @@ impl Finger {
     /// 返回执行结果
     pub async fn delete_metal_by_user_id(
         &self,
-        user_id: &str,
-        name: &str,
+        user_id: impl Into<String>,
+        name: impl Into<String>,
     ) -> Result<ResponseResult, Error> {
         let url = "user/edit/remove-metal-by-user-id".to_string();
+        let user_id = user_id.into();
+        let name = name.into();
 
         let data = json!({
             "goldFingerKey": self.key,
@@ -148,8 +163,9 @@ impl Finger {
     /// - `user_name` 用户在摸鱼派的用户名
     ///
     /// 返回用户背包信息
-    pub async fn query_user_bag(&self, user_name: &str) -> Result<UserBag, Error> {
+    pub async fn query_user_bag(&self, user_name: impl Into<String>) -> Result<UserBag, Error> {
         let url = "user/query/items".to_string();
+        let user_name = user_name.into();
 
         let data_json = json!({
             "goldFingerKey": self.key,
@@ -176,11 +192,12 @@ impl Finger {
     /// 返回执行结果
     pub async fn edit_user_bag(
         &self,
-        user_name: &str,
+        user_name: impl Into<String>,
         item: UserBagType,
         sum: i32,
     ) -> Result<ResponseResult, Error> {
         let url = "user/edit/items".to_string();
+        let user_name = user_name.into();
 
         let data_json = json!({
             "goldFingerKey": self.key,
@@ -203,11 +220,13 @@ impl Finger {
     /// 返回执行结果
     pub async fn edit_user_points(
         &self,
-        user_name: &str,
+        user_name: impl Into<String>,
         point: i32,
-        memo: &str,
+        memo: impl Into<String>,
     ) -> Result<ResponseResult, Error> {
         let url = "user/edit/points".to_string();
+        let user_name = user_name.into();
+        let memo = memo.into();
 
         let data_json = json!({
             "goldFingerKey": self.key,
@@ -226,8 +245,9 @@ impl Finger {
     /// - `user_name` 用户在摸鱼派的用户名
     ///
     /// 返回活跃度
-    pub async fn get_liveness(&self, user_name: &str) -> Result<f64, Error> {
+    pub async fn get_liveness(&self, user_name: impl Into<String>) -> Result<f64, Error> {
         let url = "user/liveness".to_string();
+        let user_name = user_name.into();
 
         let data_json = json!({
             "goldFingerKey": self.key,
@@ -250,8 +270,12 @@ impl Finger {
     /// - `user_name` 用户在摸鱼派的用户名
     ///
     /// 返回奖励数量
-    pub async fn get_yesterday_liveness_reward(&self, user_name: &str) -> Result<f64, Error> {
+    pub async fn get_yesterday_liveness_reward(
+        &self,
+        user_name: impl Into<String>,
+    ) -> Result<f64, Error> {
         let url = "activity/yesterday-liveness-reward-api".to_string();
+        let user_name = user_name.into();
 
         let data_json = json!({
             "goldFingerKey": self.key,

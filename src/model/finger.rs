@@ -5,9 +5,9 @@ use crate::{impl_str_enum, utils::error::Error};
 
 /// 摸鱼大闯关信息
 #[derive(Debug, Clone, Deserialize)]
-#[allow(non_snake_case)]
 pub struct MoFishGame {
-    pub userName: String,
+    #[serde(rename = "userName")]
+    pub user_name: String,
     pub stage: String,
     pub time: u64,
 }
@@ -21,10 +21,11 @@ impl MoFishGame {
 
 /// 用户IP信息
 #[derive(Debug, Clone, Deserialize)]
-#[allow(non_snake_case)]
 pub struct UserIP {
-    pub latestLoginIP: String,
-    pub userId: String,
+    #[serde(rename = "latestLoginIP")]
+    pub latest_login_ip: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
 }
 
 impl UserIP {
@@ -57,16 +58,17 @@ impl_str_enum!(UserBagType{
 /// 用户背包信息
 #[derive(Default, Clone, Debug, Deserialize)]
 #[serde(default)]
-#[allow(non_snake_case)]
 pub struct UserBag {
     /// 免签卡
     pub checkin1day: u32,
     /// 两日免签卡
     pub checkin2days: u32,
     /// 补签卡
-    pub patchCheckinCard: u32,
+    #[serde(rename = "patchCheckinCard")]
+    pub patch_checkin_card: u32,
     /// 摸鱼派一周年纪念勋章领取券
-    pub metalTicket: u32,
+    #[serde(rename = "metalTicket")]
+    pub metal_ticket: u32,
 }
 
 impl UserBag {

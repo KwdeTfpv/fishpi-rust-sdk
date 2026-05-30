@@ -22,7 +22,17 @@ internal fun JSONObject.toChatRoomMessage(): ChatRoomMessage {
         reactionSummary = optJSONArray("reactionSummary").toReactionSummaryList(),
         currentUserReaction = optString("currentUserReaction"),
         redPacket = optJSONObject("redPacket")?.toRedPacketPreview(),
+        music = optJSONObject("music")?.toMusicPreview(),
         quote = optJSONObject("quote")?.toChatQuotePreview(),
+    )
+}
+
+private fun JSONObject.toMusicPreview(): MusicPreview {
+    return MusicPreview(
+        coverUrl = optString("coverURL"),
+        source = optString("source"),
+        title = optString("title"),
+        from = optString("from"),
     )
 }
 

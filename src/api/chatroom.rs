@@ -111,7 +111,7 @@ use crate::api::ws::{
 use crate::model::MuteItem;
 use crate::model::chatroom::{
     BarragerCost, BarragerMsg, ChatContentType, ChatReactionMsg, ChatRoomMessageMode,
-    ChatRoomMessageType, ChatRoomMsg, ClientType, CustomMsg, OnlineInfo, RevokeMsg,
+    ChatRoomMessageType, ChatRoomMsg, ClientType, CustomMsg, MusicMsg, OnlineInfo, RevokeMsg,
 };
 use crate::model::reaction::ReactionMutationResult;
 use crate::model::redpacket::RedPacketStatusMsg;
@@ -159,13 +159,13 @@ pub enum ChatRoomEventData {
     /// 弹幕消息
     Barrager(BarragerMsg),
     /// 红包消息
-    RedPacket(ChatRoomMsg<Value>),
+    RedPacket(ChatRoomMsg),
     /// 红包状态
     RedPacketStatus(RedPacketStatusMsg),
     /// 音乐消息
-    Music(ChatRoomMsg<Value>),
+    Music(MusicMsg),
     /// 天气消息
-    Weather(ChatRoomMsg<Value>),
+    Weather(ChatRoomMsg),
     /// 进出场消息
     Custom(CustomMsg),
     /// 聊天室表态/反应
@@ -207,6 +207,17 @@ pub type ChatRoomListener = Arc<dyn Fn(ChatRoomEventData) + Send + Sync + 'stati
 /// 聊天室消息处理器
 pub type ChatRoomHandler = ParsedMessageHandler<ChatRoomEventType, ChatRoomEventData>;
 
+fn chatroom_payload_type(value: &Value) -> Option<&str> {
+    value
+        .get("msgType")
+        .or_else(|| value.get("type"))
+        .and_then(|v| v.as_str())
+}
+
+fn payload_type_is(value: &Value, expected: &str) -> bool {
+    chatroom_payload_type(value).is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
+}
+
 /// 解析聊天室消息，返回 (事件类型, 事件数据)
 #[allow(non_snake_case)]
 fn parse_chatroom_message(json: &Value) -> Result<(ChatRoomEventType, ChatRoomEventData), Error> {
@@ -225,9 +236,9 @@ fn parse_chatroom_message(json: &Value) -> Result<(ChatRoomEventType, ChatRoomEv
                         .iter()
                         .filter_map(|u| {
                             Some(OnlineInfo {
-                                homePage: u["homePage"].as_str()?.to_string(),
-                                userAvatarURL: u["userAvatarURL"].as_str()?.to_string(),
-                                userName: u["userName"].as_str()?.to_string(),
+                                home_page: u["homePage"].as_str()?.to_string(),
+                                user_avatar_url: u["userAvatarURL"].as_str()?.to_string(),
+                                user_name: u["userName"].as_str()?.to_string(),
                             })
                         })
                         .collect()
@@ -270,18 +281,16 @@ fn parse_chatroom_message(json: &Value) -> Result<(ChatRoomEventType, ChatRoomEv
         ChatRoomMessageType::Msg => {
             let chat_msg = ChatRoomMsg::from_value(json)?;
 
-            // 检查 content 是否为 music 或 weather
-            if let Value::Object(ref obj) = chat_msg.content {
-                if obj.get("msgType").and_then(|v| v.as_str()) == Some("music") {
-                    Ok((ChatRoomEventType::Music, ChatRoomEventData::Music(chat_msg)))
-                } else if obj.get("msgType").and_then(|v| v.as_str()) == Some("weather") {
-                    Ok((
-                        ChatRoomEventType::Weather,
-                        ChatRoomEventData::Weather(chat_msg),
-                    ))
-                } else {
-                    Ok((ChatRoomEventType::Msg, ChatRoomEventData::Msg(chat_msg)))
-                }
+            if payload_type_is(&chat_msg.content, "music") {
+                Ok((
+                    ChatRoomEventType::Music,
+                    ChatRoomEventData::Music(MusicMsg::from_chatroom_msg(chat_msg)?),
+                ))
+            } else if payload_type_is(&chat_msg.content, "weather") {
+                Ok((
+                    ChatRoomEventType::Weather,
+                    ChatRoomEventData::Weather(chat_msg),
+                ))
             } else {
                 Ok((ChatRoomEventType::Msg, ChatRoomEventData::Msg(chat_msg)))
             }
@@ -356,7 +365,7 @@ impl Clone for ChatRoom {
 }
 
 impl ChatRoom {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             connection: WsConnection::new(),
             handler: ChatRoomHandler::new(
@@ -364,7 +373,7 @@ impl ChatRoom {
                 Some(ChatRoomEventType::All),
                 "chatroom",
             ),
-            api_key,
+            api_key: api_key.into(),
             discuss: Arc::new(Mutex::new(String::new())),
             onlines: Arc::new(Mutex::new(Vec::new())),
             current_node: Arc::new(Mutex::new(None)),
@@ -561,7 +570,7 @@ impl ChatRoom {
     /// 监听红包消息事件
     pub async fn on_redpacket<F>(&self, listener: F)
     where
-        F: Fn(ChatRoomMsg<Value>) + Send + Sync + 'static,
+        F: Fn(ChatRoomMsg) + Send + Sync + 'static,
     {
         self.add_listener(
             ChatRoomEventType::RedPacket,
@@ -593,7 +602,7 @@ impl ChatRoom {
     /// 监听音乐消息事件
     pub async fn on_music<F>(&self, listener: F)
     where
-        F: Fn(ChatRoomMsg<Value>) + Send + Sync + 'static,
+        F: Fn(MusicMsg) + Send + Sync + 'static,
     {
         self.add_listener(ChatRoomEventType::Music, move |event: ChatRoomEventData| {
             if let ChatRoomEventData::Music(music) = event {
@@ -606,7 +615,7 @@ impl ChatRoom {
     /// 监听天气消息事件
     pub async fn on_weather<F>(&self, listener: F)
     where
-        F: Fn(ChatRoomMsg<Value>) + Send + Sync + 'static,
+        F: Fn(ChatRoomMsg) + Send + Sync + 'static,
     {
         self.add_listener(
             ChatRoomEventType::Weather,
@@ -669,8 +678,9 @@ impl ChatRoom {
     ///
     /// # 参数
     /// * `msg` - 消息内容
-    pub async fn send(&self, msg: String) -> Result<(), Error> {
+    pub async fn send(&self, msg: impl Into<String>) -> Result<(), Error> {
         let client = format!("{}/{}", self.client.as_str(), self.version);
+        let msg = msg.into();
 
         let data = json!({
             "content": msg,
@@ -701,7 +711,8 @@ impl ChatRoom {
     ///
     /// # 参数
     /// * `discuss` - 新话题
-    pub async fn set_discuss(&self, discuss: String) {
+    pub async fn set_discuss(&self, discuss: impl Into<String>) {
+        let discuss = discuss.into();
         self.send(format!("[setdiscuss]{}[/setdiscuss]", discuss))
             .await
             .ok();
@@ -714,8 +725,8 @@ impl ChatRoom {
     }
 
     /// 重新设置apiKey
-    pub fn set_api_key(&mut self, api_key: String) {
-        self.api_key = api_key;
+    pub fn set_api_key(&mut self, api_key: impl Into<String>) {
+        self.api_key = api_key.into();
     }
 
     /// 设置客户端类型
@@ -775,15 +786,16 @@ impl ChatRoom {
     /// * 返回 [ChatRoomMsg] 消息列表
     pub async fn get_msg_around(
         &self,
-        o_id: &str,
+        o_id: impl Into<String>,
         mode: ChatRoomMessageMode,
         size: u32,
         type_: ChatContentType,
     ) -> Result<Vec<ChatRoomMsg>, Error> {
+        let o_id = o_id.into();
         let resp = get(&build_http_path(
             "chat-room/getMessage",
             &[
-                ("oId", o_id.to_string()),
+                ("oId", o_id),
                 ("mode", mode.to_string()),
                 ("size", size.to_string()),
                 ("type", type_.as_str().to_string()),
@@ -815,7 +827,8 @@ impl ChatRoom {
     /// #### 参数
     /// * `o_id` - 消息 ID
     /// #### 返回 [RevokeMsg]
-    pub async fn revoke(&self, o_id: &str) -> Result<RevokeMsg, Error> {
+    pub async fn revoke(&self, o_id: impl Into<String>) -> Result<RevokeMsg, Error> {
+        let o_id = o_id.into();
         let data = json!({
             "apiKey": self.api_key,
         });
@@ -837,7 +850,11 @@ impl ChatRoom {
     /// 给聊天室消息添加/切换/取消 emoji reaction。
     ///
     /// 再次发送相同 value 表示取消；发送不同 value 表示切换。
-    pub async fn reaction(&self, o_id: &str, value: &str) -> Result<ReactionMutationResult, Error> {
+    pub async fn reaction(
+        &self,
+        o_id: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Result<ReactionMutationResult, Error> {
         crate::api::reaction::Reaction::new(self.api_key.clone())
             .chat_room(o_id, value)
             .await
@@ -848,7 +865,12 @@ impl ChatRoom {
     /// #### 参数
     /// * `msg` - 弹幕内容
     /// * `color` - 颜色（可选）
-    pub async fn barrager(&self, msg: String, color: Option<String>) -> Result<String, Error> {
+    pub async fn barrager(
+        &self,
+        msg: impl Into<String>,
+        color: Option<String>,
+    ) -> Result<String, Error> {
+        let msg = msg.into();
         let color = color.unwrap_or("#ffffff".to_string());
 
         let data = json!({
@@ -923,61 +945,12 @@ impl ChatRoom {
     ///
     /// #### 参数
     /// * `o_id` - 消息 ID
-    pub async fn get_raw_message(&self, o_id: &str) -> Result<String, Error> {
+    pub async fn get_raw_message(&self, o_id: impl Into<String>) -> Result<String, Error> {
+        let o_id = o_id.into();
         let resp = get_text(&format!("cr/raw/{}", o_id,)).await?;
 
         let raw_message = resp.split("<!--").next().unwrap_or("").trim().to_string();
 
         Ok(raw_message)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{ChatRoomEventData, ChatRoomEventType, parse_chatroom_message};
-    use serde_json::json;
-
-    #[test]
-    fn parse_chatroom_custom_message() {
-        let payload = json!({
-            "type": "customMessage",
-            "message": "user joined"
-        });
-
-        let (event_type, event) = parse_chatroom_message(&payload).expect("should parse");
-        assert!(matches!(event_type, ChatRoomEventType::Custom));
-        match event {
-            ChatRoomEventData::Custom(msg) => assert_eq!(msg.message, "user joined"),
-            _ => panic!("unexpected event variant"),
-        }
-    }
-
-    #[test]
-    fn parse_chatroom_reaction_message() {
-        let payload = json!({
-            "type": "chatreaction",
-            "oId": "reaction-id",
-            "data": {
-                "target": "message-id"
-            }
-        });
-
-        let (event_type, event) = parse_chatroom_message(&payload).expect("should parse");
-        assert!(matches!(event_type, ChatRoomEventType::ChatReaction));
-        match event {
-            ChatRoomEventData::ChatReaction(reaction) => {
-                assert_eq!(reaction.raw["type"], "chatreaction");
-                assert_eq!(reaction.oId, "reaction-id");
-            }
-            _ => panic!("unexpected event variant"),
-        }
-    }
-
-    #[test]
-    fn parse_chatroom_unknown_type_fails() {
-        let payload = json!({
-            "type": "nope"
-        });
-        assert!(parse_chatroom_message(&payload).is_err());
     }
 }

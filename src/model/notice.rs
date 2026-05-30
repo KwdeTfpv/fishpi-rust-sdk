@@ -128,14 +128,13 @@ impl_str_enum!(NoticeType {
 });
 
 #[derive(Clone, Debug, Deserialize)]
-#[allow(non_snake_case)]
 pub struct NoticeCount {
     /// 用户是否启用 Web 通知
     #[serde(
         rename = "userNotifyStatus",
         deserialize_with = "bool_from_int_or_bool"
     )]
-    pub notifyStatus: bool,
+    pub notify_status: bool,
     /// 未读通知数
     #[serde(rename = "unreadNotificationCnt")]
     pub count: u64,
@@ -153,10 +152,10 @@ pub struct NoticeCount {
     pub broadcast: u64,
     /// 未读系统通知数
     #[serde(rename = "unreadSysAnnounceNotificationCnt")]
-    pub sysAnnounce: u64,
+    pub sys_announce: u64,
     /// 未读关注者通知数
     #[serde(rename = "unreadNewFollowerNotificationCnt")]
-    pub newFollower: u64,
+    pub new_follower: u64,
     /// 未读关注通知数
     #[serde(rename = "unreadFollowingNotificationCnt")]
     pub following: u64,
@@ -179,17 +178,22 @@ pub struct NoticePoint {
     /// 通知 ID
     pub oId: String,
     /// 数据ID
-    pub dataId: String,
+    #[serde(rename = "dataId")]
+    pub data_id: String,
     /// 用户ID
-    pub userId: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
     /// 数据类型
-    pub dataType: u32,
+    #[serde(rename = "dataType")]
+    pub data_type: u32,
     /// 通知描述
     pub description: String,
     /// 是否已读
-    pub hasRead: bool,
+    #[serde(rename = "hasRead")]
+    pub has_read: bool,
     /// 创建时间
-    pub createTime: String,
+    #[serde(rename = "createTime")]
+    pub create_time: String,
 }
 
 impl NoticePoint {
@@ -200,8 +204,7 @@ impl NoticePoint {
 }
 
 /// 评论/回帖通知
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(default)]
+#[derive(Clone, Debug, Deserialize)]
 #[allow(non_snake_case)]
 pub struct NoticeComment {
     /// 通知 id
@@ -214,7 +217,7 @@ pub struct NoticeComment {
     pub author: String,
     /// 作者头像
     #[serde(rename = "commentAuthorThumbnailURL")]
-    pub thumbnailURL: String,
+    pub thumbnail_url: String,
     /// 文章类型
     #[serde(rename = "commentArticleType")]
     pub type_: u32,
@@ -226,12 +229,13 @@ pub struct NoticeComment {
     pub content: String,
     /// 评论地址
     #[serde(rename = "commentSharpURL")]
-    pub sharpURL: String,
+    pub sharp_url: String,
     /// 是否已读
-    pub hasRead: bool,
+    #[serde(rename = "hasRead")]
+    pub has_read: bool,
     /// 评论时间
     #[serde(rename = "commentCreateTime")]
-    pub createTime: String,
+    pub create_time: String,
 }
 
 impl NoticeComment {
@@ -254,7 +258,7 @@ pub struct NoticeReply {
     pub author: String,
     /// 作者头像
     #[serde(rename = "commentAuthorThumbnailURL")]
-    pub thumbnailURL: String,
+    pub thumbnail_url: String,
     /// 文章类型
     #[serde(rename = "commentArticleType")]
     pub type_: u32,
@@ -266,13 +270,15 @@ pub struct NoticeReply {
     pub content: String,
     /// 回复地址
     #[serde(rename = "commentSharpURL")]
-    pub sharpURL: String,
+    pub sharp_url: String,
     /// 是否已读
-    pub hasRead: bool,
+    #[serde(rename = "hasRead")]
+    pub has_read: bool,
     /// 回复时间
     #[serde(rename = "commentCreateTime")]
-    pub createTime: String,
-    pub dataType: u32,
+    pub create_time: String,
+    #[serde(rename = "dataType")]
+    pub data_type: u32,
 }
 
 impl NoticeReply {
@@ -283,32 +289,37 @@ impl NoticeReply {
 }
 
 /// 提到我通知（包含 @消息、文章/评论点赞、红包等）
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(default)]
+#[derive(Clone, Debug, Deserialize)]
 #[allow(non_snake_case)]
 pub struct NoticeAt {
     /// 通知 id
     pub oId: String,
     /// 数据类型
-    pub dataType: u32,
+    #[serde(rename = "dataType")]
+    pub data_type: u32,
     /// 用户名
-    pub userName: String,
+    #[serde(rename = "userName")]
+    pub user_name: String,
     /// 用户头像（点赞类消息用 thumbnailURL）
     #[serde(rename = "thumbnailURL")]
-    pub avatarURL: String,
+    pub avatar_url: String,
     /// 用户头像（@消息/红包用 userAvatarURL）
     #[serde(default)]
-    pub userAvatarURL: String,
+    #[serde(rename = "userAvatarURL")]
+    pub user_avatar_url: String,
     /// 通知内容（@消息/红包）
     pub content: String,
     /// 通知描述（点赞类消息）
     #[serde(default)]
     pub description: String,
     /// 是否已读
-    pub hasRead: bool,
+    #[serde(rename = "hasRead")]
+    pub has_read: bool,
     /// 创建时间
-    pub createTime: String,
-    pub dataId: String,
+    #[serde(rename = "createTime")]
+    pub create_time: String,
+    #[serde(rename = "dataId")]
+    pub data_id: String,
     /// 是否已删除
     #[serde(default)]
     pub deleted: bool,
@@ -330,7 +341,8 @@ pub struct NoticeFollow {
     /// 文章地址
     pub url: String,
     /// 数据类型
-    pub dataType: u32,
+    #[serde(rename = "dataType")]
+    pub data_type: u32,
     /// 文章标题
     #[serde(rename = "articleTitle")]
     pub title: String,
@@ -340,18 +352,20 @@ pub struct NoticeFollow {
     /// 通知内容
     pub content: String,
     /// 是否评论
-    pub isComment: bool,
+    #[serde(rename = "isComment")]
+    pub is_comment: bool,
     /// 作者头像
-    pub thumbnailURL: String,
+    #[serde(rename = "thumbnailURL")]
+    pub thumbnail_url: String,
     /// 文章评论数
     #[serde(rename = "articleCommentCount")]
-    pub commentCnt: u32,
+    pub comment_count: u32,
     /// 是否精选
     #[serde(rename = "articlePerfect", deserialize_with = "bool_from_int")]
     pub perfect: bool,
     /// 文章标签列表
     #[serde(rename = "articleTagObjs")]
-    pub tagObjs: Vec<ArticleTag>,
+    pub tag_objs: Vec<ArticleTag>,
     /// 文章标签
     #[serde(rename = "articleTags")]
     pub tags: String,
@@ -359,9 +373,11 @@ pub struct NoticeFollow {
     #[serde(rename = "articleType")]
     pub type_: u32,
     /// 是否已读
-    pub hasRead: bool,
+    #[serde(rename = "hasRead")]
+    pub has_read: bool,
     /// 通知创建时间
-    pub createTime: String,
+    #[serde(rename = "createTime")]
+    pub create_time: String,
 }
 
 impl NoticeFollow {
@@ -378,17 +394,22 @@ pub struct NoticeSystem {
     /// 消息的 oId
     pub oId: String,
     /// 用户 Id
-    pub userId: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
     /// 数据 Id
-    pub dataId: String,
+    #[serde(rename = "dataId")]
+    pub data_id: String,
     /// 数据类型
-    pub dataType: u32,
+    #[serde(rename = "dataType")]
+    pub data_type: u32,
     /// 消息描述
     pub description: String,
     /// 是否已读
-    pub hasRead: bool,
+    #[serde(rename = "hasRead")]
+    pub has_read: bool,
     /// 创建日期
-    pub createTime: String,
+    #[serde(rename = "createTime")]
+    pub create_time: String,
 }
 
 impl NoticeSystem {
@@ -425,7 +446,8 @@ pub struct NoticeMsg {
     /// 通知类型
     pub command: String,
     /// 通知接收者用户Id
-    pub userId: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
     /// 全局公告内容，仅 `warnBroadcast` 有信息
     #[serde(rename = "warnBroadcastText")]
     pub content: Option<String>,

@@ -83,19 +83,28 @@ impl UserInfo {
 }
 
 /// 更新用户信息参数
-#[derive(Clone, Serialize, Deserialize)]
-#[allow(non_snake_case)]
-pub struct UpdateUserInfoParams {
+#[derive(Clone, Serialize)]
+pub struct UserProfileUpdate {
     /// 用户昵称
-    pub nickName: Option<String>,
+    #[serde(rename = "nickName")]
+    pub nickname: Option<String>,
     ///  用户标签，多个标签用逗号分隔
-    pub userTag: Option<String>,
+    #[serde(rename = "userTag")]
+    pub tags: Option<String>,
     /// 个人主页 URL
-    pub userUrl: Option<String>,
+    #[serde(rename = "userUrl")]
+    pub url: Option<String>,
     /// 个人简介
-    pub userIntro: Option<String>,
+    #[serde(rename = "userIntro")]
+    pub intro: Option<String>,
     /// MBTI 性格类型（例如：ENFP）
     pub mbti: Option<String>,
+}
+
+impl From<&UserProfileUpdate> for UserProfileUpdate {
+    fn from(value: &UserProfileUpdate) -> Self {
+        value.clone()
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -168,11 +177,14 @@ pub struct Metal {
 #[allow(non_snake_case)]
 pub struct AtUser {
     /// 用户名
-    pub userName: String,
+    #[serde(rename = "userName")]
+    pub user_name: String,
     /// 用户头像
-    pub userAvatarURL: String,
+    #[serde(rename = "userAvatarURL")]
+    pub user_avatar_url: String,
     /// 全小写用户名
-    pub userNameLowerCase: String,
+    #[serde(rename = "userNameLowerCase")]
+    pub user_name_lower_case: String,
 }
 
 impl AtUser {

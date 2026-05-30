@@ -108,20 +108,20 @@ pub struct ChatReactionMsg {
     #[serde(default)]
     pub oId: String,
     /// 目标类型。
-    #[serde(default)]
-    pub targetType: String,
+    #[serde(default, rename = "targetType")]
+    pub target_type: String,
     /// Reaction 分组。
-    #[serde(default)]
-    pub groupType: String,
+    #[serde(default, rename = "groupType")]
+    pub group_type: String,
     /// 该聊天消息最新的表情汇总。
     #[serde(default)]
     pub summary: Vec<ReactionSummaryItem>,
     /// 本次触发操作的用户 id。
-    #[serde(default)]
-    pub actorUserId: String,
+    #[serde(default, rename = "actorUserId")]
+    pub actor_user_id: String,
     /// 该用户本次操作后最终选中的表情值。
-    #[serde(default)]
-    pub actorReaction: String,
+    #[serde(default, rename = "actorReaction")]
+    pub actor_reaction: String,
     /// 保留原始数据，方便服务端字段扩展时客户端不丢信息。
     #[serde(skip)]
     pub raw: Value,
@@ -190,42 +190,60 @@ pub enum WeatherCode {
 /// 聊天消息
 #[derive(Clone, Debug)]
 #[allow(non_snake_case)]
-pub struct ChatRoomMsg<T = Value> {
+pub struct ChatRoomMsg {
     pub r#type: ChatRoomMessageType,
     pub oId: String,
     pub time: String,
-    pub userOId: String,
-    pub userName: String,
-    pub userNickname: String,
-    pub userAvatarURL: String,
-    pub sysMetal: Vec<Metal>,
-    pub content: T,
+    pub user_o_id: String,
+    pub user_name: String,
+    pub user_nickname: String,
+    pub user_avatar_url: String,
+    pub sys_metal: Vec<Metal>,
+    pub content: Value,
     pub md: String,
     pub client: String,
     pub via: ClientType,
-    pub reactionSummary: Vec<ReactionSummaryItem>,
-    pub currentUserReaction: String,
+    pub reaction_summary: Vec<ReactionSummaryItem>,
+    pub current_user_reaction: String,
+}
+
+/// 聊天室音乐消息
+#[derive(Clone, Debug)]
+pub struct MusicMsg {
+    pub base: ChatRoomMsg,
+    pub cover_url: String,
+    pub source: String,
+    pub title: String,
+    pub from: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[allow(non_snake_case)]
 pub struct BarragerMsg {
     /// 用户名
-    pub userName: String,
+    #[serde(rename = "userName")]
+    pub user_name: String,
     /// 用户昵称
-    pub userNickname: String,
+    #[serde(rename = "userNickname")]
+    pub user_nickname: String,
     /// 弹幕消息
-    pub barragerContent: String,
+    #[serde(rename = "barragerContent")]
+    pub barrager_content: String,
     /// 弹幕颜色
-    pub barragerColor: String,
+    #[serde(rename = "barragerColor")]
+    pub barrager_color: String,
     /// 用户头像地址
-    pub userAvatarURL: String,
+    #[serde(rename = "userAvatarURL")]
+    pub user_avatar_url: String,
     /// 头像地址20x20
-    pub userAvatarURL20: String,
+    #[serde(rename = "userAvatarURL20")]
+    pub user_avatar_url20: String,
     /// 头像地址48x48
-    pub userAvatarURL48: String,
+    #[serde(rename = "userAvatarURL48")]
+    pub user_avatar_url48: String,
     /// 头像地址100x100
-    pub userAvatarURL210: String,
+    #[serde(rename = "userAvatarURL210")]
+    pub user_avatar_url210: String,
 }
 
 /// 在线用户信息
@@ -233,11 +251,11 @@ pub struct BarragerMsg {
 #[allow(non_snake_case)]
 pub struct OnlineInfo {
     /// 用户首页
-    pub homePage: String,
+    pub home_page: String,
     /// 用户头像
-    pub userAvatarURL: String,
+    pub user_avatar_url: String,
     /// 用户名
-    pub userName: String,
+    pub user_name: String,
 }
 
 impl_str_enum!(ClientType {
@@ -326,11 +344,44 @@ impl ChatRoomMsg {
     }
 
     pub fn name(&self) -> &str {
-        if self.userNickname.is_empty() {
-            &self.userName
+        if self.user_nickname.is_empty() {
+            &self.user_name
         } else {
-            &self.userNickname
+            &self.user_nickname
         }
+    }
+}
+
+impl MusicMsg {
+    pub fn from_chatroom_msg(base: ChatRoomMsg) -> Result<Self, Error> {
+        let payload = base
+            .content
+            .as_object()
+            .ok_or_else(|| Error::Parse("Missing music payload".to_string()))?;
+
+        Ok(Self {
+            cover_url: payload
+                .get("coverURL")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            source: payload
+                .get("source")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            title: payload
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            from: payload
+                .get("from")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            base,
+        })
     }
 }
 
@@ -341,24 +392,50 @@ impl BarragerMsg {
     }
 }
 
-fn parse_content(content: &str) -> (ChatRoomMessageType, Value) {
-    if let Ok(data) = serde_json::from_str::<Value>(content) {
-        if let Some(msg_type_str) = data["msgType"].as_str() {
-            match msg_type_str {
-                "redPacket" => (ChatRoomMessageType::RedPacket, data),
-                "music" => (ChatRoomMessageType::Msg, data),
-                "weather" => (ChatRoomMessageType::Msg, data),
-                _ => (ChatRoomMessageType::Msg, Value::String(content.to_string())),
-            }
-        } else {
-            (ChatRoomMessageType::Msg, Value::String(content.to_string()))
-        }
-    } else {
-        (ChatRoomMessageType::Msg, Value::String(content.to_string()))
+fn parse_message_payload(value: &Value) -> Option<Value> {
+    match value {
+        Value::Object(_) => Some(value.clone()),
+        Value::String(content) => serde_json::from_str::<Value>(content)
+            .ok()
+            .filter(|v| v.is_object()),
+        _ => None,
     }
 }
 
-impl<'de> Deserialize<'de> for ChatRoomMsg<Value> {
+fn message_payload_type(value: &Value) -> Option<&str> {
+    value
+        .get("msgType")
+        .or_else(|| value.get("type"))
+        .and_then(|v| v.as_str())
+}
+
+fn message_payload_type_is(value: &Value, expected: &str) -> bool {
+    message_payload_type(value).is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
+}
+
+fn parse_chatroom_payload(content: &Value, md: Option<&Value>) -> (ChatRoomMessageType, Value) {
+    if let Some(data) = parse_message_payload(content) {
+        if message_payload_type_is(&data, "redPacket") {
+            return (ChatRoomMessageType::RedPacket, data);
+        }
+        if message_payload_type_is(&data, "music") || message_payload_type_is(&data, "weather") {
+            return (ChatRoomMessageType::Msg, data);
+        }
+    }
+
+    if let Some(data) = md.and_then(parse_message_payload) {
+        if message_payload_type_is(&data, "music") || message_payload_type_is(&data, "weather") {
+            return (ChatRoomMessageType::Msg, data);
+        }
+    }
+
+    match content {
+        Value::String(content) => (ChatRoomMessageType::Msg, Value::String(content.clone())),
+        _ => (ChatRoomMessageType::Msg, content.clone()),
+    }
+}
+
+impl<'de> Deserialize<'de> for ChatRoomMsg {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -373,8 +450,8 @@ impl<'de> Deserialize<'de> for ChatRoomMsg<Value> {
             userNickname: String,
             userAvatarURL: String,
             sysMetal: Option<Value>,
-            content: String,
-            md: Option<String>,
+            content: Value,
+            md: Option<Value>,
             client: Option<String>,
             #[serde(default)]
             reactionSummary: Option<Vec<ReactionSummaryItem>>,
@@ -384,14 +461,15 @@ impl<'de> Deserialize<'de> for ChatRoomMsg<Value> {
 
         let raw = Raw::deserialize(deserializer)?;
 
-        let (r#type, content) = parse_content(&raw.content);
+        let (r#type, content) = parse_chatroom_payload(&raw.content, raw.md.as_ref());
 
-        let via = raw
-            .client
-            .as_ref()
-            .and_then(|s| ClientType::from_str(s).ok())
-            .unwrap_or(ClientType::Other);
-        let client = raw.client.unwrap_or(ClientType::Rust.as_str().to_string());
+        let client = raw.client.unwrap_or_default();
+        let client = if client.trim().is_empty() {
+            ClientType::Other.as_str().to_string()
+        } else {
+            client
+        };
+        let via = ClientType::from_str(&client).unwrap_or(ClientType::Other);
 
         let sys_metal = raw
             .sysMetal
@@ -405,17 +483,23 @@ impl<'de> Deserialize<'de> for ChatRoomMsg<Value> {
             r#type,
             oId: raw.oId,
             time: raw.time,
-            userOId: raw.userOId.to_string(),
-            userName: raw.userName,
-            userNickname: raw.userNickname,
-            userAvatarURL: raw.userAvatarURL,
-            sysMetal: sys_metal,
+            user_o_id: raw.userOId.to_string(),
+            user_name: raw.userName,
+            user_nickname: raw.userNickname,
+            user_avatar_url: raw.userAvatarURL,
+            sys_metal: sys_metal,
             content,
-            md: raw.md.unwrap_or("".to_string()),
+            md: raw
+                .md
+                .map(|value| match value {
+                    Value::String(text) => text,
+                    other => other.to_string(),
+                })
+                .unwrap_or_default(),
             client,
             via,
-            reactionSummary: raw.reactionSummary.unwrap_or_default(),
-            currentUserReaction: raw.currentUserReaction.unwrap_or_default(),
+            reaction_summary: raw.reactionSummary.unwrap_or_default(),
+            current_user_reaction: raw.currentUserReaction.unwrap_or_default(),
         })
     }
 }

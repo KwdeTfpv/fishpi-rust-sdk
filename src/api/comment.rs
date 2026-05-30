@@ -27,18 +27,12 @@
 //!     let comment = Comment::new("your_api_key".to_string());
 //!
 //!     // 发布评论
-//!     let data = CommentPost {
-//!         articleId: "article_id".to_string(),
-//!         isAnonymous: false,
-//!         isVisible: true,
-//!         content: "This is a comment.".to_string(),
-//!         replyId: "".to_string(),
-//!     };
-//!     let result = comment.send(&data).await?;
+//!     let data = CommentPost::new("article_id", "This is a comment.");
+//!     let result = comment.send(data.clone()).await?;
 //!     println!("Sent: {}", result.success);
 //!
 //!     // 更新评论
-//!     let updated_content = comment.update("comment_id", &data).await?;
+//!     let updated_content = comment.update("comment_id", data).await?;
 //!     println!("Updated content: {}", updated_content);
 //!
 //!     // 点赞评论
@@ -62,8 +56,10 @@ pub struct Comment {
 }
 
 impl Comment {
-    pub fn new(api_key: String) -> Self {
-        Self { api_key }
+    pub fn new(api_key: impl Into<String>) -> Self {
+        Self {
+            api_key: api_key.into(),
+        }
     }
 
     /// 给评论添加/切换/取消 emoji reaction。
@@ -71,8 +67,8 @@ impl Comment {
     /// 再次发送相同 value 表示取消；发送不同 value 表示切换。
     pub async fn reaction(
         &self,
-        comment_id: &str,
-        value: &str,
+        comment_id: impl Into<String>,
+        value: impl Into<String>,
     ) -> Result<ReactionMutationResult, Error> {
         crate::api::reaction::Reaction::new(self.api_key.clone())
             .comment(comment_id, value)
@@ -84,9 +80,13 @@ impl Comment {
     /// - `data` 评论信息
     ///
     /// 返回执行结果
-    pub async fn send(&self, data: &CommentPost) -> Result<ResponseResult, Error> {
+    pub async fn send<P>(&self, data: P) -> Result<ResponseResult, Error>
+    where
+        P: Into<CommentPost>,
+    {
         let url = "comment".to_string();
 
+        let data = data.into();
         let mut data_json = data.to_value()?;
         data_json["apiKey"] = Value::String(self.api_key.clone());
 
@@ -101,9 +101,14 @@ impl Comment {
     /// - `data` 评论信息
     ///
     /// 返回评论内容 HTML
-    pub async fn update(&self, id: &str, data: &CommentPost) -> Result<String, Error> {
+    pub async fn update<P>(&self, id: impl Into<String>, data: P) -> Result<String, Error>
+    where
+        P: Into<CommentPost>,
+    {
+        let id = id.into();
         let url = format!("comment/{}", id);
 
+        let data = data.into();
         let mut data_json = data.to_value()?;
         data_json["apiKey"] = Value::String(self.api_key.clone());
 
@@ -124,7 +129,8 @@ impl Comment {
     /// - `like` 点赞类型，true 为点赞，false 为点踩
     ///
     /// 返回评论点赞状态，true 为点赞，false 为点踩
-    pub async fn vote(&self, id: &str, like: bool) -> Result<bool, Error> {
+    pub async fn vote(&self, id: impl Into<String>, like: bool) -> Result<bool, Error> {
+        let id = id.into();
         let action = if like { "up" } else { "down" };
         let url = format!("vote/{}/comment", action);
 
@@ -149,7 +155,8 @@ impl Comment {
     /// - `id` 评论 Id
     ///
     /// 返回执行结果
-    pub async fn thank(&self, id: &str) -> Result<ResponseResult, Error> {
+    pub async fn thank(&self, id: impl Into<String>) -> Result<ResponseResult, Error> {
+        let id = id.into();
         let url = "comment/thank".to_string();
 
         let data_json = json!({
@@ -167,7 +174,8 @@ impl Comment {
     /// - `id` 评论 Id
     ///
     /// 返回删除的评论 Id
-    pub async fn remove(&self, id: &str) -> Result<String, Error> {
+    pub async fn remove(&self, id: impl Into<String>) -> Result<String, Error> {
+        let id = id.into();
         let url = format!("comment/{}/remove", id);
 
         let data_json = json!({
