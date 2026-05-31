@@ -47,6 +47,18 @@ data class ExtensionStoreComment(
     val isAdmin: Boolean,
 )
 
+data class ExtensionStoreUploadRequest(
+    val name: String,
+    val description: String,
+    val identifier: String,
+    val price: String,
+    val type: String,
+    val code: String,
+    val language: String,
+    val upgradeFromId: Long? = null,
+    val isDraft: Boolean = false,
+)
+
 class ExtensionStoreClient private constructor(
     private val baseUrl: String = DefaultBaseUrl,
 ) {
@@ -79,10 +91,19 @@ class ExtensionStoreClient private constructor(
         page: Int = 1,
         limit: Int = 30,
     ): ExtensionStorePage {
+        if (type.isNullOrBlank()) {
+            val extensions = getPublishedItems(search, TypeAppExtension, page, limit)
+            val themes = getPublishedItems(search, TypeAppTheme, page, limit)
+            val items = (extensions.items + themes.items)
+                .distinctBy { it.id }
+                .sortedByDescending { it.id }
+                .take(limit)
+            return ExtensionStorePage(items = items, total = extensions.total + themes.total)
+        }
         val params = buildList {
             val keyword = search.trim()
             if (keyword.isNotBlank()) add("search=${keyword.urlEncode()}")
-            if (!type.isNullOrBlank()) add("type=${type.urlEncode()}")
+            add("type=${type.urlEncode()}")
             add("page=$page")
             add("limit=$limit")
         }.joinToString("&")
@@ -104,10 +125,15 @@ class ExtensionStoreClient private constructor(
     }
 
     fun getMyPurchases(token: String, type: String? = null): List<ExtensionStoreItem> {
+        if (type.isNullOrBlank()) {
+            return (getMyPurchases(token, TypeAppExtension) + getMyPurchases(token, TypeAppTheme))
+                .distinctBy { it.id }
+                .sortedByDescending { it.id }
+        }
         val params = buildList {
-            if (!type.isNullOrBlank()) add("type=${type.urlEncode()}")
+            add("type=${type.urlEncode()}")
         }.joinToString("&")
-        val path = if (params.isBlank()) "/items/my-purchases" else "/items/my-purchases?$params"
+        val path = "/items/my-purchases?$params"
         val data = requestJson(
             method = "GET",
             path = path,
@@ -175,6 +201,30 @@ class ExtensionStoreClient private constructor(
         ).unwrapData()
         return (data as? JSONObject)?.toExtensionStoreItem()
             ?: error("鱼排扩展集市购买返回为空")
+    }
+
+    fun uploadItem(token: String, request: ExtensionStoreUploadRequest): ExtensionStoreItem {
+        require(request.type == TypeAppExtension || request.type == TypeAppTheme) { "只能发布 APP 扩展或 APP 主题" }
+        val body = JSONObject()
+            .put("name", request.name)
+            .put("description", request.description)
+            .put("identifier", request.identifier)
+            .put("price", request.price)
+            .put("type", request.type)
+            .put("code", request.code)
+            .put("language", request.language)
+            .put("matchUrls", JSONArray())
+            .put("isDraft", request.isDraft)
+            .put("dependencyIds", JSONArray())
+        request.upgradeFromId?.let { body.put("upgradeFromId", it) }
+        val data = requestJson(
+            method = "POST",
+            path = "/items/upload",
+            headers = authHeaders(token),
+            body = body,
+        ).unwrapData()
+        return (data as? JSONObject)?.toExtensionStoreItem()
+            ?: error("鱼排扩展集市发布返回为空")
     }
 
     fun downloadItemContent(item: ExtensionStoreItem): String {

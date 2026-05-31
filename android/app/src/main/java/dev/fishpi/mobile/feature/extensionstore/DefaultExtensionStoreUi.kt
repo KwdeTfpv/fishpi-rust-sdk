@@ -1,8 +1,10 @@
-package dev.fishpi.mobile.extension
+package dev.fishpi.mobile.feature.extensionstore
 
+import android.content.ClipData
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +30,8 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +44,7 @@ import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Storefront
+import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -67,13 +72,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.fishpi.mobile.FishPiNotifier
@@ -83,123 +92,74 @@ import dev.fishpi.mobile.data.ExtensionStoreClient
 import dev.fishpi.mobile.data.ExtensionStoreComment
 import dev.fishpi.mobile.data.ExtensionStoreItem
 import dev.fishpi.mobile.data.ExtensionStoreSession
+import dev.fishpi.mobile.data.ExtensionStoreUploadRequest
 import dev.fishpi.mobile.plugin.PluginManager
 import dev.fishpi.mobile.ui.components.PlainBackButton
 import coil3.compose.SubcomposeAsyncImage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-private enum class StoreFilter(val title: String, val type: String?) {
+internal enum class StoreFilter(val title: String, val type: String?) {
     All("全部", null),
     Plugins("插件", ExtensionStoreClient.TypeAppExtension),
     Themes("主题", ExtensionStoreClient.TypeAppTheme),
 }
 
+private fun StoreFilter.emptyMessage(total: Int): String =
+    if (total > 0) {
+        "当前筛选下没有可展示内容"
+    } else {
+        when (this) {
+            StoreFilter.All -> "当前没有可展示的 APP 扩展或主题"
+            StoreFilter.Plugins -> "当前没有可展示的 APP 扩展"
+            StoreFilter.Themes -> "当前没有可展示的 APP 主题"
+        }
+    }
+
+private val PluginHeaderRegex = Regex("""//\s*==FishPiPlugin==[\s\S]*?//\s*==/FishPiPlugin==""")
+private val StoreIdentifierRegex = Regex("""^[A-Za-z0-9_.-]{3,100}$""")
+
 private enum class StoreItemAction {
     Purchase,
-    Apply,
+    Install,
     Update,
-    Applied,
+    Installed,
 }
 
 @Composable
-internal fun ExtensionStoreScreen(
-    apiKey: String,
+internal fun DefaultExtensionStoreUi(
+    state: ExtensionStoreState,
+    dispatch: (ExtensionStoreAction) -> Unit,
     onImportTheme: (String) -> Result<String>,
-    isThemeApplied: (String) -> Boolean,
+    isThemeSaved: (String) -> Boolean,
 ) {
     val scope = rememberCoroutineScope()
     val pluginManager = remember { PluginManager.get() }
-    var session by remember(apiKey) { mutableStateOf<ExtensionStoreSession?>(null) }
-    var authError by remember(apiKey) { mutableStateOf<String?>(null) }
-    var isAuthenticating by remember(apiKey) { mutableStateOf(false) }
-    var selectedFilter by remember { mutableStateOf(StoreFilter.All) }
-    var query by remember { mutableStateOf("") }
-    var items by remember { mutableStateOf<List<ExtensionStoreItem>>(emptyList()) }
-    var total by remember { mutableStateOf(0) }
-    var isLoading by remember { mutableStateOf(false) }
-    var loadError by remember { mutableStateOf<String?>(null) }
     var installingId by remember { mutableStateOf<Long?>(null) }
-    var purchasingId by remember { mutableStateOf<Long?>(null) }
-    var purchasedItems by remember { mutableStateOf<List<ExtensionStoreItem>>(emptyList()) }
     var contentById by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
     var detailById by remember { mutableStateOf<Map<Long, ExtensionStoreItem>>(emptyMap()) }
     var versionsById by remember { mutableStateOf<Map<Long, List<ExtensionStoreItem>>>(emptyMap()) }
     var commentsById by remember { mutableStateOf<Map<Long, List<ExtensionStoreComment>>>(emptyMap()) }
     var detailItem by remember { mutableStateOf<ExtensionStoreItem?>(null) }
     var purchaseConfirmItem by remember { mutableStateOf<ExtensionStoreItem?>(null) }
-    var loadRequestId by remember { mutableStateOf(0) }
+    var uploadOpen by remember { mutableStateOf(false) }
+    var uploadSubmitted by remember { mutableStateOf(false) }
+    var uploadBaseline by remember { mutableStateOf(state.uploadSuccessCount) }
 
     fun actionStateFor(item: ExtensionStoreItem, versions: List<ExtensionStoreItem> = emptyList()): StoreItemAction =
         item.actionState(
-            ownership = item.ownershipIn(purchasedItems, versions),
-            currentApplied = item.isCurrentApplied(
+            ownership = item.ownershipIn(state.purchasedItems, versions),
+            currentInstalled = item.isCurrentInstalled(
                 pluginManager = pluginManager,
-                isThemeApplied = isThemeApplied,
+                isThemeSaved = isThemeSaved,
                 loadedContent = contentById[item.id],
             ),
         )
-
-    fun loadStore(activeSession: ExtensionStoreSession? = session) {
-        val requestId = loadRequestId + 1
-        loadRequestId = requestId
-        scope.launch {
-            isLoading = true
-            loadError = null
-            val searchText = query.trim()
-            val filterType = selectedFilter.type
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    val page = ExtensionStoreClient.shared.getPublishedItems(
-                        search = searchText,
-                        type = filterType,
-                        limit = 12,
-                    )
-                    val purchases = activeSession?.let { ExtensionStoreClient.shared.getMyPurchases(it.accessToken) }.orEmpty()
-                    page to purchases
-                }
-            }.onSuccess { (page, purchases) ->
-                if (requestId == loadRequestId) {
-                    items = page.items
-                    total = page.total
-                    purchasedItems = purchases
-                }
-            }.onFailure { throwable ->
-                if (requestId == loadRequestId) {
-                    loadError = throwable.message ?: "鱼排扩展集市加载失败"
-                }
-            }
-            if (requestId == loadRequestId) {
-                isLoading = false
-            }
-        }
-    }
-
-    fun authenticateThenLoad() {
-        if (apiKey.isBlank()) {
-            authError = "请先登录后使用鱼排扩展集市"
-            items = emptyList()
-            return
-        }
-        scope.launch {
-            isAuthenticating = true
-            authError = null
-            runCatching {
-                withContext(Dispatchers.IO) { ExtensionStoreClient.shared.getToken(apiKey) }
-            }.onSuccess {
-                session = it
-                loadStore(it)
-            }.onFailure { throwable ->
-                authError = throwable.message ?: "鱼排扩展集市鉴权失败"
-                items = emptyList()
-            }
-            isAuthenticating = false
-        }
-    }
 
     fun installItem(item: ExtensionStoreItem) {
         if (installingId != null) return
@@ -218,47 +178,44 @@ internal fun ExtensionStoreScreen(
                     }
                 }
             }.onSuccess {
-                FishPiNotifier.success("${item.displayName()} 应用成功")
+                FishPiNotifier.success(
+                    if (item.type == ExtensionStoreClient.TypeAppTheme) {
+                        "${item.displayName()} 已加入主题列表"
+                    } else {
+                        "${item.displayName()} 已安装"
+                    },
+                )
             }.onFailure { throwable ->
-                FishPiNotifier.error("应用失败：${throwable.message ?: "未知错误"}")
+                FishPiNotifier.error("安装失败：${throwable.message ?: "未知错误"}")
             }
             installingId = null
         }
     }
 
-    fun purchaseItem(item: ExtensionStoreItem) {
-        val token = session?.accessToken
-        if (token.isNullOrBlank()) {
-            FishPiNotifier.error("请先完成集市鉴权")
-            return
+
+    if (uploadOpen) {
+        BackHandler {
+            if (!state.isUploading) uploadOpen = false
         }
-        if (purchasingId != null) return
-        scope.launch {
-            purchasingId = item.id
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    ExtensionStoreClient.shared.purchaseItem(token, item.id)
-                    ExtensionStoreClient.shared.getMyPurchases(token)
-                }
-            }.onSuccess { purchases ->
-                purchasedItems = purchases
-                FishPiNotifier.success("${item.displayName()} 已购买")
-            }.onFailure { throwable ->
-                FishPiNotifier.error("购买失败：${throwable.message ?: "未知错误"}")
+        StoreUploadPage(
+            initialType = state.selectedFilter.type ?: ExtensionStoreClient.TypeAppExtension,
+            uploading = state.isUploading,
+            onBack = {
+                if (!state.isUploading) uploadOpen = false
+            },
+            onSubmit = {
+                uploadSubmitted = true
+                uploadBaseline = state.uploadSuccessCount
+                dispatch(ExtensionStoreAction.Upload(it))
+            },
+        )
+        LaunchedEffect(state.uploadSuccessCount, uploadSubmitted, uploadBaseline) {
+            if (uploadSubmitted && state.uploadSuccessCount > uploadBaseline) {
+                uploadOpen = false
+                uploadSubmitted = false
             }
-            purchasingId = null
         }
-    }
-
-    LaunchedEffect(apiKey) {
-        authenticateThenLoad()
-    }
-
-    LaunchedEffect(session, selectedFilter, query) {
-        if (session != null) {
-            delay(280)
-            loadStore()
-        }
+        return
     }
 
     val activeDetailItem = detailItem
@@ -271,12 +228,12 @@ internal fun ExtensionStoreScreen(
         }
         StoreItemDetailPage(
             item = fullItem,
-            token = session?.accessToken,
+            token = state.session?.accessToken,
             versions = versions,
             comments = commentsById[item.id].orEmpty(),
             running = installingId == fullItem.id,
-            purchasing = purchasingId == fullItem.id,
-            enabled = installingId == null && purchasingId == null,
+            purchasing = state.purchasingId == fullItem.id,
+            enabled = installingId == null && state.purchasingId == null,
             actionState = actionStateFor(fullItem, versions),
             onDismiss = { detailItem = null },
             onDetailLoaded = { loadedItem, loadedVersions, loadedComments ->
@@ -294,13 +251,13 @@ internal fun ExtensionStoreScreen(
         purchaseConfirmItem?.let { pending ->
             PurchaseConfirmDialog(
                 item = pending,
-                purchasing = purchasingId == pending.id,
+                purchasing = state.purchasingId == pending.id,
                 onDismiss = {
-                    if (purchasingId == null) purchaseConfirmItem = null
+                    if (state.purchasingId == null) purchaseConfirmItem = null
                 },
                 onConfirm = {
                     purchaseConfirmItem = null
-                    purchaseItem(pending)
+                    dispatch(ExtensionStoreAction.Purchase(pending))
                 },
             )
         }
@@ -317,37 +274,39 @@ internal fun ExtensionStoreScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         StoreTopBar(
-            session = session,
-            authError = authError,
-            isAuthenticating = isAuthenticating,
+            session = state.session,
+            authError = state.authError,
+            isAuthenticating = state.isAuthenticating,
+            canUpload = state.session != null && !state.isUploading,
+            onUpload = { uploadOpen = true },
         )
         StoreControls(
-            query = query,
-            onQueryChange = { query = it },
-            selectedFilter = selectedFilter,
-            onFilterChange = { selectedFilter = it },
-            canRefresh = session != null && !isLoading,
-            onRefresh = ::loadStore,
+            query = state.query,
+            onQueryChange = { dispatch(ExtensionStoreAction.ChangeQuery(it)) },
+            selectedFilter = state.selectedFilter,
+            onFilterChange = { dispatch(ExtensionStoreAction.ChangeFilter(it)) },
+            canRefresh = state.session != null && !state.isLoading,
+            onRefresh = { dispatch(ExtensionStoreAction.Refresh) },
         )
         when {
-            isAuthenticating -> StoreStateRow("正在进行鱼排扩展集市鉴权", busy = true)
-            authError != null -> StoreStateRow(authError ?: "鱼排扩展集市鉴权失败")
-            isLoading -> StoreStateRow("正在加载鱼排扩展集市", busy = true)
-            loadError != null -> StoreStateRow(loadError ?: "鱼排扩展集市加载失败")
-            items.isEmpty() -> StoreStateRow(if (total == 0) "当前没有可展示的 APP 扩展或主题" else "当前筛选下没有可应用内容")
+            state.isAuthenticating -> StoreStateRow("正在进行鱼排扩展集市鉴权", busy = true)
+            state.authError != null -> StoreStateRow(state.authError)
+            state.isLoading -> StoreStateRow("正在加载鱼排扩展集市", busy = true)
+            state.loadError != null -> StoreStateRow(state.loadError)
+            state.items.isEmpty() -> StoreStateRow(state.selectedFilter.emptyMessage(state.total))
             else -> LazyColumn(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(bottom = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(items, key = { "${it.type}-${it.id}" }) { item ->
+                items(state.items, key = { "${it.type}-${it.id}" }) { item ->
                     val actionState = actionStateFor(item)
                     val owned = actionState != StoreItemAction.Purchase
                     StoreItemRow(
                         item = item,
                         running = installingId == item.id,
-                        purchasing = purchasingId == item.id,
-                        enabled = installingId == null && purchasingId == null,
+                        purchasing = state.purchasingId == item.id,
+                        enabled = installingId == null && state.purchasingId == null,
                         actionState = actionState,
                         owned = owned,
                         onOpenDetail = { detailItem = item },
@@ -362,16 +321,17 @@ internal fun ExtensionStoreScreen(
     purchaseConfirmItem?.let { item ->
         PurchaseConfirmDialog(
             item = item,
-            purchasing = purchasingId == item.id,
+            purchasing = state.purchasingId == item.id,
             onDismiss = {
-                if (purchasingId == null) purchaseConfirmItem = null
+                if (state.purchasingId == null) purchaseConfirmItem = null
             },
             onConfirm = {
                 purchaseConfirmItem = null
-                purchaseItem(item)
+                dispatch(ExtensionStoreAction.Purchase(item))
             },
         )
     }
+
 }
 
 @Composable
@@ -379,6 +339,8 @@ private fun StoreTopBar(
     session: ExtensionStoreSession?,
     authError: String?,
     isAuthenticating: Boolean,
+    canUpload: Boolean,
+    onUpload: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -394,7 +356,12 @@ private fun StoreTopBar(
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Rounded.Storefront, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            Icon(
+                Icons.Rounded.Storefront,
+                contentDescription = "鱼排扩展集市",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text("鱼排扩展集市", color = FishPiTheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 20.sp)
@@ -410,6 +377,15 @@ private fun StoreTopBar(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        TextButton(
+            onClick = onUpload,
+            enabled = canUpload,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+        ) {
+            Icon(Icons.Rounded.UploadFile, contentDescription = "发布扩展或主题", modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(3.dp))
+            Text("发布", fontSize = 12.sp)
         }
     }
 }
@@ -429,7 +405,7 @@ private fun StoreControls(
             onValueChange = onQueryChange,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = "搜索") },
             placeholder = { Text("搜索扩展、主题或作者") },
             shape = RoundedCornerShape(FishPiTheme.radiusField),
         )
@@ -464,7 +440,7 @@ private fun StoreControls(
                 enabled = canRefresh,
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
             ) {
-                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(15.dp))
+                Icon(Icons.Rounded.Refresh, contentDescription = "刷新扩展集市", modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(3.dp))
                 Text("刷新", fontSize = 12.sp)
             }
@@ -500,7 +476,7 @@ private fun PurchaseConfirmDialog(
         title = { Text("确认购买") },
         text = {
             Text(
-                text = "确定要购买「${item.displayName()}」吗？本次购买需要 ${item.priceLabel()}，购买后可在集市中应用到 APP。",
+                text = "确定要购买「${item.displayName()}」吗？本次购买需要 ${item.priceLabel()}，购买后可在集市中安装或加入到 APP。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         },
@@ -525,6 +501,295 @@ private fun PurchaseConfirmDialog(
 }
 
 @Composable
+private fun StoreUploadPage(
+    initialType: String,
+    uploading: Boolean,
+    onBack: () -> Unit,
+    onSubmit: (ExtensionStoreUploadRequest) -> Unit,
+) {
+    var type by remember(initialType) {
+        mutableStateOf(
+            initialType.takeIf { it == ExtensionStoreClient.TypeAppTheme }
+                ?: ExtensionStoreClient.TypeAppExtension,
+        )
+    }
+    var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var identifier by remember { mutableStateOf("") }
+    var price by remember { mutableStateOf("0") }
+    var code by remember {
+        mutableStateOf(
+            if (type == ExtensionStoreClient.TypeAppTheme) defaultAppThemeCode() else defaultAppExtensionCode(),
+        )
+    }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    fun switchType(nextType: String) {
+        if (type == nextType) return
+        val oldDefault = if (type == ExtensionStoreClient.TypeAppTheme) defaultAppThemeCode() else defaultAppExtensionCode()
+        type = nextType
+        if (code.isBlank() || code == oldDefault) {
+            code = if (nextType == ExtensionStoreClient.TypeAppTheme) defaultAppThemeCode() else defaultAppExtensionCode()
+        }
+    }
+
+    fun submit(isDraft: Boolean) {
+        val cleanName = name.trim()
+        val cleanIdentifier = identifier.trim()
+        val cleanPrice = price.trim().ifBlank { "0" }
+        val cleanCode = code.trim()
+        error = validateUploadForm(
+            name = cleanName,
+            identifier = cleanIdentifier,
+            price = cleanPrice,
+            type = type,
+            code = cleanCode,
+        )
+        if (error != null) return
+        onSubmit(
+            ExtensionStoreUploadRequest(
+                name = cleanName,
+                description = description.trim(),
+                identifier = cleanIdentifier,
+                price = cleanPrice,
+                type = type,
+                code = cleanCode,
+                language = if (type == ExtensionStoreClient.TypeAppTheme) "json" else "javascript",
+                isDraft = isDraft,
+            ),
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            PlainBackButton(onClick = onBack)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text("发布 APP 作品", color = FishPiTheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(
+                    if (type == ExtensionStoreClient.TypeAppTheme) "提交 APP 主题配置，审核通过后上架" else "提交 APP 插件脚本，审核通过后上架",
+                    color = FishPiTheme.weakText,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StoreUploadTypeChip(
+                title = "APP 扩展",
+                selected = type == ExtensionStoreClient.TypeAppExtension,
+                onClick = { switchType(ExtensionStoreClient.TypeAppExtension) },
+            )
+            StoreUploadTypeChip(
+                title = "APP 主题",
+                selected = type == ExtensionStoreClient.TypeAppTheme,
+                onClick = { switchType(ExtensionStoreClient.TypeAppTheme) },
+            )
+        }
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                CompactUploadField(
+                    label = "名称",
+                    value = name,
+                    onValueChange = { name = it },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                )
+                CompactUploadField(
+                    label = "价格",
+                    value = price,
+                    onValueChange = { next -> price = next.filter { it.isDigit() }.take(7) },
+                    modifier = Modifier.width(96.dp),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+            }
+            CompactUploadField(
+                label = "标识符",
+                value = identifier,
+                onValueChange = { identifier = it },
+                placeholder = "me.name.tool",
+                singleLine = true,
+            )
+            CompactUploadField(
+                label = "简介",
+                value = description,
+                onValueChange = { description = it },
+                placeholder = "一句话说明这个作品的用途",
+                minLines = 2,
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    if (type == ExtensionStoreClient.TypeAppTheme) "主题 JSON" else "插件 JS",
+                    color = FishPiTheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                )
+                Text(
+                    if (type == ExtensionStoreClient.TypeAppTheme) "合法 JSON 配置" else "需要 FishPiPlugin 头部",
+                    color = FishPiTheme.weakText,
+                    fontSize = 11.sp,
+                )
+            }
+            CompactCodeField(
+                value = code,
+                onValueChange = { code = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+            )
+        }
+
+        error?.let {
+            Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = { submit(true) }, enabled = !uploading, modifier = Modifier.weight(1f)) {
+                Text(if (uploading) "处理中" else "存草稿")
+            }
+            Button(
+                onClick = { submit(false) },
+                enabled = !uploading,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.inverseSurface,
+                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                ),
+            ) {
+                Text(if (uploading) "提交中" else "提交审核")
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactUploadField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    singleLine: Boolean = false,
+    minLines: Int = 1,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, color = FishPiTheme.weakText, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = singleLine,
+            minLines = minLines,
+            keyboardOptions = keyboardOptions,
+            textStyle = TextStyle(
+                color = FishPiTheme.onSurface,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(FishPiTheme.radiusField))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.62f))
+                .border(
+                    FishPiTheme.borderWidth,
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
+                    RoundedCornerShape(FishPiTheme.radiusField),
+                )
+                .padding(horizontal = 11.dp, vertical = 9.dp),
+            decorationBox = { inner ->
+                Box {
+                    if (value.isBlank() && placeholder.isNotBlank()) {
+                        Text(placeholder, color = FishPiTheme.weakText.copy(alpha = 0.62f), fontSize = 13.sp)
+                    }
+                    inner()
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun CompactCodeField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val verticalScroll = rememberScrollState()
+    val horizontalScroll = rememberScrollState()
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        textStyle = TextStyle(
+            color = FishPiTheme.onSurface,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            lineHeight = 17.sp,
+        ),
+        modifier = modifier
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.66f))
+            .border(
+                FishPiTheme.borderWidth,
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
+                RoundedCornerShape(FishPiTheme.radiusBox),
+            )
+            .padding(11.dp)
+            .verticalScroll(verticalScroll)
+            .horizontalScroll(horizontalScroll),
+    )
+}
+
+@Composable
+private fun StoreUploadTypeChip(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(title, fontSize = 12.sp) },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+            selectedLabelColor = MaterialTheme.colorScheme.primary,
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.54f),
+            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            enabled = true,
+            selected = selected,
+            borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f),
+            selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f),
+        ),
+    )
+}
+
+@Composable
 private fun StoreItemRow(
     item: ExtensionStoreItem,
     running: Boolean,
@@ -545,12 +810,19 @@ private fun StoreItemRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onOpenDetail)
+                .clickable(
+                    onClickLabel = "查看${item.displayName()}详情",
+                    role = Role.Button,
+                    onClick = onOpenDetail,
+                )
                 .padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            StoreTypeIcon(if (isTheme) Icons.Rounded.Palette else Icons.Rounded.Extension)
+            StoreTypeIcon(
+                icon = if (isTheme) Icons.Rounded.Palette else Icons.Rounded.Extension,
+                contentDescription = if (isTheme) "APP 主题" else "APP 插件",
+            )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -566,13 +838,7 @@ private fun StoreItemRow(
                         modifier = Modifier.weight(1f),
                     )
                     if (owned) {
-                        Text(
-                            text = "已拥有",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                        )
+                        StoreOwnedChip()
                     }
                 }
                 Text(
@@ -584,27 +850,18 @@ private fun StoreItemRow(
                 )
                 StoreItemSubline(item = item)
             }
-            Column(
-                modifier = Modifier.width(74.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(5.dp),
+            Box(
+                modifier = Modifier.width(66.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = item.priceLabel(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
                 Button(
-                onClick = when (actionState) {
-                    StoreItemAction.Purchase -> onPurchase
-                    StoreItemAction.Apply -> onInstall
-                    StoreItemAction.Update -> onInstall
-                    StoreItemAction.Applied -> onInstall
-                },
-                    enabled = enabled && actionState != StoreItemAction.Applied,
+                    onClick = when (actionState) {
+                        StoreItemAction.Purchase -> onPurchase
+                        StoreItemAction.Install -> onInstall
+                        StoreItemAction.Update -> onInstall
+                        StoreItemAction.Installed -> onInstall
+                    },
+                    enabled = enabled && actionState != StoreItemAction.Installed,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(34.dp),
@@ -618,13 +875,13 @@ private fun StoreItemRow(
                 ) {
                     Text(
                         when {
-                        running -> "应用中"
-                        purchasing -> "购买中"
-                        actionState == StoreItemAction.Applied -> "已应用"
-                        actionState == StoreItemAction.Update -> "更新"
-                        actionState == StoreItemAction.Apply -> "应用"
-                        else -> "购买"
-                    },
+                            running -> if (item.type == ExtensionStoreClient.TypeAppTheme) "加入中" else "安装中"
+                            purchasing -> "购买中"
+                            actionState == StoreItemAction.Installed -> if (item.type == ExtensionStoreClient.TypeAppTheme) "已加入" else "已安装"
+                            actionState == StoreItemAction.Update -> "更新"
+                            actionState == StoreItemAction.Install -> if (item.type == ExtensionStoreClient.TypeAppTheme) "加入" else "安装"
+                            else -> "购买"
+                        },
                         fontSize = 13.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -636,10 +893,28 @@ private fun StoreItemRow(
 }
 
 @Composable
+private fun StoreOwnedChip() {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+        contentColor = MaterialTheme.colorScheme.primary,
+    ) {
+        Text(
+            text = "已拥有",
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
 private fun StoreItemSubline(item: ExtensionStoreItem) {
     val author = item.author.ifBlank { "未知作者" }
     val version = item.version.ifBlank { "1" }
     Row(
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -649,12 +924,21 @@ private fun StoreItemSubline(item: ExtensionStoreItem) {
             fontSize = 11.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
         )
         Text(
             text = "v$version",
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
             fontSize = 11.sp,
             maxLines = 1,
+        )
+        Text(
+            text = item.priceLabel(),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -680,11 +964,38 @@ private fun StoreItemDetailPage(
     var previewError by remember(item.id, item.type) { mutableStateOf<String?>(null) }
     var detailLoading by remember(item.id) { mutableStateOf(versions.isEmpty() && comments.isEmpty()) }
     var compareVersionId by remember(item.id) { mutableStateOf<Long?>(null) }
+    var compareVersionContent by remember(item.id) { mutableStateOf<Map<Long, String>>(emptyMap()) }
+    var compareVersionLoadingId by remember(item.id) { mutableStateOf<Long?>(null) }
+    var compareVersionError by remember(item.id) { mutableStateOf<String?>(null) }
     var commentDraft by remember(item.id) { mutableStateOf("") }
     var commentPosting by remember(item.id) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val compareVersion = versions.firstOrNull { it.id == compareVersionId && it.id != item.id }
     val pagerState = rememberPagerState(pageCount = { 2 })
+
+    fun selectCompareVersion(version: ExtensionStoreItem) {
+        if (version.id == item.id || compareVersionId == version.id) {
+            compareVersionId = null
+            compareVersionError = null
+            return
+        }
+        compareVersionId = version.id
+        compareVersionError = null
+        if (version.code.isNotBlank() || compareVersionContent.containsKey(version.id)) return
+        scope.launch {
+            compareVersionLoadingId = version.id
+            runCatching {
+                withContext(Dispatchers.IO) { ExtensionStoreClient.shared.downloadItemContent(version) }
+            }.onSuccess { content ->
+                compareVersionContent = compareVersionContent + (version.id to content)
+            }.onFailure { throwable ->
+                compareVersionError = throwable.message ?: "版本内容读取失败"
+            }
+            if (compareVersionLoadingId == version.id) {
+                compareVersionLoadingId = null
+            }
+        }
+    }
 
     fun submitComment() {
         val activeToken = token
@@ -778,9 +1089,7 @@ private fun StoreItemDetailPage(
                     versions = versions,
                     loading = detailLoading,
                     selectedVersionId = compareVersionId,
-                    onSelectVersion = { version ->
-                        compareVersionId = if (version.id == item.id || compareVersionId == version.id) null else version.id
-                    },
+                    onSelectVersion = ::selectCompareVersion,
                 )
                 if (item.type == ExtensionStoreClient.TypeAppTheme) {
                     StoreThemePreview(content = preview)
@@ -796,6 +1105,9 @@ private fun StoreItemDetailPage(
                 StoreVersionDiffPreview(
                     current = preview,
                     previous = compareVersion,
+                    previousContent = compareVersion?.let { compareVersionContent[it.id] },
+                    loading = compareVersion?.id == compareVersionLoadingId,
+                    error = compareVersionError,
                     isJson = item.type == ExtensionStoreClient.TypeAppTheme,
                 )
             }
@@ -877,7 +1189,10 @@ private fun StoreDetailTabs(
                 modifier = Modifier
                     .weight(1f)
                     .height(36.dp)
-                    .clickable { onSelect(index) },
+                    .clickable(
+                        onClickLabel = "切换到$title",
+                        role = Role.Button,
+                    ) { onSelect(index) },
                 shape = RoundedCornerShape(999.dp),
                 color = if (selected == index) {
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
@@ -1011,7 +1326,15 @@ private fun StoreVersionChip(
     onClick: () -> Unit,
 ) {
     Surface(
-        modifier = if (selected) Modifier else Modifier.clickable(onClick = onClick),
+        modifier = if (selected) {
+            Modifier
+        } else {
+            Modifier.clickable(
+                onClickLabel = "对比$text",
+                role = Role.Button,
+                onClick = onClick,
+            )
+        },
         shape = RoundedCornerShape(999.dp),
         color = when {
             comparing -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f)
@@ -1043,10 +1366,13 @@ private fun StoreVersionChip(
 private fun StoreVersionDiffPreview(
     current: String,
     previous: ExtensionStoreItem?,
+    previousContent: String?,
+    loading: Boolean,
+    error: String?,
     isJson: Boolean,
 ) {
     if (previous == null) return
-    val oldCode = previous.code
+    val oldCode = previousContent ?: previous.code
     val diffLines = remember(current, oldCode, isJson) {
         buildStoreDiff(
             oldText = if (isJson) oldCode.prettyJsonOrRaw() else oldCode.trim(),
@@ -1079,8 +1405,24 @@ private fun StoreVersionDiffPreview(
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.60f))
                 .padding(10.dp),
         ) {
-            if (diffLines.isEmpty()) {
-                Text("两个版本内容一致", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+            if (loading || error != null || oldCode.isBlank()) {
+                val message = when {
+                    loading -> "正在读取旧版本内容"
+                    error != null -> error
+                    oldCode.isBlank() -> "旧版本暂无可对比内容"
+                    else -> ""
+                }
+                Text(
+                    message,
+                    color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                )
+            } else if (diffLines.isEmpty()) {
+                Text(
+                    "两个版本内容一致",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                )
             } else {
                 Column(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -1207,7 +1549,7 @@ private fun StoreCommentRow(comment: ExtensionStoreComment) {
                 SubcomposeAsyncImage(
                     model = comment.avatar,
                     imageLoader = imageLoader,
-                    contentDescription = null,
+                    contentDescription = comment.displayName(),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                     loading = {
@@ -1299,6 +1641,7 @@ private fun StoreDetailActions(
     onInstall: () -> Unit,
     onPurchase: () -> Unit,
 ) {
+    val isTheme = item.type == ExtensionStoreClient.TypeAppTheme
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -1310,11 +1653,11 @@ private fun StoreDetailActions(
         Button(
             onClick = when (actionState) {
                 StoreItemAction.Purchase -> onPurchase
-                StoreItemAction.Apply -> onInstall
+                StoreItemAction.Install -> onInstall
                 StoreItemAction.Update -> onInstall
-                StoreItemAction.Applied -> onInstall
+                StoreItemAction.Installed -> onInstall
             },
-            enabled = enabled && actionState != StoreItemAction.Applied,
+            enabled = enabled && actionState != StoreItemAction.Installed,
             modifier = Modifier.weight(1.6f),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.inverseSurface,
@@ -1325,17 +1668,17 @@ private fun StoreDetailActions(
         ) {
             Icon(
                 imageVector = if (actionState == StoreItemAction.Purchase) Icons.Rounded.Payments else Icons.Rounded.CloudDownload,
-                contentDescription = null,
+                contentDescription = if (actionState == StoreItemAction.Purchase) "购买" else "下载并安装",
                 modifier = Modifier.size(16.dp),
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 when {
-                    running -> "应用中"
+                    running -> "安装中"
                     purchasing -> "购买中"
-                    actionState == StoreItemAction.Applied -> "已应用"
+                    actionState == StoreItemAction.Installed -> if (isTheme) "已加入" else "已安装"
                     actionState == StoreItemAction.Update -> "更新"
-                    actionState == StoreItemAction.Apply -> "应用"
+                    actionState == StoreItemAction.Install -> if (isTheme) "加入" else "安装"
                     else -> "购买 ${item.priceLabel()}"
                 },
                 maxLines = 1,
@@ -1354,7 +1697,8 @@ private fun StoreCodePreview(
     error: String?,
     isJson: Boolean,
 ) {
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     val display = remember(content, isJson) {
         if (isJson) content.prettyJsonOrRaw() else content.trim()
     }
@@ -1376,20 +1720,24 @@ private fun StoreCodePreview(
                     fontSize = 13.sp,
                 )
                 Text(
-                    text = if (isJson) "应用时会加入主题列表" else "应用时会安装插件 JS",
+                    text = if (isJson) "加入后可在主题列表中选择" else "安装后可在插件管理中启用",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
                 )
             }
             TextButton(
                 onClick = {
-                    clipboard.setText(AnnotatedString(display))
-                    FishPiNotifier.success("已复制预览代码")
+                    scope.launch {
+                        clipboard.setClipEntry(
+                            ClipEntry(ClipData.newPlainText("预览代码", display)),
+                        )
+                        FishPiNotifier.success("已复制预览代码")
+                    }
                 },
                 enabled = display.isNotBlank() && !loading && error == null,
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
             ) {
-                Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(15.dp))
+                Icon(Icons.Rounded.ContentCopy, contentDescription = "复制预览代码", modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(3.dp))
                 Text("复制", fontSize = 12.sp)
             }
@@ -1503,7 +1851,7 @@ private fun StoreDetailRow(label: String, value: String) {
 }
 
 @Composable
-private fun StoreTypeIcon(icon: ImageVector) {
+private fun StoreTypeIcon(icon: ImageVector, contentDescription: String) {
     Box(
         modifier = Modifier
             .size(36.dp)
@@ -1511,11 +1859,16 @@ private fun StoreTypeIcon(icon: ImageVector) {
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.09f)),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.70f), modifier = Modifier.size(18.dp))
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.70f),
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 
-private fun ExtensionStoreItem.displayName(): String =
+internal fun ExtensionStoreItem.displayName(): String =
     name.ifBlank { identifier }.ifBlank { "未命名扩展" }
 
 private fun ExtensionStoreComment.displayName(): String =
@@ -1541,16 +1894,109 @@ private fun ExtensionStoreItem.isFree(): Boolean =
 private fun ExtensionStoreItem.priceLabel(): String =
     pricePoints().let { if (it <= 0) "免费" else "$it 积分" }
 
+private fun validateUploadForm(
+    name: String,
+    identifier: String,
+    price: String,
+    type: String,
+    code: String,
+): String? {
+    if (name.isBlank()) return "名称不能为空"
+    if (!StoreIdentifierRegex.matches(identifier)) return "标识符至少 3 位，只能包含字母、数字、点、下划线或连字符"
+    if (price.toIntOrNull() == null) return "价格必须是非负整数"
+    if (code.isBlank()) return "请输入代码或配置内容"
+    return when (type) {
+        ExtensionStoreClient.TypeAppExtension -> {
+            if (!PluginHeaderRegex.containsMatchIn(code)) {
+                "APP 扩展必须包含 // ==FishPiPlugin== 到 // ==/FishPiPlugin== 头部声明"
+            } else {
+                null
+            }
+        }
+        ExtensionStoreClient.TypeAppTheme -> {
+            runCatching { JSONObject(code) }
+                .fold(
+                    onSuccess = { null },
+                    onFailure = { "APP 主题必须是合法 JSON：${it.message ?: "解析失败"}" },
+                )
+        }
+        else -> "只能发布 APP 扩展或 APP 主题"
+    }
+}
+
+private fun defaultAppExtensionCode(): String =
+    """
+    // ==FishPiPlugin==
+    // @name         我的插件
+    // @author       你的名字
+    // @version      1.0.0
+    // @scenes       chatRoom
+    // ==/FishPiPlugin==
+
+    ui.notify('Hello in FishPi APP Extension!');
+    log('plugin loaded');
+    """.trimIndent()
+
+private fun defaultAppThemeCode(): String =
+    """
+    {
+      "schema": 1,
+      "previewTemplate": "fishpi-mobile-v1",
+      "name": "我的主题",
+      "description": "适合 FishPi APP 的主题",
+      "colorScheme": "light",
+      "colors": {
+        "base-100": "#F3F8FF",
+        "base-200": "#FFFFFF",
+        "base-300": "#E9F2FF",
+        "base-content": "#08233F",
+        "primary": "#08233F",
+        "primary-content": "#FFFFFF",
+        "secondary": "#0B5C93",
+        "secondary-content": "#FFFFFF",
+        "accent": "#7CFF52",
+        "accent-content": "#08233F",
+        "neutral": "#5D7188",
+        "neutral-content": "#FFFFFF",
+        "info": "#0B5C93",
+        "success": "#42D94D",
+        "warning": "#EAB308",
+        "error": "#E53935"
+      },
+      "radius": {
+        "radius-selector": 40,
+        "radius-field": 18,
+        "radius-box": 12
+      },
+      "spacing": {
+        "page": 14,
+        "section": 12,
+        "item": 8,
+        "control": 10
+      },
+      "border": {
+        "border": 1,
+        "opacity": 0.2
+      },
+      "depth": {
+        "depth": 0.12
+      },
+      "wallpaper": {
+        "image": "assets/wallpaper.png"
+      }
+    }
+    """.trimIndent()
+
 private data class StoreOwnership(
     val current: Boolean,
     val previous: Boolean,
 )
 
-private fun ExtensionStoreItem.actionState(ownership: StoreOwnership, currentApplied: Boolean): StoreItemAction =
+private fun ExtensionStoreItem.actionState(ownership: StoreOwnership, currentInstalled: Boolean): StoreItemAction =
     when {
-        currentApplied -> StoreItemAction.Applied
+        currentInstalled -> StoreItemAction.Installed
         ownership.previous && !ownership.current -> StoreItemAction.Update
-        ownership.current -> StoreItemAction.Apply
+        ownership.current -> StoreItemAction.Install
         else -> StoreItemAction.Purchase
     }
 
@@ -1571,14 +2017,14 @@ private fun ExtensionStoreItem.ownershipIn(
     return StoreOwnership(current = current, previous = previous)
 }
 
-private fun ExtensionStoreItem.isCurrentApplied(
+private fun ExtensionStoreItem.isCurrentInstalled(
     pluginManager: PluginManager,
-    isThemeApplied: (String) -> Boolean,
+    isThemeSaved: (String) -> Boolean,
     loadedContent: String?,
 ): Boolean =
     if (type == ExtensionStoreClient.TypeAppTheme) {
         val themeContent = loadedContent?.takeIf { it.isNotBlank() } ?: code
-        themeContent.isNotBlank() && isThemeApplied(themeContent)
+        themeContent.isNotBlank() && isThemeSaved(themeContent)
     } else {
         val pluginContent = loadedContent?.takeIf { it.isNotBlank() } ?: code
         pluginContent.isNotBlank() && pluginManager.storePluginMatchesSource(preferredStoreName(), pluginContent)

@@ -1,0 +1,199 @@
+package dev.fishpi.mobile.feature.extensionstore
+
+import dev.fishpi.mobile.core.ui.UiController
+import dev.fishpi.mobile.data.ExtensionStoreClient
+import dev.fishpi.mobile.data.ExtensionStoreItem
+import dev.fishpi.mobile.data.ExtensionStoreSession
+import dev.fishpi.mobile.data.ExtensionStoreUploadRequest
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+internal class ExtensionStoreController(
+    private val apiKey: String,
+    private val client: ExtensionStoreClient = ExtensionStoreClient.shared,
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+) : UiController<ExtensionStoreState, ExtensionStoreAction> {
+    private val _state = MutableStateFlow(ExtensionStoreState())
+    override val state: StateFlow<ExtensionStoreState> = _state
+
+    private val _effects = MutableSharedFlow<ExtensionStoreEffect>(extraBufferCapacity = 16)
+    val effects: SharedFlow<ExtensionStoreEffect> = _effects.asSharedFlow()
+
+    private var initialized = false
+    private var searchJob: Job? = null
+    private var loadRequestId = 0
+
+    override fun dispatch(action: ExtensionStoreAction) {
+        when (action) {
+            ExtensionStoreAction.Initialize -> initialize()
+            ExtensionStoreAction.Refresh -> loadStore()
+            is ExtensionStoreAction.ChangeFilter -> {
+                _state.update { it.copy(selectedFilter = action.filter) }
+                loadStore()
+            }
+            is ExtensionStoreAction.ChangeQuery -> {
+                _state.update { it.copy(query = action.query) }
+                searchJob?.cancel()
+                searchJob = scope.launch {
+                    delay(280)
+                    loadStore()
+                }
+            }
+            is ExtensionStoreAction.Purchase -> purchaseItem(action.item)
+            is ExtensionStoreAction.Upload -> uploadItem(action.request)
+        }
+    }
+
+    fun close() {
+        searchJob?.cancel()
+    }
+
+    private fun initialize() {
+        if (initialized) return
+        initialized = true
+        if (apiKey.isBlank()) {
+            _state.update {
+                it.copy(authError = "请先登录后使用鱼排扩展集市", items = emptyList())
+            }
+            return
+        }
+        scope.launch {
+            _state.update { it.copy(isAuthenticating = true, authError = null) }
+            runCatching {
+                withContext(Dispatchers.IO) { client.getToken(apiKey) }
+            }.onSuccess { session ->
+                _state.update { it.copy(session = session, isAuthenticating = false) }
+                loadStore(session)
+            }.onFailure { throwable ->
+                _state.update {
+                    it.copy(
+                        authError = throwable.message ?: "鱼排扩展集市鉴权失败",
+                        isAuthenticating = false,
+                        items = emptyList(),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun loadStore(activeSession: ExtensionStoreSession? = _state.value.session) {
+        val requestId = ++loadRequestId
+        val snapshot = _state.value
+        scope.launch {
+            _state.update { it.copy(isLoading = true, loadError = null) }
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val pageTask = async {
+                        client.getPublishedItems(
+                            search = snapshot.query.trim(),
+                            type = snapshot.selectedFilter.type,
+                            limit = 12,
+                        )
+                    }
+                    val purchasesTask = async {
+                        activeSession?.let { client.getMyPurchases(it.accessToken) }.orEmpty()
+                    }
+                    pageTask.await() to purchasesTask.await()
+                }
+            }.onSuccess { (page, purchases) ->
+                if (requestId == loadRequestId) {
+                    _state.update {
+                        it.copy(
+                            items = page.items,
+                            total = page.total,
+                            purchasedItems = purchases,
+                            isLoading = false,
+                        )
+                    }
+                }
+            }.onFailure { throwable ->
+                if (requestId == loadRequestId) {
+                    _state.update {
+                        it.copy(
+                            loadError = throwable.message ?: "鱼排扩展集市加载失败",
+                            isLoading = false,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun purchaseItem(item: ExtensionStoreItem) {
+        val token = _state.value.session?.accessToken
+        if (token.isNullOrBlank()) {
+            emitEffect(ExtensionStoreEffect.ShowError("请先完成集市鉴权"))
+            return
+        }
+        if (_state.value.purchasingId != null) return
+        scope.launch {
+            _state.update { it.copy(purchasingId = item.id) }
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    client.purchaseItem(token, item.id)
+                    client.getMyPurchases(token)
+                }
+            }.onSuccess { purchases ->
+                _state.update { it.copy(purchasedItems = purchases, purchasingId = null) }
+                emitEffect(ExtensionStoreEffect.ShowMessage("${item.displayName()} 已购买"))
+            }.onFailure { throwable ->
+                _state.update { it.copy(purchasingId = null) }
+                emitEffect(ExtensionStoreEffect.ShowError("购买失败：${throwable.message ?: "未知错误"}"))
+            }
+        }
+    }
+
+    private fun uploadItem(request: ExtensionStoreUploadRequest) {
+        val token = _state.value.session?.accessToken
+        if (token.isNullOrBlank()) {
+            emitEffect(ExtensionStoreEffect.ShowError("请先完成集市鉴权"))
+            return
+        }
+        if (_state.value.isUploading) return
+        scope.launch {
+            _state.update { it.copy(isUploading = true) }
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    client.uploadItem(token, request)
+                }
+            }.onSuccess {
+                _state.update {
+                    it.copy(
+                        isUploading = false,
+                        uploadSuccessCount = it.uploadSuccessCount + 1,
+                    )
+                }
+                emitEffect(ExtensionStoreEffect.UploadFinished)
+                emitEffect(
+                    ExtensionStoreEffect.ShowMessage(
+                        if (request.isDraft) "草稿已保存" else "发布成功，作品已进入审核流程",
+                    ),
+                )
+                loadStore()
+            }.onFailure { throwable ->
+                _state.update { it.copy(isUploading = false) }
+                emitEffect(
+                    ExtensionStoreEffect.ShowError(
+                        "${if (request.isDraft) "保存草稿" else "发布"}失败：${throwable.message ?: "未知错误"}",
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun emitEffect(effect: ExtensionStoreEffect) {
+        _effects.tryEmit(effect)
+    }
+}

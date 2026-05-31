@@ -103,7 +103,7 @@ import dev.fishpi.mobile.feature.chat.ChatController
 import dev.fishpi.mobile.feature.chat.ChatRealtimeRouteLifecycle
 import dev.fishpi.mobile.feature.chat.ChatRoute
 import dev.fishpi.mobile.feature.chat.blocksChatMessage
-import dev.fishpi.mobile.extension.ExtensionStoreScreen
+import dev.fishpi.mobile.feature.extensionstore.ExtensionStoreRoute
 import dev.fishpi.mobile.shared.message.toRenderHints
 import dev.fishpi.mobile.feature.home.HomeRoute
 import dev.fishpi.mobile.feature.pluginui.PluginUiRoute
@@ -531,10 +531,10 @@ internal fun MainShell(
                         HomePane.Fun -> FunApiScreen(
                             onOpenStore = { homePane = HomePane.Store },
                         )
-                        HomePane.Store -> ExtensionStoreScreen(
+                        HomePane.Store -> ExtensionStoreRoute(
                             apiKey = session.apiKey,
                             onImportTheme = onSaveStoreTheme,
-                            isThemeApplied = isStoreThemeSaved,
+                            isThemeSaved = isStoreThemeSaved,
                         )
                     }
                 }
