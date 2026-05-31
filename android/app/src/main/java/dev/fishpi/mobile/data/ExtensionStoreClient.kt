@@ -55,7 +55,7 @@ class ExtensionStoreClient private constructor(
 
         const val TypeAppExtension = "app-extension"
         const val TypeAppTheme = "app-theme"
-        private const val DefaultBaseUrl = "https://room.net.time-pack.com/api"
+        private const val DefaultBaseUrl = "https://ext.adventext.fun/api"
         private const val MaxStoreContentBytes = 2 * 1024 * 1024
     }
 
@@ -258,8 +258,11 @@ class ExtensionStoreClient private constructor(
         val trimmed = rawUrl.trim()
         require(trimmed.isNotBlank()) { "扩展内容地址为空" }
         return when {
-            trimmed.startsWith("http://room.net.time-pack.com/") -> "https://" + trimmed.removePrefix("http://")
-            trimmed.startsWith("/") -> "https://room.net.time-pack.com$trimmed"
+            trimmed.startsWith("/") -> {
+                val base = URL(baseUrl)
+                val port = if (base.port > 0) ":${base.port}" else ""
+                "${base.protocol}://${base.host}$port$trimmed"
+            }
             else -> trimmed
         }
     }

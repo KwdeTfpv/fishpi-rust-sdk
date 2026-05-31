@@ -434,6 +434,7 @@ internal fun LoginScreen(
                 onClose = { showQrScanner = false },
             )
         }
+
     }
 }
 
