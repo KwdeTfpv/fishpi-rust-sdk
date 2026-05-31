@@ -100,7 +100,7 @@ internal class FishPiWebLoginClient(
 
             continuation.invokeOnCancellation {
                 if (finished.compareAndSet(false, true)) {
-                    socket?.close(1000, null)
+                    socket.close(1000, null)
                 }
             }
         }
