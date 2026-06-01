@@ -159,8 +159,8 @@ internal fun MainShell(
     onThemeChange: (String) -> Unit,
     onImportThemePackage: suspend (String) -> Result<String>,
     onSaveEditedTheme: (String) -> Result<String>,
-    onSaveStoreTheme: (String) -> Result<String>,
-    isStoreThemeSaved: (String) -> Boolean,
+    onSaveStoreTheme: (String, Long, String) -> Result<String>,
+    storeThemeSaveState: (String, Long, String) -> StoreThemeSaveState,
     onDeleteCustomTheme: (String) -> Boolean,
     chatWallpaperUri: String,
     onChatWallpaperChange: (String) -> Unit,
@@ -534,7 +534,7 @@ internal fun MainShell(
                         HomePane.Store -> ExtensionStoreRoute(
                             apiKey = session.apiKey,
                             onImportTheme = onSaveStoreTheme,
-                            isThemeSaved = isStoreThemeSaved,
+                            themeSaveState = storeThemeSaveState,
                         )
                     }
                 }

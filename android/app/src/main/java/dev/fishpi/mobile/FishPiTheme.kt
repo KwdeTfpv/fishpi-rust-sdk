@@ -45,6 +45,12 @@ internal data class CustomFishPiTheme(
     val previewImageUris: Map<String, String> = emptyMap(),
 )
 
+internal enum class StoreThemeSaveState {
+    NotSaved,
+    SavedSameContent,
+    SavedDifferentContent,
+}
+
 internal data class FishPiThemeOption(
     val key: String,
     val label: String,
@@ -460,6 +466,17 @@ internal fun buildEditableThemeJson(
             .put("border", tokens.border.width)
             .put("opacity", tokens.border.opacity))
         .put("depth", JSONObject().put("depth", tokens.depth.level))
+        .toString()
+}
+
+internal fun buildStoreThemeJson(
+    rawJson: String,
+    identifier: String,
+    itemId: Long,
+): String {
+    val storeIdentifier = identifier.trim().ifBlank { "item-$itemId" }
+    return JSONObject(rawJson)
+        .put("key", "store:$storeIdentifier")
         .toString()
 }
 

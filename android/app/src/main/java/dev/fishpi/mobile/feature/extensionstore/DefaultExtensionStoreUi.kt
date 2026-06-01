@@ -87,6 +87,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.FishPiTheme
+import dev.fishpi.mobile.StoreThemeSaveState
 import dev.fishpi.mobile.rememberFishPiImageLoader
 import dev.fishpi.mobile.data.ExtensionStoreClient
 import dev.fishpi.mobile.data.ExtensionStoreComment
@@ -135,8 +136,8 @@ private enum class StoreItemAction {
 internal fun DefaultExtensionStoreUi(
     state: ExtensionStoreState,
     dispatch: (ExtensionStoreAction) -> Unit,
-    onImportTheme: (String) -> Result<String>,
-    isThemeSaved: (String) -> Boolean,
+    onImportTheme: (String, Long, String) -> Result<String>,
+    themeSaveState: (String, Long, String) -> StoreThemeSaveState,
 ) {
     val scope = rememberCoroutineScope()
     val pluginManager = remember { PluginManager.get() }
@@ -151,27 +152,45 @@ internal fun DefaultExtensionStoreUi(
     var uploadSubmitted by remember { mutableStateOf(false) }
     var uploadBaseline by remember { mutableStateOf(state.uploadSuccessCount) }
 
-    fun actionStateFor(item: ExtensionStoreItem, versions: List<ExtensionStoreItem> = emptyList()): StoreItemAction =
-        item.actionState(
-            ownership = item.ownershipIn(state.purchasedItems, versions),
+    fun actionStateFor(item: ExtensionStoreItem, versions: List<ExtensionStoreItem> = emptyList()): StoreItemAction {
+        val ownership = item.ownershipIn(state.purchasedItems, versions)
+        if (item.type == ExtensionStoreClient.TypeAppTheme) {
+            val themeContent = contentById[item.id]?.takeIf { it.isNotBlank() } ?: item.code
+            val currentThemeState = if (themeContent.isNotBlank()) {
+                themeSaveState(item.identifier, item.id, themeContent)
+            } else {
+                StoreThemeSaveState.NotSaved
+            }
+            return item.themeActionState(ownership, currentThemeState)
+        }
+        return item.actionState(
+            ownership = ownership,
             currentInstalled = item.isCurrentInstalled(
                 pluginManager = pluginManager,
-                isThemeSaved = isThemeSaved,
                 loadedContent = contentById[item.id],
             ),
         )
+    }
 
     fun installItem(item: ExtensionStoreItem) {
         if (installingId != null) return
         scope.launch {
             installingId = item.id
+            var themeSaveStateBefore: StoreThemeSaveState? = null
             runCatching {
                 val content = withContext(Dispatchers.IO) {
                     ExtensionStoreClient.shared.downloadItemContent(item)
                 }
                 contentById = contentById + (item.id to content)
+                themeSaveStateBefore = if (item.type == ExtensionStoreClient.TypeAppTheme) {
+                    themeSaveState(item.identifier, item.id, content)
+                } else {
+                    null
+                }
                 if (item.type == ExtensionStoreClient.TypeAppTheme) {
-                    onImportTheme(content).getOrThrow()
+                    if (themeSaveStateBefore != StoreThemeSaveState.SavedSameContent) {
+                        onImportTheme(item.identifier, item.id, content).getOrThrow()
+                    }
                 } else {
                     withContext(Dispatchers.IO) {
                         pluginManager.installPluginFromSource(content, item.preferredStoreName(), enable = false)
@@ -180,7 +199,11 @@ internal fun DefaultExtensionStoreUi(
             }.onSuccess {
                 FishPiNotifier.success(
                     if (item.type == ExtensionStoreClient.TypeAppTheme) {
-                        "${item.displayName()} 已加入主题列表"
+                        if (themeSaveStateBefore == StoreThemeSaveState.SavedDifferentContent) {
+                            "${item.displayName()} 已更新"
+                        } else {
+                            "${item.displayName()} 已加入主题列表"
+                        }
                     } else {
                         "${item.displayName()} 已安装"
                     },
@@ -2000,6 +2023,18 @@ private fun ExtensionStoreItem.actionState(ownership: StoreOwnership, currentIns
         else -> StoreItemAction.Purchase
     }
 
+private fun ExtensionStoreItem.themeActionState(
+    ownership: StoreOwnership,
+    saveState: StoreThemeSaveState,
+): StoreItemAction =
+    when {
+        saveState == StoreThemeSaveState.SavedSameContent -> StoreItemAction.Installed
+        saveState == StoreThemeSaveState.SavedDifferentContent -> StoreItemAction.Update
+        ownership.previous && !ownership.current -> StoreItemAction.Update
+        ownership.current -> StoreItemAction.Install
+        else -> StoreItemAction.Purchase
+    }
+
 private fun ExtensionStoreItem.ownershipIn(
     purchases: List<ExtensionStoreItem>,
     versions: List<ExtensionStoreItem>,
@@ -2019,12 +2054,10 @@ private fun ExtensionStoreItem.ownershipIn(
 
 private fun ExtensionStoreItem.isCurrentInstalled(
     pluginManager: PluginManager,
-    isThemeSaved: (String) -> Boolean,
     loadedContent: String?,
 ): Boolean =
     if (type == ExtensionStoreClient.TypeAppTheme) {
-        val themeContent = loadedContent?.takeIf { it.isNotBlank() } ?: code
-        themeContent.isNotBlank() && isThemeSaved(themeContent)
+        false
     } else {
         val pluginContent = loadedContent?.takeIf { it.isNotBlank() } ?: code
         pluginContent.isNotBlank() && pluginManager.storePluginMatchesSource(preferredStoreName(), pluginContent)

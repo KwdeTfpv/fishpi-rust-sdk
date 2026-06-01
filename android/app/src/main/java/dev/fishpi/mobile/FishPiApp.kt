@@ -67,8 +67,29 @@ fun FishPiApp() {
             store.saveImportedThemeJsons(nextThemes.map { it.rawJson })
             custom.label
         }
-    fun isStoreThemeSaved(rawJson: String): Boolean =
-        importedThemes.any { it.rawJson == rawJson }
+    fun storeThemeSaveState(identifier: String, itemId: Long, rawJson: String): StoreThemeSaveState =
+        runCatching {
+            val storeRaw = buildStoreThemeJson(rawJson, identifier, itemId)
+            val custom = parseCustomFishPiTheme(storeRaw)
+            val existing = importedThemes.firstOrNull { it.key == custom.key }
+            when {
+                existing?.rawJson == storeRaw -> StoreThemeSaveState.SavedSameContent
+                existing != null -> StoreThemeSaveState.SavedDifferentContent
+                importedThemes.any { it.rawJson == rawJson } -> StoreThemeSaveState.SavedDifferentContent
+                else -> StoreThemeSaveState.NotSaved
+            }
+        }.getOrDefault(StoreThemeSaveState.NotSaved)
+
+    fun saveStoreTheme(identifier: String, itemId: Long, rawJson: String): Result<String> =
+        runCatching {
+            val storeRaw = buildStoreThemeJson(rawJson, identifier, itemId)
+            val custom = parseCustomFishPiTheme(storeRaw)
+            val nextThemes = (importedThemes.filterNot { it.key == custom.key || it.rawJson == rawJson } + custom)
+            importedThemes = nextThemes
+            store.saveImportedThemeJsons(nextThemes.map { it.rawJson })
+            custom.label
+        }
+
     suspend fun importThemePackage(uri: String): Result<String> =
         runCatching {
             val custom = withContext(Dispatchers.IO) {
@@ -186,8 +207,8 @@ fun FishPiApp() {
                     onThemeChange = { applyThemeKey(it) },
                     onImportThemePackage = { importThemePackage(it) },
                     onSaveEditedTheme = { importTheme(it) },
-                    onSaveStoreTheme = { saveThemeOnly(it) },
-                    isStoreThemeSaved = { isStoreThemeSaved(it) },
+                    onSaveStoreTheme = { identifier, itemId, raw -> saveStoreTheme(identifier, itemId, raw) },
+                    storeThemeSaveState = { identifier, itemId, raw -> storeThemeSaveState(identifier, itemId, raw) },
                     onDeleteCustomTheme = { deleteCustomTheme(it) },
                     chatWallpaperUri = chatWallpaperUri,
                     onChatWallpaperChange = { applyChatWallpaper(it) },

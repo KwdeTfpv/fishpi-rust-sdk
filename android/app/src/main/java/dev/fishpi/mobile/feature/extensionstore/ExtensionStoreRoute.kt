@@ -7,12 +7,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import dev.fishpi.mobile.FishPiNotifier
+import dev.fishpi.mobile.StoreThemeSaveState
 
 @Composable
 internal fun ExtensionStoreRoute(
     apiKey: String,
-    onImportTheme: (String) -> Result<String>,
-    isThemeSaved: (String) -> Boolean,
+    onImportTheme: (String, Long, String) -> Result<String>,
+    themeSaveState: (String, Long, String) -> StoreThemeSaveState,
 ) {
     val controller = remember(apiKey) {
         ExtensionStoreController(apiKey = apiKey)
@@ -41,6 +42,6 @@ internal fun ExtensionStoreRoute(
         state = state,
         dispatch = controller::dispatch,
         onImportTheme = onImportTheme,
-        isThemeSaved = isThemeSaved,
+        themeSaveState = themeSaveState,
     )
 }
