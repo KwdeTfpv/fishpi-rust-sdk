@@ -52,8 +52,8 @@ theme.fpt
     "secondary-content": "#FFFFFF",
     "accent": "#7CFF52",
     "accent-content": "#08233F",
-    "neutral": "#5D7188",
-    "neutral-content": "#FFFFFF",
+    "neutral": "#B7C4D3",
+    "neutral-content": "#5D7188",
     "info": "#0B5C93",
     "success": "#42D94D",
     "warning": "#EAB308",
@@ -120,8 +120,8 @@ theme.fpt
 | `secondary-content` | secondary 上的文字或图标 |
 | `accent` | 强调点，例如当前状态、关键提示、引用线 |
 | `accent-content` | accent 上的文字或图标 |
-| `neutral` | 辅助文字、时间、弱边界 |
-| `neutral-content` | neutral 上的文字或图标 |
+| `neutral` | 边界、分割线、弱色块来源 |
+| `neutral-content` | 辅助文字、时间、客户端名、说明文字 |
 | `info` | 信息状态，也用于部分工具入口 |
 | `success` | 成功、已连接、在线状态 |
 | `warning` | 警告、正在重连、需要注意的状态 |

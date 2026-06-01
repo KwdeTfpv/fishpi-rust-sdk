@@ -73,8 +73,8 @@ internal val ThemeTokenColorSections = listOf(
             ThemeTokenColorSpec(ThemeTokenColorKey.SecondaryContent, "secondary-content"),
             ThemeTokenColorSpec(ThemeTokenColorKey.Accent, "accent 状态强调"),
             ThemeTokenColorSpec(ThemeTokenColorKey.AccentContent, "accent-content"),
-            ThemeTokenColorSpec(ThemeTokenColorKey.Neutral, "neutral 弱文字/边界"),
-            ThemeTokenColorSpec(ThemeTokenColorKey.NeutralContent, "neutral-content"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.Neutral, "neutral 边界/弱色块"),
+            ThemeTokenColorSpec(ThemeTokenColorKey.NeutralContent, "neutral-content 弱文字/说明"),
         ),
     ),
     ThemeTokenColorSection(
