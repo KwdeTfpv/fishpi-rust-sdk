@@ -69,9 +69,9 @@ pub struct RedPacketGot {
         rename = "userMoney",
         alias = "money",
         default,
-        deserialize_with = "deserialize_u32"
+        deserialize_with = "deserialize_i32"
     )]
-    pub user_money: u32,
+    pub user_money: i32,
     /// 领取时间
     pub time: String,
 }
@@ -188,6 +188,14 @@ where
     value_to_u32(&value).ok_or_else(|| serde::de::Error::custom("Expected u32 or numeric string"))
 }
 
+fn deserialize_i32<'de, D>(deserializer: D) -> Result<i32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+    value_to_i32(&value).ok_or_else(|| serde::de::Error::custom("Expected i32 or numeric string"))
+}
+
 fn value_to_u32(value: &Value) -> Option<u32> {
     value
         .as_u64()
@@ -198,6 +206,13 @@ fn value_to_u32(value: &Value) -> Option<u32> {
         })
         .or_else(|| value.as_str().and_then(|s| s.trim().parse::<u64>().ok()))
         .and_then(|n| u32::try_from(n).ok())
+}
+
+fn value_to_i32(value: &Value) -> Option<i32> {
+    value
+        .as_i64()
+        .or_else(|| value.as_str().and_then(|s| s.trim().parse::<i64>().ok()))
+        .and_then(|n| i32::try_from(n).ok())
 }
 
 fn deserialize_optional_gesture<'de, D>(deserializer: D) -> Result<Option<GestureType>, D::Error>
