@@ -27,6 +27,7 @@ internal enum class ThemeTokenColorKey {
     Success,
     Warning,
     Error,
+    MessageOutgoing,
 }
 
 internal enum class ThemeTokenMetricKey {
@@ -83,6 +84,12 @@ internal val ThemeTokenColorSections = listOf(
             ThemeTokenColorSpec(ThemeTokenColorKey.Success, "success 成功/相册"),
             ThemeTokenColorSpec(ThemeTokenColorKey.Warning, "warning 警告"),
             ThemeTokenColorSpec(ThemeTokenColorKey.Error, "error 错误/红包"),
+        ),
+    ),
+    ThemeTokenColorSection(
+        "聊天",
+        listOf(
+            ThemeTokenColorSpec(ThemeTokenColorKey.MessageOutgoing, "message-outgoing 自己消息气泡"),
         ),
     ),
 )
@@ -154,6 +161,7 @@ internal data class EditableThemeTokens(
             success = get(ThemeTokenColorKey.Success).toThemeColor(),
             warning = get(ThemeTokenColorKey.Warning).toThemeColor(),
             error = get(ThemeTokenColorKey.Error).toThemeColor(),
+            messageOutgoing = get(ThemeTokenColorKey.MessageOutgoing).toThemeColor(),
         ),
         radius = FishPiRadiusTokens(
             selector = get(ThemeTokenMetricKey.RadiusSelector),
@@ -193,6 +201,7 @@ internal data class EditableThemeTokens(
                 ThemeTokenColorKey.Success to tokens.colors.success.toThemeHex(),
                 ThemeTokenColorKey.Warning to tokens.colors.warning.toThemeHex(),
                 ThemeTokenColorKey.Error to tokens.colors.error.toThemeHex(),
+                ThemeTokenColorKey.MessageOutgoing to tokens.colors.messageOutgoing.toThemeHex(),
             ),
             metrics = mapOf(
                 ThemeTokenMetricKey.RadiusSelector to tokens.radius.selector,

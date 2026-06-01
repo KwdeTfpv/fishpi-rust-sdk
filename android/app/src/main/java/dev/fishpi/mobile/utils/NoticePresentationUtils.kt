@@ -82,6 +82,12 @@ internal fun NoticeItemView.noticeSummaryText(): String {
 }
 
 internal fun NoticeItemView.noticePrimaryDestination(): NoticeDestination {
+    if (category == "@") {
+        return when (jumpType) {
+            "article" -> NoticeDestination.Article
+            else -> NoticeDestination.ChatRoom
+        }
+    }
     return when (dataType) {
         NoticeDataType.AT,
         NoticeDataType.CHATROOM_AT,
@@ -107,6 +113,7 @@ internal fun NoticeItemView.noticePrimaryDestination(): NoticeDestination {
 }
 
 internal fun NoticeItemView.noticePresentationCategory(): NoticePresentationCategory {
+    if (category == "@") return NoticePresentationCategory.AtMe
     return when (dataType) {
         NoticeDataType.COMMENTED,
         NoticeDataType.REPLY,
@@ -142,6 +149,7 @@ internal fun NoticeItemView.noticePresentationCategory(): NoticePresentationCate
 }
 
 internal fun NoticeItemView.noticeCategoryLabel(): String {
+    if (category == "@") return "@我"
     return when (dataType) {
         NoticeDataType.POINT_CHARGE,
         NoticeDataType.POINT_TRANSFER,

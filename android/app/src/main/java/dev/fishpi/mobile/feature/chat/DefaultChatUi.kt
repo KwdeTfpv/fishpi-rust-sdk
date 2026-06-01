@@ -3163,7 +3163,7 @@ private fun PluginFloatingChip(
                 }
             )
             .border(
-                1.dp,
+                FishPiTheme.borderWidth,
                 when {
                     selected -> palette.accent.copy(alpha = 0.26f)
                     else -> palette.outline.copy(alpha = 0.13f)

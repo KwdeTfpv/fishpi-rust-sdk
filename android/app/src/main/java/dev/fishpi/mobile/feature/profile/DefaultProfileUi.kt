@@ -67,6 +67,7 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.AttachMoney
@@ -116,6 +117,7 @@ import dev.fishpi.mobile.data.SavedAccount
 import dev.fishpi.mobile.data.UserActivityView
 import dev.fishpi.mobile.data.MedalView
 import dev.fishpi.mobile.data.BreezemoonView
+import dev.fishpi.mobile.shared.message.copyToClipboard
 import dev.fishpi.mobile.utils.EditableThemeTokens
 import dev.fishpi.mobile.utils.ThemeTokenColorKey
 import dev.fishpi.mobile.utils.ThemeTokenColorSections
@@ -661,6 +663,7 @@ private fun ThemeEditorOverlay(
     onSave: (String) -> Result<String>,
     onDismiss: () -> Unit,
 ) {
+    val context = LocalContext.current
     var name by remember(option.key) { mutableStateOf(option.label) }
     var editableTokens by remember(option.key) { mutableStateOf(EditableThemeTokens.from(option.tokens)) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -681,6 +684,15 @@ private fun ThemeEditorOverlay(
             error = null
         }
         return editableTokens.toTokens(option.tokens)
+    }
+
+    fun currentThemeJson(reportError: Boolean = false): String? {
+        val tokens = normalizedTokens(reportError = reportError) ?: return null
+        return buildEditableThemeJson(
+            label = name.ifBlank { "应用内主题" },
+            description = "应用内编辑主题",
+            tokens = tokens,
+        )
     }
 
     val previewTokens by remember(
@@ -791,16 +803,27 @@ private fun ThemeEditorOverlay(
             Spacer(modifier = Modifier.height(4.dp))
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-                    .background(profileAccentSoft())
-                    .clickable {
-                        val tokens = normalizedTokens(reportError = true) ?: return@clickable
-                        val raw = buildEditableThemeJson(
-                            label = name.ifBlank { "应用内主题" },
-                            description = "应用内编辑主题",
-                            tokens = tokens,
-                        )
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
+            ) {
+                ThemeEditorActionButton(
+                    text = "复制 JSON",
+                    icon = Icons.Rounded.ContentCopy,
+                    primary = false,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        val raw = currentThemeJson(reportError = true) ?: return@ThemeEditorActionButton
+                        context.copyToClipboard("FishPi 主题 JSON", raw)
+                        FishPiNotifier.success("已复制主题 JSON")
+                    },
+                )
+                ThemeEditorActionButton(
+                    text = "保存并应用",
+                    icon = Icons.Rounded.CheckCircle,
+                    primary = true,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        val raw = currentThemeJson(reportError = true) ?: return@ThemeEditorActionButton
                         val result = onSave(raw)
                         result.fold(
                             onSuccess = { FishPiNotifier.success("已保存主题：$it") },
@@ -809,17 +832,44 @@ private fun ThemeEditorOverlay(
                         if (result.isSuccess) {
                             onDismiss()
                         }
-                    }
-                    .padding(14.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    text = "保存并应用主题",
-                    color = profileAccentColor(),
-                    fontWeight = FontWeight.SemiBold,
+                    },
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ThemeEditorActionButton(
+    text: String,
+    icon: ImageVector,
+    primary: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(FishPiTheme.radiusBox)
+    val background = if (primary) profileAccentSoft() else FishPiTheme.surfaceContainer
+    val color = if (primary) profileAccentColor() else FishPiTheme.onSurface
+    Row(
+        modifier = modifier
+            .clip(shape)
+            .background(background)
+            .border(FishPiTheme.borderWidth, FishPiTheme.outline.copy(alpha = if (primary) 0.10f else 0.16f), shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = text,
+            color = color,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -1074,6 +1124,7 @@ private fun themeColorVariable(key: ThemeTokenColorKey): String = when (key) {
     ThemeTokenColorKey.Success -> "--color-success"
     ThemeTokenColorKey.Warning -> "--color-warning"
     ThemeTokenColorKey.Error -> "--color-error"
+    ThemeTokenColorKey.MessageOutgoing -> "--color-message-outgoing"
 }
 
 private fun themeColorTitle(key: ThemeTokenColorKey): String = when (key) {
@@ -1093,6 +1144,7 @@ private fun themeColorTitle(key: ThemeTokenColorKey): String = when (key) {
     ThemeTokenColorKey.Success -> "成功 / 已连接"
     ThemeTokenColorKey.Warning -> "警告 / 重连中"
     ThemeTokenColorKey.Error -> "错误 / 红包"
+    ThemeTokenColorKey.MessageOutgoing -> "自己消息气泡"
 }
 
 private fun themeMetricVariable(key: ThemeTokenMetricKey): String = when (key) {

@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.theme
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,10 +11,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -25,8 +28,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,11 +39,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import dev.fishpi.mobile.FishPiPalette
+import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.FishPiThemeOption
 import dev.fishpi.mobile.FishPiThemeTokens
 import dev.fishpi.mobile.FishPiUiStyle
 import dev.fishpi.mobile.FishPiM3BridgedTheme
 import dev.fishpi.mobile.rememberFishPiImageLoader
+import dev.fishpi.mobile.shared.message.native.NativeMessageTheme
+import dev.fishpi.mobile.ui.components.ActionChipButton
 import dev.fishpi.mobile.toPalette
 
 private enum class ThemePreviewPage(val label: String) {
@@ -46,6 +54,7 @@ private enum class ThemePreviewPage(val label: String) {
     Home("首页"),
     Article("帖子"),
     Profile("我的"),
+    Components("组件"),
 }
 
 @Composable
@@ -94,6 +103,7 @@ internal fun ThemePreviewDeck(
                 ThemePreviewPage.Home -> HomePreview(palette, tokens)
                 ThemePreviewPage.Article -> ArticlePreview(palette, tokens)
                 ThemePreviewPage.Profile -> ProfilePreview(palette, tokens)
+                ThemePreviewPage.Components -> ComponentsPreview(palette, tokens)
             }
         }
     }
@@ -145,13 +155,15 @@ private fun ThemePreviewTab(
 
 @Composable
 private fun ChatPreview(palette: FishPiPalette, tokens: FishPiThemeTokens, title: String) {
+    val messageTheme = remember(palette, tokens) { NativeMessageTheme.fromTheme(palette, tokens) }
     Column(verticalArrangement = Arrangement.spacedBy(tokens.spacing.item.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(text = title, color = palette.onSurface, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Box(Modifier.size(7.dp).clip(CircleShape).background(tokens.colors.success))
         }
-        PreviewBubble("今天的主题包看起来很舒服", false, palette, tokens)
-        PreviewBubble("边距、圆角和气泡都会跟着变", true, palette, tokens)
+        PreviewBubble("今晚话题有点安静", false, messageTheme, tokens)
+        PreviewBubble("那就先把这一版调顺", true, messageTheme, tokens)
+        PreviewQuoteSample(messageTheme, tokens)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -220,7 +232,70 @@ private fun ProfilePreview(palette: FishPiPalette, tokens: FishPiThemeTokens) {
 }
 
 @Composable
-private fun PreviewBubble(text: String, mine: Boolean, palette: FishPiPalette, tokens: FishPiThemeTokens) {
+private fun ComponentsPreview(palette: FishPiPalette, tokens: FishPiThemeTokens) {
+    Column(verticalArrangement = Arrangement.spacedBy(tokens.spacing.item.dp)) {
+        PreviewNotificationIsland("已保存主题设置", palette, tokens)
+        Row(horizontalArrangement = Arrangement.spacedBy(tokens.spacing.item.dp)) {
+            ActionChipButton(
+                text = "快捷助手",
+                onClick = {},
+                selected = true,
+                leadingDot = true,
+                modifier = Modifier.weight(1f),
+            )
+            ActionChipButton(
+                text = "同步",
+                onClick = {},
+                leadingDot = true,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        PreviewCard(palette, tokens) {
+            Text(text = "插件 action", color = palette.onSurface, fontWeight = FontWeight.SemiBold)
+            Text(text = "按钮、边界和状态点使用真实 ActionChipButton", color = palette.weakText, fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+private fun PreviewNotificationIsland(text: String, palette: FishPiPalette, tokens: FishPiThemeTokens) {
+    val dark = palette.background.luminance() < 0.5f
+    val accent = FishPiTheme.success
+    val shape = RoundedCornerShape(tokens.radius.selector.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(12.dp, shape, clip = false)
+            .clip(shape)
+            .background(if (dark) palette.surfaceElevated else palette.surface)
+            .border(tokens.border.width.dp, palette.outline.copy(alpha = if (dark) 0.42f else 0.18f), shape)
+            .padding(horizontal = 11.dp, vertical = 8.dp)
+            .sizeIn(minHeight = 38.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(accent.copy(alpha = if (dark) 0.20f else 0.14f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = accent, modifier = Modifier.size(15.dp))
+        }
+        Text(
+            text = text,
+            color = palette.onSurface,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun PreviewBubble(text: String, mine: Boolean, theme: NativeMessageTheme, tokens: FishPiThemeTokens) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
@@ -229,12 +304,46 @@ private fun PreviewBubble(text: String, mine: Boolean, palette: FishPiPalette, t
             modifier = Modifier
                 .fillMaxWidth(0.78f)
                 .clip(RoundedCornerShape(tokens.radius.box.dp))
-                .background(if (mine) palette.outgoingBubble else palette.incomingBubble)
+                .background(Color(if (mine) theme.outgoingBubble else theme.incomingBubble))
+                .border(
+                    tokens.border.width.dp,
+                    Color(theme.bubbleBorder),
+                    RoundedCornerShape(tokens.radius.box.dp),
+                )
                 .padding(horizontal = tokens.spacing.control.dp + 2.dp, vertical = tokens.spacing.control.dp),
         ) {
-            Text(text = text, color = palette.onSurface, fontSize = 13.sp)
+            Text(text = text, color = Color(theme.bubbleText), fontSize = 13.sp)
         }
-        Text(text = if (mine) "12:35 · Android" else "Android · 12:34", color = palette.timeText, fontSize = 10.sp)
+        Text(text = if (mine) "12:35 · Android" else "Android · 12:34", color = Color(theme.timeText), fontSize = 10.sp)
+    }
+}
+
+@Composable
+private fun PreviewQuoteSample(theme: NativeMessageTheme, tokens: FishPiThemeTokens) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth(0.82f)
+            .clip(RoundedCornerShape(tokens.radius.field.dp))
+            .background(Color(theme.quoteBackground))
+            .border(
+                tokens.border.width.dp,
+                Color(theme.bubbleBorder),
+                RoundedCornerShape(tokens.radius.field.dp),
+            )
+            .padding(horizontal = tokens.spacing.control.dp, vertical = (tokens.spacing.control * 0.72f).dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            Modifier
+                .size(3.dp, 28.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(Color(theme.quoteLine)),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(text = "引用 Reily", color = Color(theme.quoteText), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            Text(text = "图片和 Markdown 会走同一套消息主题", color = Color(theme.bubbleText), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 

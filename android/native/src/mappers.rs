@@ -287,23 +287,43 @@ pub(crate) fn notice_item_to_json(item: NoticeItem) -> Option<Value> {
             "mentionUser": "",
         })),
         NoticeItem::At(v) => {
-            let body = if !v.content.is_empty() {
-                &v.content
+            let mention_user = if v.user_name.trim().is_empty() {
+                v.author_name.trim().to_string()
             } else {
-                &v.description
+                v.user_name.trim().to_string()
             };
-            let article_jump_id = resolve_article_jump_id_default(v.data_type, &v.data_id, body);
+            let body = if !v.content.trim().is_empty() {
+                v.content.trim().to_string()
+            } else if !v.description.trim().is_empty() {
+                v.description.trim().to_string()
+            } else {
+                v.article_title.trim().to_string()
+            };
+            let title = if !v.article_title.trim().is_empty() {
+                v.article_title.trim().to_string()
+            } else {
+                format!("@{}", mention_user)
+            };
+            let article_jump_id = if v.at_in_article {
+                first_non_empty([
+                    v.article_id.trim().to_string(),
+                    parse_article_id_from_url(&v.url).unwrap_or_default(),
+                    v.data_id.trim().to_string(),
+                ])
+            } else {
+                resolve_article_jump_id_default(v.data_type, &v.data_id, &body)
+            };
             Some(json!({
                 "id": v.oId,
                 "category": "@",
-                "title": format!("@{}", v.user_name),
+                "title": title,
                 "content": body,
                 "dataType": v.data_type,
                 "time": v.create_time,
                 "read": v.has_read,
                 "jumpType": if !article_jump_id.is_empty() { "article" } else { "chatroom" },
-                "jumpId": if !article_jump_id.is_empty() { article_jump_id } else { parse_chatroom_message_id_from_text(body).unwrap_or_default() },
-                "mentionUser": v.user_name,
+                "jumpId": if !article_jump_id.is_empty() { article_jump_id } else { parse_chatroom_message_id_from_text(&body).unwrap_or_default() },
+                "mentionUser": mention_user,
             }))
         }
         NoticeItem::Follow(v) => Some(json!({
@@ -450,6 +470,13 @@ pub(crate) fn parse_article_id_from_url(url: &str) -> Option<String> {
         .take_while(|c| c.is_ascii_digit())
         .collect::<String>();
     (!id.is_empty()).then_some(id)
+}
+
+fn first_non_empty(values: impl IntoIterator<Item = String>) -> String {
+    values
+        .into_iter()
+        .find(|value| !value.trim().is_empty())
+        .unwrap_or_default()
 }
 
 pub(crate) fn parse_chatroom_message_id_from_text(text: &str) -> Option<String> {

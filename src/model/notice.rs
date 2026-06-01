@@ -298,16 +298,32 @@ pub struct NoticeAt {
     #[serde(rename = "dataType")]
     pub data_type: u32,
     /// 用户名
-    #[serde(rename = "userName")]
+    #[serde(rename = "userName", default)]
     pub user_name: String,
+    /// 文章 @ 的作者用户名。
+    #[serde(rename = "authorName", default)]
+    pub author_name: String,
+    /// 文章 @ 的文章标题。
+    #[serde(rename = "articleTitle", default)]
+    pub article_title: String,
+    /// 文章 @ 的文章 ID。
+    #[serde(rename = "articleId", default)]
+    pub article_id: String,
+    /// 文章 @ 的跳转地址。
+    #[serde(default)]
+    pub url: String,
+    /// 是否是文章内 @。
+    #[serde(rename = "atInArticle", default)]
+    pub at_in_article: bool,
     /// 用户头像（点赞类消息用 thumbnailURL）
-    #[serde(rename = "thumbnailURL")]
+    #[serde(rename = "thumbnailURL", default)]
     pub avatar_url: String,
     /// 用户头像（@消息/红包用 userAvatarURL）
     #[serde(default)]
     #[serde(rename = "userAvatarURL")]
     pub user_avatar_url: String,
     /// 通知内容（@消息/红包）
+    #[serde(default)]
     pub content: String,
     /// 通知描述（点赞类消息）
     #[serde(default)]
@@ -316,9 +332,9 @@ pub struct NoticeAt {
     #[serde(rename = "hasRead")]
     pub has_read: bool,
     /// 创建时间
-    #[serde(rename = "createTime")]
+    #[serde(rename = "createTime", default)]
     pub create_time: String,
-    #[serde(rename = "dataId")]
+    #[serde(rename = "dataId", default)]
     pub data_id: String,
     /// 是否已删除
     #[serde(default)]

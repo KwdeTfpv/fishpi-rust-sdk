@@ -200,8 +200,8 @@ private fun FishPiNoticeType.noticeIcon(): ImageVector = when (this) {
 
 @Composable
 private fun FishPiNoticeType.noticeColor(): Color = when (this) {
-    FishPiNoticeType.Success -> Color(0xFF2E8F62)
-    FishPiNoticeType.Warning -> Color(0xFFD28A16)
-    FishPiNoticeType.Error -> MaterialTheme.colorScheme.error
+    FishPiNoticeType.Success -> FishPiTheme.success
+    FishPiNoticeType.Warning -> FishPiTheme.warning
+    FishPiNoticeType.Error -> FishPiTheme.error
     FishPiNoticeType.Info -> FishPiTheme.accent
 }

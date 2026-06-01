@@ -57,7 +57,8 @@ theme.fpt
     "info": "#0B5C93",
     "success": "#42D94D",
     "warning": "#EAB308",
-    "error": "#E53935"
+    "error": "#E53935",
+    "message-outgoing": "#EAF4FF"
   },
   "radius": {
     "radius-selector": 40,
@@ -125,6 +126,7 @@ theme.fpt
 | `success` | 成功、已连接、在线状态 |
 | `warning` | 警告、正在重连、需要注意的状态 |
 | `error` | 错误、危险操作、红包业务强调 |
+| `message-outgoing` | 自己发送的消息气泡 |
 
 建议：
 

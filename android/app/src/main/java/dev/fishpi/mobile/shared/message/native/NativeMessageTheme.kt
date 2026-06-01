@@ -42,20 +42,17 @@ internal data class NativeMessageTheme(
 
         fun fromTheme(palette: FishPiPalette, tokens: FishPiThemeTokens): NativeMessageTheme {
             val isDark = palette.chatBackground.luminance() < 0.5f
+            val bubbleBase = if (isDark) palette.chatBackground else palette.surface
             val incomingBubble = if (isDark) {
-                palette.surface.copy(alpha = 0.88f)
+                palette.incomingBubble.copy(alpha = 0.88f).compositeOver(bubbleBase)
             } else {
-                palette.surface.copy(alpha = 0.98f)
+                palette.incomingBubble.copy(alpha = 0.98f).compositeOver(bubbleBase)
             }
-            val outgoingBubble = if (isDark) {
-                palette.surfaceElevated.copy(alpha = 0.92f)
-            } else {
-                palette.outgoingBubble.copy(alpha = 0.14f).compositeOver(palette.surface)
-            }
+            val outgoingBubble = palette.outgoingBubble
             val quoteBackground = if (isDark) {
-                palette.surfaceElevated.copy(alpha = 0.82f)
+                palette.quoteBackground.copy(alpha = 0.78f).compositeOver(bubbleBase)
             } else {
-                palette.outgoingBubble.copy(alpha = 0.09f).compositeOver(palette.surface)
+                palette.quoteBackground.copy(alpha = 0.72f).compositeOver(palette.surface)
             }
             val bubbleBorder = if (isDark) {
                 palette.accent.copy(alpha = 0.18f)

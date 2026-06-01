@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
@@ -106,6 +107,7 @@ internal data class FishPiColorTokens(
     val success: Color,
     val warning: Color,
     val error: Color,
+    val messageOutgoing: Color,
 )
 
 internal data class FishPiRadiusTokens(
@@ -160,6 +162,7 @@ internal val IslandFishPiThemeTokens = FishPiThemeTokens(
         success = Color(0xFF42D974),
         warning = Color(0xFFE4C36A),
         error = Color(0xFFFF5252),
+        messageOutgoing = Color(0xFF252525),
     ),
     radius = FishPiRadiusTokens(selector = 999f, field = 18f, box = 12f),
     spacing = FishPiSpacingTokens(page = 14f, section = 12f, item = 8f, control = 10f),
@@ -186,6 +189,7 @@ internal val DeepBlueNeonFishPiThemeTokens = FishPiThemeTokens(
         success = Color(0xFF42D94D),
         warning = Color(0xFFEAB308),
         error = Color(0xFFE53935),
+        messageOutgoing = Color(0xFFEAF4FF),
     ),
     radius = FishPiRadiusTokens(selector = 999f, field = 18f, box = 12f),
     spacing = FishPiSpacingTokens(page = 14f, section = 12f, item = 8f, control = 10f),
@@ -232,7 +236,6 @@ internal object FishPiTheme {
 internal fun FishPiThemeTokens.toPalette(wallpaperImageUri: String? = null): FishPiPalette {
     val c = colors
     val dark = colorScheme == FishPiThemeColorScheme.Dark
-    val outgoingAlpha = if (dark) 0.20f else 0.10f
     val incoming = if (dark) c.base200 else c.base200
     return FishPiPalette(
         background = c.base100,
@@ -251,7 +254,7 @@ internal fun FishPiThemeTokens.toPalette(wallpaperImageUri: String? = null): Fis
         outline = c.neutral.copy(alpha = border.opacity.coerceIn(0f, 1f)),
         accent = c.primary,
         quoteBackground = c.base300.copy(alpha = if (dark) 0.82f else 0.72f),
-        outgoingBubble = c.primary.copy(alpha = outgoingAlpha),
+        outgoingBubble = c.messageOutgoing,
         incomingBubble = incoming,
         linkText = c.secondary,
         quoteText = c.neutral,
@@ -323,29 +326,51 @@ internal fun parseCustomFishPiTheme(rawJson: String): CustomFishPiTheme {
     val schemeValue = json.optString("colorScheme")
         .ifBlank { json.optString("prefersdark") }
         .lowercase()
-    val tokens = FishPiThemeTokens(
-        colorScheme = when (schemeValue) {
+    val colorScheme = when (schemeValue) {
             "light" -> FishPiThemeColorScheme.Light
             "dark" -> FishPiThemeColorScheme.Dark
             else -> base.colorScheme
-        },
+        }
+    val base100 = colors.optThemeColor("base100", "base-100", base.colors.base100)
+    val base200 = colors.optThemeColor("base200", "base-200", base.colors.base200)
+    val base300 = colors.optThemeColor("base300", "base-300", base.colors.base300)
+    val baseContent = colors.optThemeColor("baseContent", "base-content", base.colors.baseContent)
+    val primary = colors.optThemeColor("primary", "primary", base.colors.primary)
+    val primaryContent = colors.optThemeColor("primaryContent", "primary-content", base.colors.primaryContent)
+    val secondary = colors.optThemeColor("secondary", "secondary", base.colors.secondary)
+    val secondaryContent = colors.optThemeColor("secondaryContent", "secondary-content", base.colors.secondaryContent)
+    val accent = colors.optThemeColor("accent", "accent", base.colors.accent)
+    val accentContent = colors.optThemeColor("accentContent", "accent-content", base.colors.accentContent)
+    val neutral = colors.optThemeColor("neutral", "neutral", base.colors.neutral)
+    val neutralContent = colors.optThemeColor("neutralContent", "neutral-content", base.colors.neutralContent)
+    val info = colors.optThemeColor("info", "info", base.colors.info)
+    val success = colors.optThemeColor("success", "success", base.colors.success)
+    val warning = colors.optThemeColor("warning", "warning", base.colors.warning)
+    val error = colors.optThemeColor("error", "error", base.colors.error)
+    val tokens = FishPiThemeTokens(
+        colorScheme = colorScheme,
         colors = FishPiColorTokens(
-            base100 = colors.optThemeColor("base100", "base-100", base.colors.base100),
-            base200 = colors.optThemeColor("base200", "base-200", base.colors.base200),
-            base300 = colors.optThemeColor("base300", "base-300", base.colors.base300),
-            baseContent = colors.optThemeColor("baseContent", "base-content", base.colors.baseContent),
-            primary = colors.optThemeColor("primary", "primary", base.colors.primary),
-            primaryContent = colors.optThemeColor("primaryContent", "primary-content", base.colors.primaryContent),
-            secondary = colors.optThemeColor("secondary", "secondary", base.colors.secondary),
-            secondaryContent = colors.optThemeColor("secondaryContent", "secondary-content", base.colors.secondaryContent),
-            accent = colors.optThemeColor("accent", "accent", base.colors.accent),
-            accentContent = colors.optThemeColor("accentContent", "accent-content", base.colors.accentContent),
-            neutral = colors.optThemeColor("neutral", "neutral", base.colors.neutral),
-            neutralContent = colors.optThemeColor("neutralContent", "neutral-content", base.colors.neutralContent),
-            info = colors.optThemeColor("info", "info", base.colors.info),
-            success = colors.optThemeColor("success", "success", base.colors.success),
-            warning = colors.optThemeColor("warning", "warning", base.colors.warning),
-            error = colors.optThemeColor("error", "error", base.colors.error),
+            base100 = base100,
+            base200 = base200,
+            base300 = base300,
+            baseContent = baseContent,
+            primary = primary,
+            primaryContent = primaryContent,
+            secondary = secondary,
+            secondaryContent = secondaryContent,
+            accent = accent,
+            accentContent = accentContent,
+            neutral = neutral,
+            neutralContent = neutralContent,
+            info = info,
+            success = success,
+            warning = warning,
+            error = error,
+            messageOutgoing = colors.optThemeColor(
+                "messageOutgoing",
+                "message-outgoing",
+                defaultMessageOutgoingColor(primary, base200, colorScheme),
+            ),
         ),
         radius = FishPiRadiusTokens(
             selector = radius.optThemeFloat("selector", "radius-selector", base.radius.selector, 0f, 40f),
@@ -414,6 +439,7 @@ internal fun buildEditableThemeJson(
         .put("success", c.success.toThemeHex())
         .put("warning", c.warning.toThemeHex())
         .put("error", c.error.toThemeHex())
+        .put("message-outgoing", c.messageOutgoing.toThemeHex())
     return JSONObject()
         .put("schema", 1)
         .put("previewTemplate", "fishpi-mobile-v1")
@@ -446,6 +472,15 @@ private fun JSONObject.optThemeColor(primaryName: String, aliasName: String, fal
     return runCatching {
         Color(android.graphics.Color.parseColor(value))
     }.getOrDefault(fallback)
+}
+
+private fun defaultMessageOutgoingColor(
+    primary: Color,
+    surface: Color,
+    colorScheme: FishPiThemeColorScheme,
+): Color {
+    val alpha = if (colorScheme == FishPiThemeColorScheme.Dark) 0.20f else 0.10f
+    return primary.copy(alpha = alpha).compositeOver(surface)
 }
 
 private fun JSONObject.optThemeFloat(
