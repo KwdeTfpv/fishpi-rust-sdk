@@ -107,8 +107,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import android.widget.TextView
 import dev.fishpi.mobile.data.FishPiUser
 import dev.fishpi.mobile.data.ChatFilterConfig
@@ -1785,38 +1788,100 @@ private fun ProfileTransferDialog(
     var amountText by remember { mutableStateOf("") }
     var memo by remember { mutableStateOf("") }
     val amount = amountText.toIntOrNull() ?: 0
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("转账给 ${user.displayName}") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it.filter(Char::isDigit).take(8) },
-                    label = { Text("积分数量") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = memo,
-                    onValueChange = { memo = it.take(80) },
-                    label = { Text("备注") },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                enabled = amount > 0,
-                onClick = { onTransfer(amount, memo) },
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.18f))
+                .silentTap(onDismiss)
+                .padding(horizontal = FishPiTheme.spacingPage + 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            ContentCardSurface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .consumeTaps(),
+                contentPadding = PaddingValues(FishPiTheme.spacingSection),
             ) {
-                Text("确认转账")
+                Column(verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
+                    ) {
+                        FishPiAvatar(
+                            avatarUrl = user.userAvatarUrl,
+                            displayName = user.displayName,
+                            contentDescription = "转账对象头像",
+                            size = 42.dp,
+                            fallback = FishPiAvatarFallback.Icon,
+                        )
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "转账给 ${user.displayName}",
+                                color = FishPiTheme.onSurface,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = "@${user.userName}",
+                                color = FishPiTheme.weakText,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem)) {
+                        TextField(
+                            value = amountText,
+                            onValueChange = { amountText = it.filter(Char::isDigit).take(8) },
+                            label = "积分数量",
+                            placeholder = "输入要转出的积分",
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        TextField(
+                            value = memo,
+                            onValueChange = { memo = it.take(80) },
+                            label = "备注",
+                            placeholder = "可选，最多 80 字",
+                            maxLines = 3,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
+                    ) {
+                        FishPiPillButton(
+                            text = "取消",
+                            onClick = onDismiss,
+                            compact = true,
+                            containerColor = FishPiTheme.surfaceContainer,
+                            contentColor = FishPiTheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        FishPiPillButton(
+                            text = "确认转账",
+                            onClick = { onTransfer(amount, memo) },
+                            enabled = amount > 0,
+                            compact = true,
+                            containerColor = profileAccentSoft(),
+                            contentColor = profileAccentColor(),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             }
-        },
-        dismissButton = {
-            FishPiPillButton(text = "取消", onClick = onDismiss, compact = true)
-        },
-    )
+        }
+    }
 }
 
 @Composable
