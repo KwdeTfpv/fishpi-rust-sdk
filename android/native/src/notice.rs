@@ -1,6 +1,6 @@
 use crate::jni_utils::{emit_callback, string_arg, to_jstring};
 use crate::mappers::*;
-use crate::runtime::runtime_json;
+use crate::runtime::{runtime_json, shared_runtime};
 use crate::session::current_user;
 use fishpi_sdk::api::notice::Notice;
 use fishpi_sdk::model::notice::NoticeType;
@@ -60,8 +60,8 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getNotices(
 ) -> jstring {
     let result = (|| {
         let token = string_arg(&mut env, api_key)?;
-        Ok(runtime_json(|rt| {
-            rt.block_on(async {
+        let rt = shared_runtime()?;
+        let data = rt.block_on(async {
                 let user = current_user(&token).await?;
                 let notice = &user.notice;
                 let mut items = Vec::new();
@@ -76,15 +76,19 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getNotices(
                 ] {
                     let list = timeout(Duration::from_secs(10), notice.list(ty.clone())).await;
                     if let Ok(Ok(list)) = list {
-                        items.extend(list.into_iter().filter_map(notice_item_to_json));
+                        for item in list {
+                            if let Some(view) = notice_item_to_json(item) {
+                                items.push(view);
+                            }
+                        }
                     }
                 }
                 items.sort_by_key(|item| {
                     std::cmp::Reverse(notice_time_sort_key(item["time"].as_str().unwrap_or("")))
                 });
-                Ok(Value::Array(items))
-            })
-        }))
+                Ok::<Value, String>(Value::Array(items))
+            })?;
+        Ok::<String, String>(json!({ "ok": true, "data": data }).to_string())
     })()
     .unwrap_or_else(|err: String| json!({ "ok": false, "error": err }).to_string());
 

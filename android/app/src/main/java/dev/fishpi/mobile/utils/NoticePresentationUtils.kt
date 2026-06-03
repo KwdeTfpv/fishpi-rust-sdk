@@ -56,6 +56,7 @@ private object NoticeDataType {
     const val POINT_REPORT_HANDLED = 36
     const val CHATROOM_AT = 38
     const val RED_PACKET = 39
+    const val EXTENSION_STORE_REVIEW = 41
 }
 
 private val ArticleLinkRegex =
@@ -136,6 +137,7 @@ internal fun NoticeItemView.noticePresentationCategory(): NoticePresentationCate
         NoticeDataType.SYS_ANNOUNCE_NEW_USER,
         NoticeDataType.SYS_ANNOUNCE_ROLE_CHANGED,
         NoticeDataType.BROADCAST,
+        NoticeDataType.EXTENSION_STORE_REVIEW,
         -> NoticePresentationCategory.System
         NoticeDataType.FOLLOWING_USER,
         NoticeDataType.NEW_FOLLOWER,
@@ -166,6 +168,7 @@ internal fun NoticeItemView.noticeCategoryLabel(): String {
         NoticeDataType.SYS_ANNOUNCE_NEW_USER,
         NoticeDataType.SYS_ANNOUNCE_ROLE_CHANGED,
         NoticeDataType.BROADCAST,
+        NoticeDataType.EXTENSION_STORE_REVIEW,
         -> "系统"
         NoticeDataType.COMMENTED,
         NoticeDataType.REPLY,

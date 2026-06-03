@@ -3,7 +3,7 @@ pub mod error;
 use crate::utils::error::Error;
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use reqwest::{Client, Method, Proxy, StatusCode, multipart};
+use reqwest::{Client, Method, Proxy, Response, StatusCode, multipart};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::RwLock;
@@ -40,6 +40,8 @@ lazy_static::lazy_static! {
 
 const DOMAIN: &str = "fishpi.cn";
 const MAX_UPLOAD_FILE_BYTES: u64 = 20 * 1024 * 1024;
+const VISITOR_VERIFY_MESSAGE: &str =
+    "当前网络触发摸鱼派访客验证，请完成验证后再重试";
 
 fn build_client(config: &HttpProxyConfig) -> Result<Client, Error> {
     let builder = Client::builder();
@@ -281,10 +283,7 @@ async fn request(
         };
 
         if resp.status().is_success() {
-            return resp
-                .json::<Value>()
-                .await
-                .map_err(|e| Error::Request(Box::new(e)));
+            return parse_json_response(resp).await;
         }
 
         if resp.status() == StatusCode::SERVICE_UNAVAILABLE && attempt < max_retries {
@@ -298,6 +297,42 @@ async fn request(
             format!("HTTP error: {}", resp.status()).into(),
         ));
     }
+}
+
+async fn parse_json_response(resp: Response) -> Result<Value, Error> {
+    let final_path = resp.url().path().to_string();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let text = resp.text().await.map_err(|e| Error::Request(Box::new(e)))?;
+    if is_visitor_verify_response(&final_path, &content_type, &text) {
+        return Err(Error::Api(VISITOR_VERIFY_MESSAGE.to_string()));
+    }
+
+    serde_json::from_str::<Value>(&text).map_err(|err| {
+        if is_html_response(&content_type, &text) {
+            Error::Api("服务返回了网页内容，无法作为 API 响应解析".to_string())
+        } else {
+            Error::Parse(format!("Failed to parse response body: {err}"))
+        }
+    })
+}
+
+fn is_visitor_verify_response(path: &str, content_type: &str, body: &str) -> bool {
+    let lower = body.to_ascii_lowercase();
+    path == "/test"
+        || (is_html_response(content_type, body)
+            && (body.contains("访客验证")
+                || body.contains("在继续浏览摸鱼派社区前请验证")
+                || body.contains("/validateCaptcha")
+                || lower.contains("initgeetest4")))
+}
+
+fn is_html_response(content_type: &str, body: &str) -> bool {
+    content_type.contains("text/html") || body.trim_start().to_ascii_lowercase().starts_with("<!doctype html")
 }
 
 /// 构造带查询参数的相对 HTTP 路径，自动进行 query 编码

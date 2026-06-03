@@ -38,7 +38,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -113,7 +115,9 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -1799,7 +1803,21 @@ private fun ArticleReaderBottomBar(
     onCommentsClick: () -> Unit,
 ) {
     var commentInputFocused by remember { mutableStateOf(false) }
-    val commentActive = commentInputFocused || value.isNotBlank() || !replyTarget.isNullOrBlank()
+    var commentEditValue by remember { mutableStateOf(TextFieldValue(value, selection = TextRange(value.length))) }
+    LaunchedEffect(value) {
+        if (value != commentEditValue.text) {
+            commentEditValue = TextFieldValue(value, selection = TextRange(value.length))
+        }
+    }
+    val commentText = commentEditValue.text
+    val commentActive = commentInputFocused || commentText.isNotBlank() || !replyTarget.isNullOrBlank()
+    val commentImagePreviewUrls = remember(commentText) {
+        MarkdownImageRegex.findAll(commentText)
+            .mapNotNull { match -> match.groupValues.getOrNull(1)?.cleanMarkdownUrl() }
+            .filter(String::isNotBlank)
+            .distinct()
+            .toList()
+    }
     ControlSurface(
         modifier = Modifier
             .fillMaxWidth()
@@ -1825,6 +1843,9 @@ private fun ArticleReaderBottomBar(
                 onPickGroup = onPickEmojiGroup,
                 onPickEmoji = onPickEmoji,
             )
+        }
+        if (commentImagePreviewUrls.isNotEmpty()) {
+            ArticleCommentImagePreviewStrip(commentImagePreviewUrls)
         }
         if (!replyTarget.isNullOrBlank()) {
             Row(
@@ -1865,12 +1886,15 @@ private fun ArticleReaderBottomBar(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             ArticleCompactCommentInput(
-                value = value,
+                value = commentEditValue,
                 replyTarget = replyTarget,
                 replyFocusSignal = replyFocusSignal,
                 dismissKeyboardSignal = dismissKeyboardSignal,
                 isSending = isSending,
-                onValueChange = onValueChange,
+                onValueChange = {
+                    commentEditValue = it
+                    onValueChange(it.text)
+                },
                 onSend = onSend,
                 isUploadingCommentImage = isUploadingCommentImage,
                 onToggleEmojiPanel = onToggleEmojiPanel,
@@ -1920,13 +1944,76 @@ private fun ArticleReaderBottomBar(
 }
 
 @Composable
+private fun ArticleCommentImagePreviewStrip(urls: List<String>) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
+        contentPadding = PaddingValues(horizontal = FishPiTheme.spacingItem / 2),
+    ) {
+        itemsIndexed(urls, key = { index, url -> "$index-$url" }) { index, url ->
+            Box(
+                modifier = Modifier
+                    .size(62.dp)
+                    .clip(RoundedCornerShape(FishPiTheme.radiusBox))
+                    .background(FishPiTheme.surfaceContainer)
+                    .border(
+                        FishPiTheme.borderWidth,
+                        FishPiTheme.outline.copy(alpha = 0.16f),
+                        RoundedCornerShape(FishPiTheme.radiusBox),
+                    ),
+            ) {
+                SubcomposeAsyncImage(
+                    model = url,
+                    imageLoader = rememberFishPiImageLoader(),
+                    contentDescription = "评论图片 ${index + 1}",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    loading = {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("...", color = FishPiTheme.weakText, fontSize = 12.sp)
+                        }
+                    },
+                    error = {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .background(FishPiTheme.surfaceContainer),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.BrokenImage,
+                                contentDescription = null,
+                                tint = FishPiTheme.weakText,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    },
+                )
+                Text(
+                    text = "${index + 1}",
+                    color = FishPiTheme.onSurface,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .clip(CircleShape)
+                        .background(FishPiTheme.surface.copy(alpha = 0.82f))
+                        .padding(horizontal = 5.dp, vertical = 1.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ArticleCompactCommentInput(
-    value: String,
+    value: TextFieldValue,
     replyTarget: String?,
     replyFocusSignal: Int,
     dismissKeyboardSignal: Int,
     isSending: Boolean,
-    onValueChange: (String) -> Unit,
+    onValueChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
     isUploadingCommentImage: Boolean,
     onToggleEmojiPanel: () -> Unit,
@@ -2001,7 +2088,7 @@ private fun ArticleCompactCommentInput(
                     imeAction = androidx.compose.ui.text.input.ImeAction.Send,
                 ),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = {
-                    if (!isSending && value.isNotBlank()) onSend()
+                    if (!isSending && value.text.isNotBlank()) onSend()
                 }),
                 decorationBox = { innerTextField ->
                     Box(
@@ -2010,7 +2097,7 @@ private fun ArticleCompactCommentInput(
                             .heightIn(min = 20.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
-                        if (value.isBlank()) {
+                        if (value.text.isBlank()) {
                             Text(
                                 text = when {
                                     isSending -> "发送中..."
@@ -2038,7 +2125,7 @@ private fun ArticleCompactCommentInput(
             ArticleCommentToolButton(
                 icon = Icons.AutoMirrored.Rounded.Send,
                 contentDescription = "发送评论",
-                enabled = !isSending && value.isNotBlank(),
+                enabled = !isSending && value.text.isNotBlank(),
                 prominent = true,
                 onClick = onSend,
             )

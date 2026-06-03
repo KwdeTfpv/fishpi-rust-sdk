@@ -77,9 +77,21 @@ fun QrScannerScreen(
     }
     val executor = remember { Executors.newSingleThreadExecutor() }
     val handled = remember { AtomicBoolean(false) }
+    val disposed = remember { AtomicBoolean(false) }
 
     var zoomRatio by remember { mutableFloatStateOf(1f) }
     var cameraControl by remember { mutableStateOf<androidx.camera.core.CameraControl?>(null) }
+    var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            disposed.set(true)
+            cameraControl = null
+            cameraProvider?.unbindAll()
+            scanner.close()
+            executor.shutdownNow()
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         // Camera
@@ -97,6 +109,11 @@ fun QrScannerScreen(
                     val future = ProcessCameraProvider.getInstance(ctx)
                     future.addListener({
                         val provider = future.get()
+                        cameraProvider = provider
+                        if (disposed.get()) {
+                            provider.unbindAll()
+                            return@addListener
+                        }
                         val preview = Preview.Builder().build().also {
                             it.setSurfaceProvider(pv.surfaceProvider)
                         }
@@ -114,7 +131,7 @@ fun QrScannerScreen(
                             .build()
                         analysis.setAnalyzer(executor) { proxy ->
                             val img = proxy.image
-                            if (img != null && !handled.get()) {
+                            if (img != null && !handled.get() && !disposed.get()) {
                                 val input = InputImage.fromMediaImage(
                                     img, proxy.imageInfo.rotationDegrees
                                 )
@@ -122,6 +139,7 @@ fun QrScannerScreen(
                                     .addOnSuccessListener { codes ->
                                         codes.firstOrNull()?.rawValue?.let { value ->
                                             if (handled.compareAndSet(false, true)) {
+                                                cameraProvider?.unbindAll()
                                                 onResult(value)
                                             }
                                         }

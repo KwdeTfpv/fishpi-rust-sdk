@@ -230,6 +230,8 @@ pub(crate) fn system_title(data_type: u32) -> &'static str {
         "欢迎新用户"
     } else if data_type == NoticeDataType::SysAnnounceRoleChanged as u32 {
         "角色变更"
+    } else if data_type == NoticeDataType::ExtensionStoreReview as u32 {
+        "扩展集市"
     } else if data_type == NoticeDataType::Broadcast as u32 {
         "同城广播"
     } else {
@@ -339,18 +341,24 @@ pub(crate) fn notice_item_to_json(item: NoticeItem) -> Option<Value> {
             "jumpId": parse_article_id_from_url(&v.url).unwrap_or_default(),
             "mentionUser": "",
         })),
-        NoticeItem::System(v) => Some(json!({
-            "id": v.oId,
-            "category": "系统",
-            "title": system_title(v.data_type),
-            "content": v.description,
-            "dataType": v.data_type,
-            "time": v.create_time,
-            "read": v.has_read,
-            "jumpType": parse_article_id_from_html(&v.description).map(|_| "article").unwrap_or(""),
-            "jumpId": parse_article_id_from_html(&v.description).unwrap_or_default(),
-            "mentionUser": "",
-        })),
+        NoticeItem::System(v) => {
+            let display_content = first_non_empty([
+                v.content.trim().to_string(),
+                v.description.trim().to_string(),
+            ]);
+            Some(json!({
+                "id": v.oId,
+                "category": "系统",
+                "title": system_title(v.data_type),
+                "content": display_content,
+                "dataType": v.data_type,
+                "time": v.create_time,
+                "read": v.has_read,
+                "jumpType": parse_article_id_from_html(&v.description).map(|_| "article").unwrap_or(""),
+                "jumpId": parse_article_id_from_html(&v.description).unwrap_or_default(),
+                "mentionUser": "",
+            }))
+        }
     }
 }
 

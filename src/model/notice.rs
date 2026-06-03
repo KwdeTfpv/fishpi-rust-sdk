@@ -103,6 +103,8 @@ pub enum NoticeDataType {
     ChatRoomAt = 38,
     /// 专属红包提醒
     RedPacket = 39,
+    /// 扩展集市审核/发布通知
+    ExtensionStoreReview = 41,
 }
 
 /// 通知类型
@@ -420,6 +422,9 @@ pub struct NoticeSystem {
     pub data_type: u32,
     /// 消息描述
     pub description: String,
+    /// 消息内容
+    #[serde(default)]
+    pub content: String,
     /// 是否已读
     #[serde(rename = "hasRead")]
     pub has_read: bool,

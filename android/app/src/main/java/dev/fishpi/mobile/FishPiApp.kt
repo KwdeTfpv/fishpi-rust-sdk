@@ -11,6 +11,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
+import dev.fishpi.mobile.auth.VisitorRetryAction
+import dev.fishpi.mobile.auth.isVisitorVerificationRequired
 import dev.fishpi.mobile.data.FishPiApiClient
 import dev.fishpi.mobile.data.SavedAccount
 import dev.fishpi.mobile.data.SessionStore
@@ -133,29 +135,59 @@ fun FishPiApp() {
         var savedAccounts by remember { mutableStateOf(store.getAccounts()) }
         var isBooting by remember { mutableStateOf(true) }
         var bootError by remember { mutableStateOf<String?>(null) }
+        var pendingVisitorRetry by remember { mutableStateOf<VisitorRetryAction?>(null) }
 
         fun refreshSavedAccounts() {
             savedAccounts = store.getAccounts()
         }
 
-        fun switchAccount(account: SavedAccount) {
-            if (account.apiKey == session?.apiKey) return
+        fun startSessionWithKey(
+            apiKey: String,
+            retryAction: VisitorRetryAction,
+            fallbackError: String,
+        ) {
             isBooting = true
             bootError = null
             scope.launch {
                 runCatching {
                     withContext(Dispatchers.IO) {
-                        val user = api.getUser(account.apiKey)
-                        AppSession(account.apiKey, user)
+                        val user = api.getUser(apiKey)
+                        AppSession(apiKey, user)
                     }
                 }.onSuccess {
+                    pendingVisitorRetry = null
                     store.saveAccount(it.apiKey, it.user)
                     refreshSavedAccounts()
                     session = it
                 }.onFailure {
-                    bootError = it.message ?: "切换账号失败"
+                    val message = it.message ?: fallbackError
+                    bootError = message
+                    if (message.isVisitorVerificationRequired()) {
+                        pendingVisitorRetry = retryAction
+                    }
                 }
                 isBooting = false
+            }
+        }
+
+        fun switchAccount(account: SavedAccount) {
+            if (account.apiKey == session?.apiKey) return
+            startSessionWithKey(
+                apiKey = account.apiKey,
+                retryAction = VisitorRetryAction.SavedAccountLogin(account),
+                fallbackError = "切换账号失败",
+            )
+        }
+
+        fun retryAfterVisitorVerification() {
+            when (val retry = pendingVisitorRetry) {
+                is VisitorRetryAction.SavedAccountLogin -> switchAccount(retry.account)
+                is VisitorRetryAction.SavedApiKey -> startSessionWithKey(
+                    apiKey = retry.apiKey,
+                    retryAction = retry,
+                    fallbackError = "Token 验证失败",
+                )
+                null -> bootError = "访客验证已完成，请重新登录"
             }
         }
 
@@ -166,18 +198,11 @@ fun FishPiApp() {
                 return@LaunchedEffect
             }
 
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    AppSession(savedApiKey, api.getUser(savedApiKey))
-                }
-            }.onSuccess {
-                session = it
-                store.saveAccount(it.apiKey, it.user)
-                refreshSavedAccounts()
-            }.onFailure {
-                bootError = it.message ?: "Token 验证失败"
-            }
-            isBooting = false
+            startSessionWithKey(
+                apiKey = savedApiKey,
+                retryAction = VisitorRetryAction.SavedApiKey(savedApiKey),
+                fallbackError = "Token 验证失败",
+            )
         }
 
         when {
@@ -186,7 +211,9 @@ fun FishPiApp() {
                 initialError = bootError,
                 savedAccounts = savedAccounts,
                 onSwitchAccount = { account -> switchAccount(account) },
+                onVisitorVerified = { retryAfterVisitorVerification() },
                 onAuthenticated = {
+                    pendingVisitorRetry = null
                     store.saveAccount(it.apiKey, it.user)
                     refreshSavedAccounts()
                     session = it

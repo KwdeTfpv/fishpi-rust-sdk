@@ -3,7 +3,6 @@ package dev.fishpi.mobile
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -48,9 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -63,8 +59,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
+import dev.fishpi.mobile.auth.isVisitorVerificationRequired
 import dev.fishpi.mobile.data.FishPiApiClient
 import dev.fishpi.mobile.data.SavedAccount
+import dev.fishpi.mobile.ui.components.VisitorVerifyDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,6 +72,7 @@ internal fun LoginScreen(
     initialError: String?,
     savedAccounts: List<SavedAccount>,
     onSwitchAccount: (SavedAccount) -> Unit,
+    onVisitorVerified: () -> Unit,
     onAuthenticated: (AppSession) -> Unit,
 ) {
     val api = remember { FishPiApiClient.shared }
@@ -83,17 +82,62 @@ internal fun LoginScreen(
     var mfaCode by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf(initialError) }
     var isLoading by remember { mutableStateOf(false) }
+    var showVisitorVerify by remember { mutableStateOf(false) }
+    var retryPasswordAfterVisitorVerify by remember { mutableStateOf(false) }
 
     // Focus management for better form flow
     val passwordFocus = remember { FocusRequester() }
     val mfaFocus = remember { FocusRequester() }
-    val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     var showQrScanner by remember { mutableStateOf(false) }
 
     // Auto-dismiss error after user starts typing
     LaunchedEffect(nameOrEmail, password) {
         if (error != null) error = null
+    }
+    LaunchedEffect(initialError) {
+        if (!initialError.isNullOrBlank()) {
+            error = initialError
+            if (initialError.isVisitorVerificationRequired()) {
+                retryPasswordAfterVisitorVerify = false
+                showVisitorVerify = true
+            }
+        }
+    }
+
+    fun submitPasswordLogin() {
+        val account = nameOrEmail.trim()
+        val rawPassword = password
+        if (account.isBlank() || rawPassword.isBlank()) {
+            error = "账号和密码不能为空"
+            return
+        }
+        isLoading = true
+        error = null
+        focusManager.clearFocus()
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val token = api.login(
+                        nameOrEmail = account,
+                        password = rawPassword,
+                        mfaCode = mfaCode.trim().ifBlank { null },
+                    )
+                    AppSession(token, api.getUser(token))
+                }
+            }.onSuccess {
+                retryPasswordAfterVisitorVerify = false
+                onAuthenticated(it)
+            }.onFailure {
+                val message = it.message ?: "验证失败"
+                error = message
+                if (message.isVisitorVerificationRequired()) {
+                    retryPasswordAfterVisitorVerify = true
+                    showVisitorVerify = true
+                }
+            }
+            isLoading = false
+        }
     }
 
     Box(
@@ -271,13 +315,29 @@ internal fun LoginScreen(
                                 shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.errorContainer,
                             ) {
-                                Text(
-                                    text = it,
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    textAlign = TextAlign.Center,
-                                )
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Text(
+                                        text = it,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                    if (it.isVisitorVerificationRequired()) {
+                                        OutlinedButton(
+                                            onClick = { showVisitorVerify = true },
+                                            shape = RoundedCornerShape(12.dp),
+                                        ) {
+                                            Text("打开访客验证")
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -285,32 +345,8 @@ internal fun LoginScreen(
                     // ── Login Button ──────────────────────────
                     Button(
                         onClick = {
-                            val account = nameOrEmail.trim()
-                            val rawPassword = password
-                            if (account.isBlank() || rawPassword.isBlank()) {
-                                error = "账号和密码不能为空"
-                                return@Button
-                            }
-                            isLoading = true
-                            error = null
-                            focusManager.clearFocus()
-                            scope.launch {
-                                runCatching {
-                                    withContext(Dispatchers.IO) {
-                                        val token = api.login(
-                                            nameOrEmail = account,
-                                            password = rawPassword,
-                                            mfaCode = mfaCode.trim().ifBlank { null },
-                                        )
-                                        AppSession(token, api.getUser(token))
-                                    }
-                                }.onSuccess {
-                                    onAuthenticated(it)
-                                }.onFailure {
-                                    error = it.message ?: "验证失败"
-                                }
-                                isLoading = false
-                            }
+                            retryPasswordAfterVisitorVerify = true
+                            submitPasswordLogin()
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -392,7 +428,10 @@ internal fun LoginScreen(
                         )
                         savedAccounts.forEach { account ->
                             OutlinedButton(
-                                onClick = { onSwitchAccount(account) },
+                                onClick = {
+                                    retryPasswordAfterVisitorVerify = false
+                                    onSwitchAccount(account)
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
                             ) {
@@ -427,11 +466,32 @@ internal fun LoginScreen(
                                 AppSession(token, api.getUser(token))
                             }
                         }.onSuccess { onAuthenticated(it) }
-                            .onFailure { error = it.message ?: "扫码登录失败" }
+                            .onFailure {
+                                val message = it.message ?: "扫码登录失败"
+                                error = message
+                                if (message.isVisitorVerificationRequired()) {
+                                    retryPasswordAfterVisitorVerify = false
+                                    showVisitorVerify = true
+                                }
+                            }
                         isLoading = false
                     }
                 },
                 onClose = { showQrScanner = false },
+            )
+        }
+        if (showVisitorVerify) {
+            VisitorVerifyDialog(
+                onVerified = {
+                    showVisitorVerify = false
+                    if (retryPasswordAfterVisitorVerify) {
+                        submitPasswordLogin()
+                    } else {
+                        error = "访客验证已完成，正在重新登录"
+                        onVisitorVerified()
+                    }
+                },
+                onDismiss = { showVisitorVerify = false },
             )
         }
 
