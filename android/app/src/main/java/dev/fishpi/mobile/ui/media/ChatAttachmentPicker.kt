@@ -30,9 +30,11 @@ import kotlinx.coroutines.withContext
 internal class ChatAttachmentPicker(
     private val openGalleryAction: () -> Unit,
     private val openCameraAction: () -> Unit,
+    private val openFileAction: () -> Unit,
 ) {
     fun openGallery() = openGalleryAction()
     fun openCamera() = openCameraAction()
+    fun openFile() = openFileAction()
 }
 
 @Composable
@@ -86,6 +88,38 @@ internal fun rememberChatAttachmentPicker(
             }.onFailure { err ->
                 onError(err.message ?: "读取媒体失败")
             }
+        }
+    }
+
+    fun processPickedFileUri(uri: Uri) {
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val sourceSize = context.uriContentSize(uri)
+                    if (sourceSize != null && sourceSize > CHAT_UPLOAD_MAX_BYTES) {
+                        error("文件过大，当前 ${sourceSize.toReadableMediaSize()}，最大 ${CHAT_UPLOAD_MAX_BYTES.toReadableMediaSize()}")
+                    }
+                    context.copyUriToCacheFile(uri, "chat_uploads", "file", "bin")
+                }
+            }.onSuccess { file ->
+                val sizeError = file.chatUploadSizeError()
+                if (sizeError == null) {
+                    onPickedPath(file.absolutePath)
+                } else {
+                    file.delete()
+                    onError(sizeError)
+                }
+            }.onFailure { err ->
+                onError(err.message ?: "读取文件失败")
+            }
+        }
+    }
+
+    val fileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            processPickedFileUri(uri)
         }
     }
 
@@ -180,6 +214,9 @@ internal fun rememberChatAttachmentPicker(
                     pendingCameraOpen = true
                     cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                 }
+            },
+            openFileAction = {
+                fileLauncher.launch(arrayOf("*/*"))
             },
         )
     }

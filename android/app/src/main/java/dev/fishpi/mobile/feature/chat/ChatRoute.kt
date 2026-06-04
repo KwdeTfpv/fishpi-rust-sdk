@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.UploadedChatFile
 import dev.fishpi.mobile.shared.message.ChatQuote
@@ -42,6 +43,16 @@ internal fun ChatRoute(
     var blockedMessagesOpen by remember { mutableStateOf(false) }
     var pluginManagerOpen by remember { mutableStateOf(false) }
     var routeError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(chatController) {
+        chatController.effects.collect { effect ->
+            when (effect) {
+                is ChatEffect.ShowError -> FishPiNotifier.error(effect.message)
+                is ChatEffect.ShowMessage -> FishPiNotifier.show(effect.message)
+                else -> Unit
+            }
+        }
+    }
 
     ProvideDefaultChatUiEnvironment(
         environment = DefaultChatUiEnvironment(
@@ -111,7 +122,7 @@ internal fun ChatRoute(
                     chatController.clearError()
                 }
                 override fun showError(reason: String) {
-                    routeError = reason
+                    FishPiNotifier.error(reason)
                 }
                 override fun closeAttachmentPanel() = chatController.closeAttachmentPanel()
                 override fun refreshHistory(skipIfLoaded: Boolean, onSuccess: (List<ChatRoomMessage>) -> Unit, onFailure: (String) -> Unit, onFinally: () -> Unit) =

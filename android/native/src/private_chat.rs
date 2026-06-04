@@ -79,13 +79,23 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getPrivateChatHi
             rt.block_on(async {
                 let user = current_user(&token).await?;
                 let chat = &user.chat;
-                let mut history = timeout(
+                let history_result = timeout(
                     Duration::from_secs(15),
                     chat.history(peer_name.clone(), page.max(1) as u32, 50, false),
                 )
                 .await
-                .map_err(|_| "加载私聊历史超时，请稍后重试".to_string())?
-                .map_err(|err| format!("加载私聊历史失败: {err}"))?;
+                .map_err(|_| "加载私聊历史超时，请稍后重试".to_string())?;
+                let mut history = match history_result {
+                    Ok(items) => items,
+                    Err(err) => {
+                        let message = err.to_string();
+                        if message.contains("没有更多消息") {
+                            Vec::new()
+                        } else {
+                            return Err(format!("加载私聊历史失败: {message}"));
+                        }
+                    }
+                };
                 history.reverse();
                 let messages = history
                     .into_iter()

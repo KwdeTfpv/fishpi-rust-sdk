@@ -127,7 +127,7 @@ pub(crate) fn private_session_to_json(msg: ChatData, self_username: &str, unread
             msg.markdown.clone()
         }
     } else {
-        msg.preview.clone()
+        private_session_preview_text(&msg.preview)
     };
     json!({
         "peer": private_peer(&msg, self_username),
@@ -138,6 +138,21 @@ pub(crate) fn private_session_to_json(msg: ChatData, self_username: &str, unread
         "sort": msg.oId.parse::<i64>().unwrap_or(0),
     })
 }
+
+fn private_session_preview_text(preview: &str) -> String {
+    let text = preview.trim();
+    if text.is_empty() || text.ends_with("...") || text.ends_with('…') {
+        return text.to_string();
+    }
+
+    if text.chars().count() >= PRIVATE_SESSION_PREVIEW_ELLIPSIS_THRESHOLD {
+        format!("{text}...")
+    } else {
+        text.to_string()
+    }
+}
+
+const PRIVATE_SESSION_PREVIEW_ELLIPSIS_THRESHOLD: usize = 18;
 
 pub(crate) fn private_message_to_json(msg: ChatData, _self_username: &str) -> Value {
     let content_html = msg.content.clone();

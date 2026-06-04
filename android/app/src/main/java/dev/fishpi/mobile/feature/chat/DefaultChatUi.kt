@@ -55,6 +55,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddAPhoto
+import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.InsertEmoticon
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.CardGiftcard
@@ -597,6 +598,18 @@ private fun DefaultChatUiContent(
             onClick = {
                 bridge.closeAttachmentPanel()
                 attachmentPicker.openCamera()
+            },
+        ),
+        ChatToolAction(
+            id = "file",
+            label = "文件",
+            icon = Icons.Rounded.AttachFile,
+            enabled = !isUploadingAttachment,
+            iconTint = FishPiTheme.accent,
+            iconBackground = FishPiTheme.accent.copy(alpha = 0.10f),
+            onClick = {
+                bridge.closeAttachmentPanel()
+                attachmentPicker.openFile()
             },
         ),
         ChatToolAction(

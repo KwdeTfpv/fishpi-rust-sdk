@@ -10,6 +10,7 @@ import dev.fishpi.mobile.data.PrivateChatSession
 import dev.fishpi.mobile.data.UploadedChatFile
 import dev.fishpi.mobile.feature.privatechat.mapper.sortedByLatest
 import dev.fishpi.mobile.feature.privatechat.mapper.toPrivateSessionUiModel
+import dev.fishpi.mobile.feature.privatechat.mapper.withFileTransferSession
 import dev.fishpi.mobile.feature.privatechat.model.PrivateConversationState
 import dev.fishpi.mobile.shared.message.markMessageRevoked
 import dev.fishpi.mobile.shared.message.repeatableDraftContent
@@ -71,7 +72,7 @@ internal class PrivateChatController(
             is PrivateChatAction.ShowLinkPreview -> updateConversation { it.copy(previewLinkUrl = action.url) }
             PrivateChatAction.DismissLinkPreview -> updateConversation { it.copy(previewLinkUrl = null) }
             PrivateChatAction.KeepPositionConsumed -> updateConversation { it.copy(keepPositionAfterPrependCount = 0) }
-            is PrivateChatAction.ShowError -> setError(action.message)
+            is PrivateChatAction.ShowError -> showTransientError(action.message)
             PrivateChatAction.ClearError -> _state.update { it.copy(error = null) }
         }
     }
@@ -330,7 +331,7 @@ internal class PrivateChatController(
             }.onSuccess { file ->
                 appendUploadedFile(file)
             }.onFailure {
-                setError(it.message ?: "上传媒体失败")
+                showTransientError(it.message ?: "上传媒体失败")
                 updateConversation { state -> state.copy(isUploadingAttachment = false) }
             }
         }
@@ -434,7 +435,7 @@ internal class PrivateChatController(
     }
 
     private fun setSessions(sessions: List<PrivateChatSession>) {
-        val sorted = sessions.sortedByLatest()
+        val sorted = sessions.withFileTransferSession().sortedByLatest()
         _state.update {
             it.copy(
                 rawSessions = sorted,
@@ -479,6 +480,10 @@ internal class PrivateChatController(
 
     private fun setError(reason: String) {
         _state.update { it.copy(error = reason) }
+        emitEffect(PrivateChatEffect.ShowError(reason))
+    }
+
+    private fun showTransientError(reason: String) {
         emitEffect(PrivateChatEffect.ShowError(reason))
     }
 

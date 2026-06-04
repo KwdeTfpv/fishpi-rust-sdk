@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddAPhoto
+import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,6 +72,7 @@ import dev.fishpi.mobile.shared.message.copyableText
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.EmojiGroupView
 import dev.fishpi.mobile.data.EmojiItemView
+import dev.fishpi.mobile.feature.privatechat.mapper.isFileTransferPeer
 import dev.fishpi.mobile.feature.privatechat.mapper.toPrivateChatSession
 import dev.fishpi.mobile.feature.privatechat.model.PrivateSessionUiModel
 import dev.fishpi.mobile.shared.message.native.NativeMessageList
@@ -114,6 +116,16 @@ internal fun DefaultPrivateChatUi(
             onClick = {
                 dispatch(PrivateChatAction.CloseTools)
                 attachmentPicker.openCamera()
+            },
+        ),
+        ChatToolAction(
+            id = "file",
+            label = "文件",
+            icon = Icons.Rounded.AttachFile,
+            enabled = !conversation.isUploadingAttachment,
+            onClick = {
+                dispatch(PrivateChatAction.CloseTools)
+                attachmentPicker.openFile()
             },
         ),
     )
@@ -302,6 +314,9 @@ private fun PrivateSessionRow(
     val previewText = remember(item.preview) {
         item.preview.toPrivateSessionPreviewText()
     }
+    val displayName = remember(item.peer) {
+        item.peer.toPrivateChatDisplayName()
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -320,7 +335,7 @@ private fun PrivateSessionRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
     ) {
-        PrivateAvatar(url = item.avatar, name = item.peer, sizeDp = PrivateChatAvatarSize)
+        PrivateAvatar(url = item.avatar, name = displayName, sizeDp = PrivateChatAvatarSize)
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -333,7 +348,7 @@ private fun PrivateSessionRow(
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = item.peer,
+                    text = displayName,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp,
@@ -388,8 +403,15 @@ private fun PrivateSessionRow(
 private fun String.toPrivateSessionPreviewText(): String {
     val text = lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
     if (text.isBlank()) return "暂无预览"
-    return if (lineSequence().drop(1).any { it.isNotBlank() }) "$text..." else text
+    val hasMoreLines = lineSequence().drop(1).any { it.isNotBlank() }
+    val maxPreviewLength = 24
+    val clipped = text.length > maxPreviewLength
+    val preview = if (clipped) text.take(maxPreviewLength) else text
+    return if (hasMoreLines || clipped) "$preview..." else preview
 }
+
+private fun String.toPrivateChatDisplayName(): String =
+    if (isFileTransferPeer()) "文件传输助手" else this
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -437,6 +459,9 @@ private fun PrivateConversation(
     onSend: () -> Unit,
 ) {
     val listController = rememberNativeMessageListController()
+    val displayName = remember(peer) {
+        peer.toPrivateChatDisplayName()
+    }
     val listItems = remember(messages) {
         messages.mapIndexed { index, message ->
             ChatListItem(
@@ -491,10 +516,10 @@ private fun PrivateConversation(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    PrivateAvatar(url = peerAvatar, name = peer, sizeDp = 36)
+                    PrivateAvatar(url = peerAvatar, name = displayName, sizeDp = 36)
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(
-                            text = peer,
+                            text = displayName,
                             color = FishPiTheme.onSurface,
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
@@ -687,6 +712,5 @@ private fun PrivateQuotePreviewBar(
         )
     }
 }
-
 
 

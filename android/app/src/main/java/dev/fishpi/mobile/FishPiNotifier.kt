@@ -81,7 +81,7 @@ internal object FishPiNotifier {
 
     fun success(message: String?) = show(message, FishPiNoticeType.Success)
 
-    fun error(message: String?) = show(message, FishPiNoticeType.Error, durationMs = 2_800L)
+    fun error(message: String?) = show(message, FishPiNoticeType.Error, durationMs = 4_500L)
 }
 
 @Composable

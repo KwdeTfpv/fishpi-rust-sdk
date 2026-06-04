@@ -39,6 +39,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -65,6 +68,8 @@ internal class ChatController(
 
     private val _state = MutableStateFlow(ChatState(liveness = cachedHomeLiveness()))
     override val state: StateFlow<ChatState> = _state
+    private val _effects = MutableSharedFlow<ChatEffect>(extraBufferCapacity = 16)
+    val effects: SharedFlow<ChatEffect> = _effects.asSharedFlow()
     val legacyMessages: StateFlow<List<ChatRoomMessage>> = rawMessages.asStateFlow()
 
     private val _legacyComposerState = MutableStateFlow(ChatLegacyComposerState())
@@ -866,13 +871,13 @@ internal class ChatController(
                 syncComposerFromLegacy()
             }.onFailure { throwable ->
                 val reason = throwable.message ?: "上传媒体失败"
-                _legacyComposerState.update { it.copy(error = reason, isUploadingAttachment = false) }
+                _legacyComposerState.update { it.copy(isUploadingAttachment = false) }
                 _state.update {
                     it.copy(
-                        error = reason,
                         composer = it.composer.copy(isUploadingAttachment = false),
                     )
                 }
+                emitEffect(ChatEffect.ShowError(reason))
             }
         }
     }
@@ -1248,6 +1253,10 @@ internal class ChatController(
     private fun setError(reason: String) {
         _legacyComposerState.update { it.copy(error = reason) }
         _state.update { it.copy(error = reason) }
+    }
+
+    private fun emitEffect(effect: ChatEffect) {
+        _effects.tryEmit(effect)
     }
 
     fun replaceDraft(value: String, requestFocus: Boolean = false, resetInput: Boolean = false) {

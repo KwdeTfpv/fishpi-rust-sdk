@@ -5,7 +5,7 @@ use thiserror::Error;
 pub enum Error {
     #[error("Request error: {0}")]
     Request(Box<dyn StdError + Send + Sync>),
-    #[error("API error: {0}")]
+    #[error("{0}")]
     Api(String),
     #[error("Parse error: {0}")]
     Parse(String),
