@@ -312,7 +312,7 @@ private fun PrivateSessionRow(
     onClick: () -> Unit,
 ) {
     val previewText = remember(item.preview) {
-        item.preview.toPrivateSessionPreviewText()
+        item.preview.trim().ifBlank { "暂无预览" }
     }
     val displayName = remember(item.peer) {
         item.peer.toPrivateChatDisplayName()
@@ -398,16 +398,6 @@ private fun PrivateSessionRow(
             }
         }
     }
-}
-
-private fun String.toPrivateSessionPreviewText(): String {
-    val text = lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
-    if (text.isBlank()) return "暂无预览"
-    val hasMoreLines = lineSequence().drop(1).any { it.isNotBlank() }
-    val maxPreviewLength = 24
-    val clipped = text.length > maxPreviewLength
-    val preview = if (clipped) text.take(maxPreviewLength) else text
-    return if (hasMoreLines || clipped) "$preview..." else preview
 }
 
 private fun String.toPrivateChatDisplayName(): String =
@@ -712,5 +702,3 @@ private fun PrivateQuotePreviewBar(
         )
     }
 }
-
-
