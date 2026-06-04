@@ -299,6 +299,9 @@ private fun PrivateSessionRow(
     item: PrivateSessionUiModel,
     onClick: () -> Unit,
 ) {
+    val previewText = remember(item.preview) {
+        item.preview.toPrivateSessionPreviewText()
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -340,7 +343,7 @@ private fun PrivateSessionRow(
                     modifier = Modifier.padding(end = 72.dp),
                 )
                 Text(
-                    text = item.preview.ifBlank { "暂无预览" },
+                    text = previewText,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
@@ -380,6 +383,12 @@ private fun PrivateSessionRow(
             }
         }
     }
+}
+
+private fun String.toPrivateSessionPreviewText(): String {
+    val text = lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+    if (text.isBlank()) return "暂无预览"
+    return if (lineSequence().drop(1).any { it.isNotBlank() }) "$text..." else text
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
