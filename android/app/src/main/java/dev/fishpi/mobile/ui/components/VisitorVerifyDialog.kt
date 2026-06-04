@@ -42,11 +42,12 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.fishpi.mobile.FishPiTheme
-import dev.fishpi.mobile.auth.VisitorVerifyUrl
 import dev.fishpi.mobile.auth.isVisitorVerificationCompletedUrl
+import dev.fishpi.mobile.auth.visitorVerificationStartUrl
 
 @Composable
 internal fun VisitorVerifyDialog(
+    apiKey: String?,
     onVerified: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -150,7 +151,7 @@ internal fun VisitorVerifyDialog(
                                             request: WebResourceRequest,
                                         ): Boolean = false
                                     }
-                                    loadUrl(VisitorVerifyUrl)
+                                    loadUrl(visitorVerificationStartUrl(apiKey))
                                 }
                             },
                         )

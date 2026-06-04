@@ -191,6 +191,13 @@ fun FishPiApp() {
             }
         }
 
+        fun pendingVisitorVerifyApiKey(): String? =
+            when (val retry = pendingVisitorRetry) {
+                is VisitorRetryAction.SavedAccountLogin -> retry.account.apiKey
+                is VisitorRetryAction.SavedApiKey -> retry.apiKey
+                null -> null
+            }
+
         LaunchedEffect(Unit) {
             val savedApiKey = store.getApiKey()
             if (savedApiKey.isBlank()) {
@@ -209,6 +216,7 @@ fun FishPiApp() {
             isBooting -> LoadingScreen("正在登录")
             session == null -> LoginScreen(
                 initialError = bootError,
+                visitorVerifyApiKey = pendingVisitorVerifyApiKey(),
                 savedAccounts = savedAccounts,
                 onSwitchAccount = { account -> switchAccount(account) },
                 onVisitorVerified = { retryAfterVisitorVerification() },

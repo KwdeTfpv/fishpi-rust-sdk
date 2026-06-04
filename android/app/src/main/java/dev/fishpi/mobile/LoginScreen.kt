@@ -70,6 +70,7 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun LoginScreen(
     initialError: String?,
+    visitorVerifyApiKey: String?,
     savedAccounts: List<SavedAccount>,
     onSwitchAccount: (SavedAccount) -> Unit,
     onVisitorVerified: () -> Unit,
@@ -84,6 +85,7 @@ internal fun LoginScreen(
     var isLoading by remember { mutableStateOf(false) }
     var showVisitorVerify by remember { mutableStateOf(false) }
     var retryPasswordAfterVisitorVerify by remember { mutableStateOf(false) }
+    var activeVisitorVerifyApiKey by remember { mutableStateOf<String?>(null) }
 
     // Focus management for better form flow
     val passwordFocus = remember { FocusRequester() }
@@ -100,6 +102,7 @@ internal fun LoginScreen(
             error = initialError
             if (initialError.isVisitorVerificationRequired()) {
                 retryPasswordAfterVisitorVerify = false
+                activeVisitorVerifyApiKey = visitorVerifyApiKey
                 showVisitorVerify = true
             }
         }
@@ -133,6 +136,7 @@ internal fun LoginScreen(
                 error = message
                 if (message.isVisitorVerificationRequired()) {
                     retryPasswordAfterVisitorVerify = true
+                    activeVisitorVerifyApiKey = null
                     showVisitorVerify = true
                 }
             }
@@ -331,7 +335,10 @@ internal fun LoginScreen(
                                     )
                                     if (it.isVisitorVerificationRequired()) {
                                         OutlinedButton(
-                                            onClick = { showVisitorVerify = true },
+                                            onClick = {
+                                                activeVisitorVerifyApiKey = visitorVerifyApiKey
+                                                showVisitorVerify = true
+                                            },
                                             shape = RoundedCornerShape(12.dp),
                                         ) {
                                             Text("打开访客验证")
@@ -471,6 +478,7 @@ internal fun LoginScreen(
                                 error = message
                                 if (message.isVisitorVerificationRequired()) {
                                     retryPasswordAfterVisitorVerify = false
+                                    activeVisitorVerifyApiKey = token
                                     showVisitorVerify = true
                                 }
                             }
@@ -482,6 +490,7 @@ internal fun LoginScreen(
         }
         if (showVisitorVerify) {
             VisitorVerifyDialog(
+                apiKey = activeVisitorVerifyApiKey,
                 onVerified = {
                     showVisitorVerify = false
                     if (retryPasswordAfterVisitorVerify) {
