@@ -5,7 +5,7 @@ description: FishPi Android 主题与插件系统开发文档
 
 # FishPi Android 扩展开发指南
 
-FishPi Android 插件是放在手机本地的 JavaScript 文件，运行在 App 内置 WebView 沙箱中。插件可以监听聊天室消息、修改待发送文本、调用已暴露的 SDK API、保存配置、发送系统提示，注册聊天室快捷动作，并生成原生插件页面、对话框和表单 UI。
+FishPi Android 插件是放在手机本地的 JavaScript 文件，运行在 App 内置 WebView 沙箱中。插件可以监听聊天室消息、修改待发送文本、调用已暴露的 SDK API、保存配置、发送系统提示，注册聊天室快捷动作和消息长按菜单动作，并生成原生插件页面、对话框和表单 UI。
 
 ## 自定义主题
 
@@ -249,7 +249,7 @@ on('message', function(msg) {
 注意：
 
 - 插件可以读取 `apiKey`，因此只安装可信插件。
-- 插件禁用、卸载、重载或沙箱销毁时，其快捷工具栏入口和聊天室发送身份配置会被清理。
+- 插件禁用、卸载、重载或沙箱销毁时，其快捷工具栏入口、消息长按菜单入口和聊天室发送身份配置会被清理。
 - `fishpi.call()` 内部有约 10 秒等待限制，超时会返回错误。
 
 ## 事件系统
@@ -269,6 +269,7 @@ off('message', handleMessage);
 |------|----------|------|
 | `message` | 聊天室收到新消息时 | `ChatRoomMessage` |
 | `toolbarAction` | 用户点击插件快捷动作时 | `{ entryId, actionId }` |
+| `menuAction` | 用户点击插件注册的消息长按菜单动作时 | `{ scene, actionId, message }` |
 
 ### message 事件
 
@@ -505,6 +506,92 @@ on('toolbarAction', function(action) {
 ```javascript
 fishpi.toolbar.unregister('quick-actions');
 fishpi.toolbar.clear();
+```
+
+返回：
+
+```json
+{ "ok": true }
+```
+
+## 消息长按菜单
+
+插件可以在聊天室消息长按菜单中注册动作。宿主只负责显示菜单项和回传当前消息，具体业务由插件自己完成。
+
+当前聊天室的主长按菜单是气泡菜单；插件动作会显示在“更多”子菜单里。底部消息操作弹层也会显示同一批插件动作。
+
+### 注册菜单动作
+
+```javascript
+fishpi.menu.register({
+    id: 'control-ta',
+    scene: 'chatRoom',
+    label: '厉害',
+    enabled: true
+});
+```
+
+结构：
+
+```ts
+type MenuAction = {
+  id: string;
+  scene: string;
+  label: string;
+  enabled?: boolean; // 默认 true
+}
+```
+
+规则：
+
+- `id`、`scene` 和 `label` 不能为空。
+- 同一个插件重复注册相同 `id` 会覆盖旧动作。
+- `scene` 必须命中当前页面；聊天室使用 `chatRoom`。
+- `enabled: false` 的动作会显示为禁用，不会触发点击。
+- 菜单项文字应尽量短。气泡菜单空间有限，过长文字可能被压缩，例如“控制一下”可能显示成“控制一”。
+
+### 接收菜单点击事件
+
+```javascript
+on('menuAction', function(e) {
+    if (!e || e.actionId !== 'control-ta') return;
+
+    var msg = e.message || {};
+    ui.notify({
+        text: '正在处理 ' + (msg.displayName || msg.userName || '这条消息'),
+        type: 'info',
+        avatarUrl: msg.userAvatarURL
+    });
+});
+```
+
+事件结构：
+
+```json
+{
+  "scene": "chatRoom",
+  "actionId": "control-ta",
+  "message": {
+    "oId": "1778462350466",
+    "userName": "Kirito",
+    "userNickname": "只有午安",
+    "userAvatarURL": "https://...",
+    "content": "今天的摸鱼真香！",
+    "md": "今天的摸鱼真香！",
+    "contentHtml": "<p>今天的摸鱼真香！</p>",
+    "imageUrls": [],
+    "linkUrls": [],
+    "time": "Mon May 11 09:19:11 CST 2026",
+    "type": "menuAction"
+  }
+}
+```
+
+### 删除菜单动作
+
+```javascript
+fishpi.menu.unregister('control-ta');
+fishpi.menu.clear();
 ```
 
 返回：
@@ -1297,4 +1384,5 @@ adb shell rm /sdcard/fishpi/plugins/xxx.js
 | 插件不触发 | 检查 `@scenes` 是否包含当前场景，当前聊天室场景为 `chatRoom` |
 | API 返回 `{ ok:false }` | 查看 `error` 字段和 logcat |
 | 快捷入口不显示 | 确认已调用 `fishpi.toolbar.register`，且 entry 的 `id/title` 不为空 |
+| 消息长按菜单不显示 | 确认已调用 `fishpi.menu.register`，`scene` 为 `chatRoom`；聊天室主长按气泡菜单中需要点“更多”查看插件动作 |
 | 设置页没有配置项 | 先在插件启动时调用一次 `storage.get(key, defaultValue)` 写入默认值 |

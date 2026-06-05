@@ -30,6 +30,7 @@ import dev.fishpi.mobile.feature.redpacket.RedPacketTypeRockPaperScissors
 import dev.fishpi.mobile.feature.redpacket.defaultRedPacketMessage
 import dev.fishpi.mobile.feature.redpacket.toRedPacketResultUiModel
 import dev.fishpi.mobile.plugin.PluginManager
+import dev.fishpi.mobile.plugin.PluginMenuAction
 import dev.fishpi.mobile.plugin.PluginToolbarEntry
 import dev.fishpi.mobile.utils.appendDraftBlock
 import dev.fishpi.mobile.utils.removeDraftBlock
@@ -80,6 +81,8 @@ internal class ChatController(
 
     val pluginToolbarEntries: List<PluginToolbarEntry>
         get() = pluginManager.toolbarEntries
+    val pluginMenuActions: List<PluginMenuAction>
+        get() = pluginManager.menuActions
     private var realtimeConnectConfig: RealtimeConnectConfig? = null
 
     init {
@@ -189,6 +192,10 @@ internal class ChatController(
 
     fun emitPluginToolbarAction(entry: PluginToolbarEntry, actionId: String) {
         pluginManager.emitToolbarAction(entry.pluginId, entry.id, actionId)
+    }
+
+    fun emitPluginMenuAction(action: PluginMenuAction, message: ChatRoomMessage) {
+        pluginManager.emitMenuAction(action.pluginId, action.id, action.scene, message.toPluginJson("menuAction"))
     }
 
     fun connectRealtime(

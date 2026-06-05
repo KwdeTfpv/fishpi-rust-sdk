@@ -21,6 +21,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.lang.reflect.Modifier
+import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
@@ -29,7 +30,10 @@ import java.util.concurrent.TimeUnit
 data class PluginInfo(
     val name: String, val version: String, val author: String,
     val scenes: List<String>, val fileName: String, val enabled: Boolean,
+    val source: PluginSource = PluginSource.Unknown,
 )
+
+enum class PluginSource { Store, Local, Unknown }
 
 data class PluginToolbarAction(
     val pluginId: String,
@@ -45,6 +49,14 @@ data class PluginToolbarEntry(
     val id: String,
     val title: String,
     val actions: List<PluginToolbarAction>,
+)
+
+data class PluginMenuAction(
+    val pluginId: String,
+    val id: String,
+    val scene: String,
+    val label: String,
+    val enabled: Boolean = true,
 )
 
 private data class PluginChatClientConfig(
@@ -113,12 +125,16 @@ class PluginManager private constructor(context: Context) {
     private val runtimeStates = ConcurrentHashMap<String, PluginRuntimeState>()
     private val toolbarLock = Any()
     private val toolbarEntriesByPlugin = mutableMapOf<String, MutableMap<String, PluginToolbarEntry>>()
+    private val menuLock = Any()
+    private val menuActionsByPlugin = mutableMapOf<String, MutableMap<String, PluginMenuAction>>()
     private val chatClientConfigs = ConcurrentHashMap<String, PluginChatClientConfig>()
     @Volatile private var loaded = false
     var apiKey: String = ""
     var userName: String = ""
     var onSystemMessage: ((String) -> Unit)? = null
     var toolbarEntries by mutableStateOf<List<PluginToolbarEntry>>(emptyList())
+        private set
+    var menuActions by mutableStateOf<List<PluginMenuAction>>(emptyList())
         private set
 
     private val nativeMethods = mutableMapOf<String, java.lang.reflect.Method>()
@@ -214,6 +230,9 @@ class PluginManager private constructor(context: Context) {
             "toolbar.register" -> return registerToolbarEntry(pluginId, args)
             "toolbar.unregister" -> return unregisterToolbarEntry(pluginId, args.optString("id", ""))
             "toolbar.clear" -> return clearToolbarEntries(pluginId)
+            "menu.register" -> return registerMenuAction(pluginId, args)
+            "menu.unregister" -> return unregisterMenuAction(pluginId, args.optString("id", ""))
+            "menu.clear" -> return clearMenuActions(pluginId)
             "ui.open" -> return PluginUiController.get().open(pluginId, args)
             "ui.update" -> return PluginUiController.get().update(pluginId, args)
             "ui.close" -> return PluginUiController.get().close(pluginId)
@@ -345,6 +364,7 @@ class PluginManager private constructor(context: Context) {
         currentScene = scene
         if (!loaded) loadInternal()
         refreshToolbarEntries()
+        refreshMenuActions()
     }
 
     fun emitToolbarAction(pluginId: String, entryId: String, actionId: String) {
@@ -356,6 +376,19 @@ class PluginManager private constructor(context: Context) {
             sb.bridge.emit("toolbarAction", payload.toString())
         } catch (e: Exception) {
             getState(pluginId).recordError("emit toolbarAction: ${e.message}")
+        }
+    }
+
+    fun emitMenuAction(pluginId: String, actionId: String, scene: String, message: JSONObject) {
+        val sb = sandboxes.firstOrNull { it.fileName == pluginId } ?: return
+        val payload = JSONObject()
+            .put("actionId", actionId)
+            .put("scene", scene)
+            .put("message", message)
+        try {
+            sb.bridge.emit("menuAction", payload.toString())
+        } catch (e: Exception) {
+            getState(pluginId).recordError("emit menuAction: ${e.message}")
         }
     }
 
@@ -376,7 +409,16 @@ class PluginManager private constructor(context: Context) {
         val disabled = disabledFileNames()
         return pluginDir.listFiles { f -> f.extension == "js" }?.mapNotNull { f ->
             val h = PluginHeaderParser.parse(f.readText()) ?: return@mapNotNull null
-            PluginInfo(h.name, h.version, h.author, h.scenes, f.name, !disabled.contains(f.name))
+            val needsConfirmation = requiresSafetyConfirmation(f.name)
+            PluginInfo(
+                h.name,
+                h.version,
+                h.author,
+                h.scenes,
+                f.name,
+                !disabled.contains(f.name) && !needsConfirmation,
+                pluginSource(f.name),
+            )
         }?.toList() ?: emptyList()
     }
 
@@ -417,6 +459,27 @@ class PluginManager private constructor(context: Context) {
         destroyPlugin(fileName)
         File(pluginDir, fileName).delete()
         runtimeStates.remove(fileName)
+        storageFor("__manager").edit()
+            .remove("source:$fileName")
+            .remove("approved_hash:$fileName")
+            .remove("store_hash:$fileName")
+            .apply()
+    }
+
+    fun requiresSafetyConfirmation(fileName: String): Boolean {
+        val file = File(pluginDir, fileName)
+        if (!file.exists()) return false
+        if (isStoreVerified(fileName, file)) return false
+        val approvedHash = storageFor("__manager").getString("approved_hash:$fileName", "")
+        return approvedHash != file.sha256()
+    }
+
+    fun approvePluginForCurrentContent(fileName: String) {
+        val file = File(pluginDir, fileName)
+        if (!file.exists()) return
+        storageFor("__manager").edit()
+            .putString("approved_hash:$fileName", file.sha256())
+            .apply()
     }
 
     fun installPluginFromUri(uri: Uri): String {
@@ -435,7 +498,16 @@ class PluginManager private constructor(context: Context) {
         appContext.contentResolver.openInputStream(uri)?.use { input ->
             target.outputStream().use { output -> input.copyTo(output) }
         } ?: throw IOException("无法读取所选文件")
-        reloadPlugin(finalName)
+        markPluginSource(finalName, PluginSource.Local)
+        val disabled = disabledFileNames().toMutableSet()
+        disabled.add(finalName)
+        storageFor("__manager").edit()
+            .putStringSet("disabled", disabled)
+            .remove("approved_hash:$finalName")
+            .remove("store_hash:$finalName")
+            .apply()
+        destroyPlugin(finalName)
+        getState(finalName).status = PluginStatus.Disabled
         return finalName
     }
 
@@ -447,13 +519,26 @@ class PluginManager private constructor(context: Context) {
             else -> FishPiNoticeType.Info
         }
 
-    fun installPluginFromSource(source: String, preferredName: String, enable: Boolean = true): String {
+    fun installPluginFromSource(
+        source: String,
+        preferredName: String,
+        enable: Boolean = true,
+        pluginSource: PluginSource = PluginSource.Local,
+    ): String {
         pluginDir.mkdirs()
         val header = PluginHeaderParser.parse(source)
             ?: throw IOException("插件缺少 FishPiPlugin 元信息")
         val finalName = storePluginFileName(preferredName.ifBlank { header.name })
         val target = File(pluginDir, finalName)
         target.writeText(source, Charsets.UTF_8)
+        markPluginSource(finalName, pluginSource)
+        val managerPrefs = storageFor("__manager").edit().remove("approved_hash:$finalName")
+        if (pluginSource == PluginSource.Store) {
+            managerPrefs.putString("store_hash:$finalName", target.sha256())
+        } else {
+            managerPrefs.remove("store_hash:$finalName")
+        }
+        managerPrefs.apply()
         if (enable) {
             togglePlugin(finalName, enable = true)
         } else {
@@ -492,6 +577,9 @@ class PluginManager private constructor(context: Context) {
 
     fun savePluginSource(fileName: String, source: String) {
         pluginFile(fileName).writeText(source)
+        markPluginSource(fileName, PluginSource.Local)
+        approvePluginForCurrentContent(fileName)
+        storageFor("__manager").edit().remove("store_hash:$fileName").apply()
         reloadPlugin(fileName)
     }
 
@@ -508,6 +596,7 @@ class PluginManager private constructor(context: Context) {
             sandbox.start()
             sandboxes.add(sandbox)
             getState(fileName).status = PluginStatus.Running
+            refreshMenuActions()
         }.onFailure { e ->
             getState(fileName).recordError("load: ${e.message}")
             getState(fileName).status = PluginStatus.Error
@@ -533,7 +622,11 @@ class PluginManager private constructor(context: Context) {
         synchronized(toolbarLock) {
             toolbarEntriesByPlugin.clear()
         }
+        synchronized(menuLock) {
+            menuActionsByPlugin.clear()
+        }
         refreshToolbarEntries()
+        refreshMenuActions()
     }
 
     private fun destroyPlugin(fileName: String) {
@@ -541,12 +634,16 @@ class PluginManager private constructor(context: Context) {
         synchronized(toolbarLock) {
             toolbarEntriesByPlugin.remove(fileName)
         }
+        synchronized(menuLock) {
+            menuActionsByPlugin.remove(fileName)
+        }
         val sb = sandboxes.find { it.fileName == fileName }
         if (sb != null) {
             sandboxes.remove(sb)
             sb.destroy()
         }
         refreshToolbarEntries()
+        refreshMenuActions()
     }
 
     private fun registerToolbarEntry(pluginId: String, args: JSONObject): JSONObject {
@@ -603,6 +700,47 @@ class PluginManager private constructor(context: Context) {
         return JSONObject().put("ok", true)
     }
 
+    private fun registerMenuAction(pluginId: String, args: JSONObject): JSONObject {
+        val actionId = args.optString("id").trim()
+        val scene = args.optString("scene", currentScene).trim()
+        val label = args.optString("label").trim()
+        if (actionId.isBlank()) return JSONObject().put("ok", false).put("error", "menu action id is required")
+        if (scene.isBlank()) return JSONObject().put("ok", false).put("error", "menu action scene is required")
+        if (label.isBlank()) return JSONObject().put("ok", false).put("error", "menu action label is required")
+        synchronized(menuLock) {
+            val actions = menuActionsByPlugin.getOrPut(pluginId) { mutableMapOf() }
+            actions[actionId] = PluginMenuAction(
+                pluginId = pluginId,
+                id = actionId,
+                scene = scene,
+                label = label,
+                enabled = if (args.has("enabled")) args.optBoolean("enabled", true) else true,
+            )
+        }
+        refreshMenuActions()
+        return JSONObject().put("ok", true)
+    }
+
+    private fun unregisterMenuAction(pluginId: String, actionId: String): JSONObject {
+        if (actionId.isBlank()) return JSONObject().put("ok", false).put("error", "menu action id is required")
+        synchronized(menuLock) {
+            menuActionsByPlugin[pluginId]?.remove(actionId)
+            if (menuActionsByPlugin[pluginId]?.isEmpty() == true) {
+                menuActionsByPlugin.remove(pluginId)
+            }
+        }
+        refreshMenuActions()
+        return JSONObject().put("ok", true)
+    }
+
+    private fun clearMenuActions(pluginId: String): JSONObject {
+        synchronized(menuLock) {
+            menuActionsByPlugin.remove(pluginId)
+        }
+        refreshMenuActions()
+        return JSONObject().put("ok", true)
+    }
+
     private fun setPluginChatClientType(pluginId: String, args: JSONObject): JSONObject {
         val client = args.optString("client").trim()
         val version = args.optString("version").trim()
@@ -639,8 +777,53 @@ class PluginManager private constructor(context: Context) {
         }
     }
 
+    private fun refreshMenuActions() {
+        val visible = synchronized(menuLock) {
+            menuActionsByPlugin.values
+                .flatMap { it.values }
+                .filter { action ->
+                    val sb = sandboxes.firstOrNull { it.fileName == action.pluginId } ?: return@filter false
+                    val scenes = sb.header.scenes.map(String::trim).filter(String::isNotBlank)
+                    val pluginVisible = scenes.isEmpty() || scenes.contains(currentScene)
+                    pluginVisible && action.scene == currentScene
+                }
+                .sortedWith(compareBy<PluginMenuAction> { it.pluginId }.thenBy { it.id })
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            menuActions = visible
+        } else {
+            mainHandler.post { menuActions = visible }
+        }
+    }
+
     private fun disabledFileNames(): Set<String> =
         storageFor("__manager").getStringSet("disabled", emptySet()) ?: emptySet()
+
+    private fun pluginSource(fileName: String): PluginSource {
+        val value = storageFor("__manager").getString("source:$fileName", "") ?: ""
+        return when (value) {
+            "local" -> PluginSource.Local
+            "store" -> {
+                val file = File(pluginDir, fileName)
+                if (file.exists() && isStoreVerified(fileName, file)) PluginSource.Store else PluginSource.Unknown
+            }
+            else -> PluginSource.Unknown
+        }
+    }
+
+    private fun isStoreVerified(fileName: String, file: File = File(pluginDir, fileName)): Boolean {
+        val storeHash = storageFor("__manager").getString("store_hash:$fileName", "") ?: ""
+        return storeHash.isNotBlank() && file.exists() && storeHash == file.sha256()
+    }
+
+    private fun markPluginSource(fileName: String, source: PluginSource) {
+        val value = when (source) {
+            PluginSource.Store -> "store"
+            PluginSource.Local -> "local"
+            PluginSource.Unknown -> "unknown"
+        }
+        storageFor("__manager").edit().putString("source:$fileName", value).apply()
+    }
 
     private fun pluginFile(fileName: String): File {
         require(fileName.endsWith(".js", ignoreCase = true)) { "仅支持编辑 .js 插件" }
@@ -657,10 +840,13 @@ class PluginManager private constructor(context: Context) {
             return 0
         }
         pluginDir.mkdirs()
-        copySamplePlugin()
         val disabled = disabledFileNames()
         pluginDir.listFiles { f -> f.extension == "js" }?.forEach { file ->
             if (file.name in disabled) return@forEach
+            if (requiresSafetyConfirmation(file.name)) {
+                getState(file.name).status = PluginStatus.Disabled
+                return@forEach
+            }
             runCatching {
                 val script = file.readText()
                 val header = PluginHeaderParser.parse(script) ?: return@forEach
@@ -676,14 +862,17 @@ class PluginManager private constructor(context: Context) {
         loaded = true
         return sandboxes.size
     }
+}
 
-    private fun copySamplePlugin() {
-        val sample = File(pluginDir, "red-packet-assistant.js")
-        if (sample.exists()) return
-        runCatching {
-            appContext.assets.open("plugins/red-packet-assistant.js").use { input ->
-                sample.outputStream().use { it.write(input.readBytes()) }
-            }
+private fun File.sha256(): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    inputStream().use { input ->
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        while (true) {
+            val read = input.read(buffer)
+            if (read <= 0) break
+            digest.update(buffer, 0, read)
         }
     }
+    return digest.digest().joinToString("") { "%02x".format(it) }
 }

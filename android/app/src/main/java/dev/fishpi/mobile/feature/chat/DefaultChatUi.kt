@@ -134,6 +134,7 @@ import coil3.size.Size
 import dev.fishpi.mobile.*
 import dev.fishpi.mobile.shared.message.*
 import dev.fishpi.mobile.shared.message.ui.MessageActionBubbleMenu
+import dev.fishpi.mobile.shared.message.ui.MessageActionSpec
 import dev.fishpi.mobile.shared.message.ui.MessageActionSheet
 import dev.fishpi.mobile.ui.components.ErrorState
 import dev.fishpi.mobile.ui.components.LoadingScreen
@@ -173,6 +174,7 @@ import dev.fishpi.mobile.ui.animal.AnimalPanel
 import dev.fishpi.mobile.ui.animal.AnimalStatusPill
 import dev.fishpi.mobile.plugin.PluginToolbarAction
 import dev.fishpi.mobile.plugin.PluginToolbarEntry
+import dev.fishpi.mobile.plugin.PluginMenuAction
 import dev.fishpi.mobile.utils.appendDraftBlock
 import dev.fishpi.mobile.utils.appendMentionDraft
 import dev.fishpi.mobile.utils.isDirectVideoUrl
@@ -294,6 +296,7 @@ internal interface DefaultChatUiBridge {
     val scrollToBottomRequest: Int
     val keepPositionAfterPrependCount: Int
     val pluginToolbarEntries: List<PluginToolbarEntry>
+    val pluginMenuActions: List<PluginMenuAction>
 
     fun setPluginScene(scene: String)
     fun setPluginSystemMessageHandler(shouldFollowBottom: () -> Boolean)
@@ -316,6 +319,7 @@ internal interface DefaultChatUiBridge {
     fun openAttachmentPanel()
     fun openPluginManager()
     fun emitPluginToolbarAction(entry: PluginToolbarEntry, actionId: String)
+    fun emitPluginMenuAction(action: PluginMenuAction, message: ChatRoomMessage)
     fun dismissImagePreview()
     fun dismissLinkPreview()
     fun dismissMessageActions()
@@ -1114,6 +1118,14 @@ private fun DefaultChatUiContent(
         }
 
         actionAnchor?.let { anchor ->
+            val pluginMessageActions = bridge.pluginMenuActions.map { pluginAction ->
+                MessageActionSpec(
+                    label = pluginAction.label,
+                    icon = Icons.Rounded.Extension,
+                    enabled = pluginAction.enabled,
+                    onClick = { bridge.emitPluginMenuAction(pluginAction, anchor.message) },
+                )
+            }
             MessageActionBubbleMenu(
             anchor = anchor,
             rootOffsetInWindow = chatBoxOffsetInWindow,
@@ -1139,10 +1151,19 @@ private fun DefaultChatUiContent(
             onRevoke = {
                 dispatch(ChatAction.RevokeMessage(anchor.message))
             },
+            extraActions = pluginMessageActions,
             )
         }
 
         actionMessage?.let { message ->
+            val pluginMessageActions = bridge.pluginMenuActions.map { pluginAction ->
+                MessageActionSpec(
+                    label = pluginAction.label,
+                    icon = Icons.Rounded.Extension,
+                    enabled = pluginAction.enabled,
+                    onClick = { bridge.emitPluginMenuAction(pluginAction, message) },
+                )
+            }
             MessageActionSheet(
             message = message,
             canRevoke = message.canBeRevokedBy(session),
@@ -1168,6 +1189,7 @@ private fun DefaultChatUiContent(
             onRevoke = {
                 dispatch(ChatAction.RevokeMessage(message))
             },
+            extraActions = pluginMessageActions,
             )
         }
 

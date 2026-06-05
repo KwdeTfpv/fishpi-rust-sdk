@@ -67,6 +67,7 @@ internal fun MessageActionBubbleMenu(
     onReaction: (String) -> Unit,
     onRepeat: () -> Unit,
     onRevoke: () -> Unit,
+    extraActions: List<MessageActionSpec> = emptyList(),
 ) {
     var submenu by remember(anchor.message.oId) { mutableStateOf(MessageActionSubmenu.Main) }
     val density = LocalDensity.current
@@ -78,9 +79,10 @@ internal fun MessageActionBubbleMenu(
     val selectedBackground = palette.accent.copy(alpha = 0.14f)
     val itemPressedBackground = Color.Transparent
     val mainActionCount = if (canRevoke) 7 else 6
+    val moreActionCount = 4 + extraActions.size
     val menuWidth = when (submenu) {
         MessageActionSubmenu.Main -> (mainActionCount * 34 + 14).dp
-        MessageActionSubmenu.More -> 158.dp
+        MessageActionSubmenu.More -> (moreActionCount * 38 + 14).dp
         MessageActionSubmenu.Reactions -> 218.dp
     }
     val menuHeight = when (submenu) {
@@ -152,6 +154,9 @@ internal fun MessageActionBubbleMenu(
                         onCopyImageLinks = { onCopyImageLinks(); onDismiss() },
                         onCopyLinks = { onCopyLinks(); onDismiss() },
                         onBack = { submenu = MessageActionSubmenu.Main },
+                        extraActions = extraActions.map { action ->
+                            action.copy(onClick = { action.onClick(); onDismiss() })
+                        },
                     )
                     MessageActionSubmenu.Reactions -> ReactionActionRow(
                         contentColor = contentColor,
@@ -229,6 +234,7 @@ private fun MoreActionRow(
     onCopyImageLinks: () -> Unit,
     onCopyLinks: () -> Unit,
     onBack: () -> Unit,
+    extraActions: List<MessageActionSpec>,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(1.dp),
@@ -241,6 +247,14 @@ private fun MoreActionRow(
             onCopyLinks = onCopyLinks,
             onBack = onBack,
         ).forEach { action ->
+            MenuAction(
+                action = action,
+                itemBackground = itemBackground,
+                contentColor = contentColor,
+                disabledColor = disabledColor,
+            )
+        }
+        extraActions.forEach { action ->
             MenuAction(
                 action = action,
                 itemBackground = itemBackground,

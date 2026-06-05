@@ -2,6 +2,7 @@ package dev.fishpi.mobile.ui.components
 
 import android.os.Build
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -42,7 +43,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.fishpi.mobile.FishPiTheme
-import dev.fishpi.mobile.auth.isVisitorVerificationCompletedUrl
+import dev.fishpi.mobile.auth.isVisitorVerificationBypassedUrl
+import dev.fishpi.mobile.auth.isVisitorVerificationChallengeUrl
+import dev.fishpi.mobile.auth.isVisitorVerificationSuccessResponse
 import dev.fishpi.mobile.auth.visitorVerificationStartUrl
 
 @Composable
@@ -55,6 +58,7 @@ internal fun VisitorVerifyDialog(
     var title by remember { mutableStateOf("访客验证") }
     var progress by remember { mutableIntStateOf(0) }
     var completed by remember { mutableStateOf(false) }
+    var challengeLoaded by remember { mutableStateOf(false) }
 
     fun completeOnce() {
         if (completed) return
@@ -133,6 +137,14 @@ internal fun VisitorVerifyDialog(
                                 WebView(context).apply {
                                     webView = this
                                     configureVisitorVerifyWebView()
+                                    addJavascriptInterface(
+                                        VisitorVerifyBridge { url, body ->
+                                            if (isVisitorVerificationSuccessResponse(url, body)) {
+                                                post { completeOnce() }
+                                            }
+                                        },
+                                        VisitorVerifyBridgeName,
+                                    )
                                     webChromeClient = object : WebChromeClient() {
                                         override fun onProgressChanged(view: WebView, newProgress: Int) {
                                             progress = newProgress
@@ -141,7 +153,10 @@ internal fun VisitorVerifyDialog(
                                     webViewClient = object : WebViewClient() {
                                         override fun onPageFinished(view: WebView, url: String) {
                                             title = view.title?.takeIf { it.isNotBlank() } ?: "访客验证"
-                                            if (isVisitorVerificationCompletedUrl(url)) {
+                                            view.evaluateJavascript(VisitorVerifyCompletionHook, null)
+                                            if (isVisitorVerificationChallengeUrl(url)) {
+                                                challengeLoaded = true
+                                            } else if (!challengeLoaded && isVisitorVerificationBypassedUrl(url)) {
                                                 completeOnce()
                                             }
                                         }
@@ -167,6 +182,7 @@ internal fun VisitorVerifyDialog(
                 stopLoading()
                 webChromeClient = null
                 webViewClient = WebViewClient()
+                removeJavascriptInterface(VisitorVerifyBridgeName)
                 loadUrl("about:blank")
                 removeAllViews()
                 destroy()
@@ -187,3 +203,65 @@ private fun WebView.configureVisitorVerifyWebView() {
     }
     CookieManager.getInstance().setAcceptCookie(true)
 }
+
+private const val VisitorVerifyBridgeName = "FishPiVisitorVerify"
+
+private class VisitorVerifyBridge(
+    private val onResponse: (url: String, body: String) -> Unit,
+) {
+    @JavascriptInterface
+    fun onResponse(url: String, body: String) {
+        onResponse.invoke(url, body)
+    }
+}
+
+private val VisitorVerifyCompletionHook = """
+    (function() {
+        if (window.__fishPiVisitorVerifyHookInstalled) return;
+        window.__fishPiVisitorVerifyHookInstalled = true;
+
+        function absoluteUrl(url) {
+            try { return new URL(url, window.location.href).href; }
+            catch (e) { return String(url || ''); }
+        }
+
+        function report(url, body) {
+            try {
+                var bridge = window.$VisitorVerifyBridgeName;
+                if (bridge && bridge.onResponse) {
+                    bridge.onResponse(absoluteUrl(url), String(body || ''));
+                }
+            } catch (e) {}
+        }
+
+        if (window.XMLHttpRequest && window.XMLHttpRequest.prototype) {
+            var originalOpen = window.XMLHttpRequest.prototype.open;
+            var originalSend = window.XMLHttpRequest.prototype.send;
+            window.XMLHttpRequest.prototype.open = function(method, url) {
+                this.__fishPiVisitorVerifyUrl = url;
+                return originalOpen.apply(this, arguments);
+            };
+            window.XMLHttpRequest.prototype.send = function() {
+                this.addEventListener('load', function() {
+                    report(this.__fishPiVisitorVerifyUrl || this.responseURL, this.responseText);
+                });
+                return originalSend.apply(this, arguments);
+            };
+        }
+
+        if (window.fetch) {
+            var originalFetch = window.fetch;
+            window.fetch = function(input, init) {
+                var url = typeof input === 'string' ? input : (input && input.url);
+                return originalFetch.apply(this, arguments).then(function(response) {
+                    try {
+                        response.clone().text().then(function(text) {
+                            report(url || response.url, text);
+                        });
+                    } catch (e) {}
+                    return response;
+                });
+            };
+        }
+    })();
+""".trimIndent()

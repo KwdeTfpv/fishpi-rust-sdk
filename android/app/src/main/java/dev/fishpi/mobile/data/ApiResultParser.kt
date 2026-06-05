@@ -1,5 +1,7 @@
 package dev.fishpi.mobile.data
 
+import dev.fishpi.mobile.auth.VisitorVerificationEvents
+import dev.fishpi.mobile.auth.isVisitorVerificationRequired
 import org.json.JSONObject
 import java.util.Locale
 
@@ -8,6 +10,9 @@ internal fun String.unwrapApiResult(): JSONObject {
     if (!json.optBoolean("ok", false)) {
         val rawError = json.optString("error", "Rust core call failed")
         val error = rawError.toUserFriendlyError()
+        if (error.isVisitorVerificationRequired()) {
+            VisitorVerificationEvents.notifyRequired()
+        }
         throw IllegalStateException(error)
     }
     return json

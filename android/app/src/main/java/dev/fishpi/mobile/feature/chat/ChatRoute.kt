@@ -15,6 +15,7 @@ import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.UploadedChatFile
 import dev.fishpi.mobile.shared.message.ChatQuote
 import dev.fishpi.mobile.data.ChatRoomMessage
+import dev.fishpi.mobile.plugin.PluginMenuAction
 import dev.fishpi.mobile.plugin.PluginToolbarEntry
 
 @Composable
@@ -114,6 +115,7 @@ internal fun ChatRoute(
                 override val scrollToBottomRequest get() = controllerState.scrollToBottomRequest
                 override val keepPositionAfterPrependCount get() = controllerState.keepPositionAfterPrependCount
                 override val pluginToolbarEntries get() = chatController.pluginToolbarEntries
+                override val pluginMenuActions get() = chatController.pluginMenuActions
 
                 override fun setPluginScene(scene: String) = chatController.setPluginScene(scene)
                 override fun setPluginSystemMessageHandler(shouldFollowBottom: () -> Boolean) = chatController.setPluginSystemMessageHandler(shouldFollowBottom)
@@ -155,6 +157,7 @@ internal fun ChatRoute(
                     pluginManagerOpen = true
                 }
                 override fun emitPluginToolbarAction(entry: PluginToolbarEntry, actionId: String) = chatController.emitPluginToolbarAction(entry, actionId)
+                override fun emitPluginMenuAction(action: PluginMenuAction, message: ChatRoomMessage) = chatController.emitPluginMenuAction(action, message)
                 override fun dismissImagePreview() {
                     previewImageUrl = null
                 }

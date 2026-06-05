@@ -45,6 +45,7 @@ fun PluginListSheet(onDismiss: () -> Unit) {
     var settingsPlugin by remember { mutableStateOf<PluginInfo?>(null) }
     var editorPlugin by remember { mutableStateOf<PluginInfo?>(null) }
     var deleteConfirm by remember { mutableStateOf<PluginInfo?>(null) }
+    var safetyConfirmPlugin by remember { mutableStateOf<PluginInfo?>(null) }
     val installLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -53,7 +54,7 @@ fun PluginListSheet(onDismiss: () -> Unit) {
             pm.installPluginFromUri(uri)
         }.onSuccess { fileName ->
             plugins = pm.pluginInfos()
-            FishPiNotifier.success("已安装: $fileName")
+            FishPiNotifier.success("已导入: $fileName，启用前需要确认安全风险")
         }.onFailure { e ->
             FishPiNotifier.error("安装失败: ${e.message ?: "未知错误"}")
         }
@@ -79,6 +80,35 @@ fun PluginListSheet(onDismiss: () -> Unit) {
         )
     }
 
+    safetyConfirmPlugin?.let { plugin ->
+        AlertDialog(
+            onDismissRequest = { safetyConfirmPlugin = null },
+            title = { Text("加载本地插件？") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("「${plugin.name}」不是从扩展集市安装，或文件内容已变化。")
+                    Text(
+                        "插件可以读取当前登录 API Key，并调用 App 暴露的能力。请确认来源可信后再启用。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pm.approvePluginForCurrentContent(plugin.fileName)
+                    pm.togglePlugin(plugin.fileName, enable = true)
+                    plugins = pm.pluginInfos()
+                    safetyConfirmPlugin = null
+                    FishPiNotifier.success("「${plugin.name}」已启用")
+                }) { Text("确认启用") }
+            },
+            dismissButton = {
+                TextButton(onClick = { safetyConfirmPlugin = null }) { Text("取消") }
+            },
+        )
+    }
+
     // Detail dialog
     detailPlugin?.let { plugin ->
         AlertDialog(
@@ -87,7 +117,7 @@ fun PluginListSheet(onDismiss: () -> Unit) {
             text = {
                 val state = pm.getState(plugin.fileName)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("v${plugin.version} · ${plugin.author.ifBlank { "未知" }}", fontSize = 12.sp)
+                    Text("v${plugin.version} · ${plugin.author.ifBlank { "未知" }} · ${plugin.source.label()}", fontSize = 12.sp)
                     Text("状态: ${state.status}", fontSize = 12.sp,
                         color = if (state.status == PluginStatus.Error) MaterialTheme.colorScheme.error
                                 else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -208,7 +238,7 @@ fun PluginListSheet(onDismiss: () -> Unit) {
                                                 else if (state.status == PluginStatus.Error) Text(" (异常)", fontSize = 12.sp,
                                                     color = MaterialTheme.colorScheme.error)
                                             }
-                                            Text("v${plugin.version} · ${plugin.author.ifBlank { "未知" }}",
+                                            Text("v${plugin.version} · ${plugin.author.ifBlank { "未知" }} · ${plugin.source.label()}",
                                                 fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             state.lastError?.let { err ->
                                                 Text(err, fontSize = 12.sp, color = MaterialTheme.colorScheme.error,
@@ -216,8 +246,12 @@ fun PluginListSheet(onDismiss: () -> Unit) {
                                             }
                                         }
                                         Switch(checked = plugin.enabled, onCheckedChange = { enable ->
-                                            pm.togglePlugin(plugin.fileName, enable)
-                                            plugins = pm.pluginInfos()
+                                            if (enable && pm.requiresSafetyConfirmation(plugin.fileName)) {
+                                                safetyConfirmPlugin = plugin
+                                            } else {
+                                                pm.togglePlugin(plugin.fileName, enable)
+                                                plugins = pm.pluginInfos()
+                                            }
                                         })
                                     }
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -275,6 +309,12 @@ private fun JSONArray.jsonValues(): List<String> {
             add(value?.toString() ?: "")
         }
     }
+}
+
+private fun PluginSource.label(): String = when (this) {
+    PluginSource.Store -> "扩展集市"
+    PluginSource.Local -> "本地导入"
+    PluginSource.Unknown -> "未知来源"
 }
 
 @Composable

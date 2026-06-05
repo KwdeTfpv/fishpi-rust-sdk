@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
@@ -66,6 +68,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -97,6 +100,7 @@ import dev.fishpi.mobile.data.SavedAccount
 import dev.fishpi.mobile.data.SessionStore
 import dev.fishpi.mobile.data.UpdateChecker
 import dev.fishpi.mobile.data.UpdateDownloader
+import dev.fishpi.mobile.auth.VisitorVerificationEvents
 import dev.fishpi.mobile.feature.article.ArticleRoute
 import dev.fishpi.mobile.feature.breezemoon.BreezemoonRoute
 import dev.fishpi.mobile.feature.chat.ChatController
@@ -117,6 +121,7 @@ import dev.fishpi.mobile.ui.animal.AnimalPanel
 import dev.fishpi.mobile.ui.animal.AnimalStatusPill
 import dev.fishpi.mobile.ui.components.ControlSurface
 import dev.fishpi.mobile.ui.components.IconActionButton
+import dev.fishpi.mobile.ui.components.VisitorVerifyDialog
 import dev.fishpi.mobile.ui.components.statusSuccessColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -211,6 +216,8 @@ internal fun MainShell(
     var updateDismissed by remember { mutableStateOf(false) }
     var updateDownloadId by remember { mutableStateOf<Long?>(null) }
     var isCheckingUpdate by remember { mutableStateOf(false) }
+    var showVisitorVerify by remember { mutableStateOf(false) }
+    val visitorVerifyVisible by rememberUpdatedState(showVisitorVerify)
     var chatRoomCanFollowBottom by remember { mutableStateOf(true) }
     var chatRoomFollowBottomProbe by remember { mutableStateOf<(() -> Boolean)?>(null) }
     val imeBottom = WindowInsets.ime.getBottom(density)
@@ -290,6 +297,14 @@ internal fun MainShell(
         chatController.refreshHistory(skipIfLoaded = !force)
     }
 
+    fun refreshAfterVisitorVerification() {
+        refreshNoticeUnread(force = true)
+        if (tab == FishTab.Chat) {
+            refreshChatRoomHistory(force = true)
+        }
+        FishPiNotifier.success("访客验证已完成")
+    }
+
     fun openChatRoomDetail() {
         focusManager.clearFocus(force = true)
         keyboardController?.hide()
@@ -301,6 +316,21 @@ internal fun MainShell(
 
     LaunchedEffect(session.apiKey) {
         refreshNoticeUnread(force = true)
+    }
+
+    DisposableEffect(session.apiKey) {
+        val mainHandler = Handler(Looper.getMainLooper())
+        VisitorVerificationEvents.setListener {
+            mainHandler.post {
+                if (!visitorVerifyVisible) {
+                    showVisitorVerify = true
+                    FishPiNotifier.show("当前网络需要完成访客验证")
+                }
+            }
+        }
+        onDispose {
+            VisitorVerificationEvents.setListener(null)
+        }
     }
 
     LaunchedEffect(session.apiKey, tab) {
@@ -754,6 +784,19 @@ internal fun MainShell(
     }
 
     PluginUiRoute()
+
+    if (showVisitorVerify) {
+        VisitorVerifyDialog(
+            apiKey = session.apiKey,
+            onVerified = {
+                showVisitorVerify = false
+                refreshAfterVisitorVerification()
+            },
+            onDismiss = {
+                showVisitorVerify = false
+            },
+        )
+    }
 
     val pendingUpdate = updateInfo
     if (pendingUpdate != null && !updateDismissed) {

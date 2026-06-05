@@ -39,6 +39,7 @@ internal fun MessageActionSheet(
     onRepeat: () -> Unit,
     onRevoke: () -> Unit,
     showReactions: Boolean = true,
+    extraActions: List<MessageActionSpec> = emptyList(),
 ) {
     AppBottomSheet(
         onDismiss = onDismiss,
@@ -88,6 +89,18 @@ internal fun MessageActionSheet(
                 onRepeat = onRepeat,
                 onRevoke = onRevoke,
             ).forEach { action ->
+                AppSheetActionRow(
+                    text = action.label,
+                    icon = action.icon,
+                    enabled = action.enabled,
+                    danger = action.danger,
+                    onClick = {
+                        action.onClick()
+                        onDismiss()
+                    },
+                )
+            }
+            extraActions.forEach { action ->
                 AppSheetActionRow(
                     text = action.label,
                     icon = action.icon,

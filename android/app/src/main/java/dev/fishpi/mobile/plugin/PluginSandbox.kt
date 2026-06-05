@@ -128,6 +128,11 @@ fishpi.toolbar={
     unregister:function(id){return fishpi.call('toolbar.unregister',{id:id});},
     clear:function(){return fishpi.call('toolbar.clear',{});}
 };
+fishpi.menu={
+    register:function(action){return fishpi.call('menu.register',action||{});},
+    unregister:function(id){return fishpi.call('menu.unregister',{id:id});},
+    clear:function(){return fishpi.call('menu.clear',{});}
+};
 fishpi.chat={
     setClientType:function(client,version){return fishpi.call('chat.setClientType',{client:client,version:version});},
     clearClientType:function(){return fishpi.call('chat.clearClientType',{});}

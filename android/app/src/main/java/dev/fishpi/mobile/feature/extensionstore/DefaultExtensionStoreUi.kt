@@ -95,6 +95,7 @@ import dev.fishpi.mobile.data.ExtensionStoreItem
 import dev.fishpi.mobile.data.ExtensionStoreSession
 import dev.fishpi.mobile.data.ExtensionStoreUploadRequest
 import dev.fishpi.mobile.plugin.PluginManager
+import dev.fishpi.mobile.plugin.PluginSource
 import dev.fishpi.mobile.ui.components.PlainBackButton
 import coil3.compose.SubcomposeAsyncImage
 import kotlinx.coroutines.Dispatchers
@@ -193,7 +194,12 @@ internal fun DefaultExtensionStoreUi(
                     }
                 } else {
                     withContext(Dispatchers.IO) {
-                        pluginManager.installPluginFromSource(content, item.preferredStoreName(), enable = false)
+                        pluginManager.installPluginFromSource(
+                            content,
+                            item.preferredStoreName(),
+                            enable = false,
+                            pluginSource = PluginSource.Store,
+                        )
                     }
                 }
             }.onSuccess {
