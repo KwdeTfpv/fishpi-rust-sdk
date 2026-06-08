@@ -1,14 +1,10 @@
 package dev.fishpi.mobile.plugin
 
 import android.content.Context
-import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -121,7 +117,7 @@ class PluginManager private constructor(context: Context) {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
     private val sandboxes = CopyOnWriteArrayList<PluginSandbox>()
-    private val pluginDir = File(Environment.getExternalStorageDirectory(), "fishpi/plugins")
+    private val pluginDir = File(appContext.getExternalFilesDir(null) ?: appContext.filesDir, "plugins")
     private val runtimeStates = ConcurrentHashMap<String, PluginRuntimeState>()
     private val toolbarLock = Any()
     private val toolbarEntriesByPlugin = mutableMapOf<String, MutableMap<String, PluginToolbarEntry>>()
@@ -455,6 +451,8 @@ class PluginManager private constructor(context: Context) {
         }
     }
 
+    fun pluginDirectoryPath(): String = pluginDir.absolutePath
+
     fun uninstallPlugin(fileName: String) {
         destroyPlugin(fileName)
         File(pluginDir, fileName).delete()
@@ -560,7 +558,9 @@ class PluginManager private constructor(context: Context) {
     fun storePluginMatchesSource(preferredName: String, source: String): Boolean {
         val finalName = storePluginFileName(preferredName)
         val target = File(pluginDir, finalName)
-        return target.exists() && target.readText(Charsets.UTF_8) == source
+        return runCatching {
+            target.exists() && target.readText(Charsets.UTF_8) == source
+        }.getOrDefault(false)
     }
 
     fun storePluginFileName(preferredName: String): String {
@@ -832,13 +832,6 @@ class PluginManager private constructor(context: Context) {
     }
 
     private fun loadInternal(): Int {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
-            appContext.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                data = android.net.Uri.parse("package:${appContext.packageName}")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
-            return 0
-        }
         pluginDir.mkdirs()
         val disabled = disabledFileNames()
         pluginDir.listFiles { f -> f.extension == "js" }?.forEach { file ->

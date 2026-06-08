@@ -194,7 +194,7 @@ fun PluginListSheet(onDismiss: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("/sdcard/fishpi/plugins", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Text(pm.pluginDirectoryPath(), color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.sp, modifier = Modifier.weight(1f))
                 }
 
@@ -205,7 +205,7 @@ fun PluginListSheet(onDismiss: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text("暂无插件", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
-                        Text("将 .js 文件放入 /sdcard/fishpi/plugins/\n或点击下方按钮选择文件安装",
+                        Text("将 .js 文件放入应用插件目录\n或点击下方按钮选择文件安装",
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), fontSize = 12.sp)
                         TextButton(
                             onClick = { installLauncher.launch(arrayOf("text/*", "application/javascript")) },

@@ -2736,45 +2736,6 @@ private fun ChatOnlineAvatar(user: ChatOnlineUser) {
 }
 
 @Composable
-private fun ChatActionBarNoticeAction(
-    noticeUnread: Long,
-    onClick: () -> Unit,
-) {
-    val palette = LocalFishPiPalette.current
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        BadgedBox(
-            badge = {
-                if (noticeUnread > 0) {
-                    Badge(
-                        modifier = Modifier.sizeIn(minWidth = 14.dp, minHeight = 14.dp),
-                        containerColor = palette.accent,
-                        contentColor = palette.background,
-                    ) {
-                        Text(
-                            text = if (noticeUnread > 99) "99+" else noticeUnread.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
-                }
-            },
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Notifications,
-                contentDescription = if (noticeUnread > 0) "通知，$noticeUnread 条未读" else "通知",
-                tint = palette.weakText,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-    }
-}
-
-@Composable
 private fun ChatActionOverflowMenu(
     noticeUnread: Long,
     onClick: () -> Unit,
@@ -3551,93 +3512,6 @@ private fun ChatActionSheetItem(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun AiChatContextBar(
-    topicLabel: String,
-    onlineCount: Int,
-    visibleCount: Int,
-    connectionLabel: String,
-    connected: Boolean,
-    themeLabel: String,
-    onQuoteTopic: () -> Unit,
-    onRefresh: () -> Unit,
-    onReconnect: () -> Unit,
-    onOpenBlocked: () -> Unit,
-    onCycleTheme: () -> Unit,
-    onOpenPlugins: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(FishPiTheme.radiusField),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-        border = BorderStroke(FishPiTheme.borderWidth, MaterialTheme.colorScheme.primary.copy(alpha = 0.26f)),
-        shadowElevation = 0.dp,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 4.dp, height = 30.dp)
-                        .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
-                        .background(if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error),
-                )
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    Text(text = "CHATROOM", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    Text(text = "$onlineCount ONLINE / $visibleCount MSG", color = FishPiTheme.weakText, style = MaterialTheme.typography.labelSmall)
-                }
-                ChatHeaderIconAction(Icons.Rounded.Refresh, "刷新聊天室", onRefresh)
-                ChatHeaderIconAction(Icons.Rounded.Palette, if (themeLabel.isBlank()) "切换主题" else "主题：$themeLabel", onCycleTheme)
-                ChatHeaderIconAction(Icons.Rounded.VisibilityOff, "查看已屏蔽消息", onOpenBlocked)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                ChatConnectionChip(label = if (connectionLabel.isBlank()) "连接中" else connectionLabel, connected = connected, onClick = onReconnect)
-                ChatTopicChip(text = topicLabel, onClick = onQuoteTopic, modifier = Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChatHeaderPluginButton(onClick: () -> Unit) {
-    IconActionButton(
-        icon = Icons.Rounded.Extension,
-        contentDescription = "插件",
-        onClick = onClick,
-        size = 34.dp,
-        iconSize = 18.dp,
-    )
-}
-
-@Composable
-private fun ChatHeaderNoticeAction(
-    noticeUnread: Long,
-    onClick: () -> Unit,
-) {
-    BadgedBox(
-        badge = {
-            if (noticeUnread > 0) {
-                Badge(
-                    modifier = Modifier.sizeIn(minWidth = 14.dp, minHeight = 14.dp),
-                    containerColor = FishPiTheme.accent,
-                    contentColor = FishPiTheme.background,
-                ) {
-                    Text(
-                        text = if (noticeUnread > 99) "99+" else noticeUnread.toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
-            }
-        },
-    ) {
-        ChatHeaderIconAction(
-            icon = Icons.Rounded.Notifications,
-            contentDescription = if (noticeUnread > 0) "通知，$noticeUnread 条未读" else "通知",
-            onClick = onClick,
-        )
     }
 }
 

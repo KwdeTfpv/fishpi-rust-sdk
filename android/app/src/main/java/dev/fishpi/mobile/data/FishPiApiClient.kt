@@ -224,8 +224,8 @@ class FishPiApiClient private constructor() {
         return dataArray(FishPiNative.searchAtUsers(query)).toStringList()
     }
 
-    fun getNoticeUnreadCount(apiKey: String): NoticeUnreadCount {
-        return cached(noticeCache, apiKey, NOTICE_TTL_MS, "getNoticeUnreadCount") {
+    fun getNoticeUnreadCount(apiKey: String, forceRefresh: Boolean = false): NoticeUnreadCount {
+        val load: () -> NoticeUnreadCount = {
             val data = dataObject(FishPiNative.getNoticeUnreadCount(apiKey))
             NoticeUnreadCount(
                 total = data.optLong("total"),
@@ -239,6 +239,12 @@ class FishPiApiClient private constructor() {
                 newFollower = data.optLong("newFollower"),
             )
         }
+        if (forceRefresh) {
+            return traceApi("getNoticeUnreadCount") {
+                load().also { noticeCache[apiKey] = TimedValue(it, nowMs()) }
+            }
+        }
+        return cached(noticeCache, apiKey, NOTICE_TTL_MS, "getNoticeUnreadCount", load)
     }
 
     fun getNotices(apiKey: String): List<NoticeItemView> {

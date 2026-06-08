@@ -10,7 +10,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -29,38 +27,20 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Chat
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Newspaper
-import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material.icons.rounded.Forum
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -113,14 +93,8 @@ import dev.fishpi.mobile.feature.home.HomeRoute
 import dev.fishpi.mobile.feature.pluginui.PluginUiRoute
 import dev.fishpi.mobile.feature.privatechat.PrivateChatRoute
 import dev.fishpi.mobile.feature.profile.ProfileRoute
-import dev.fishpi.mobile.ui.animal.AnimalDock
-import dev.fishpi.mobile.ui.animal.AnimalDockItem
 import dev.fishpi.mobile.ui.animal.AnimalChatGlyph
 import dev.fishpi.mobile.ui.animal.AnimalIslandBackground
-import dev.fishpi.mobile.ui.animal.AnimalPanel
-import dev.fishpi.mobile.ui.animal.AnimalStatusPill
-import dev.fishpi.mobile.ui.components.ControlSurface
-import dev.fishpi.mobile.ui.components.IconActionButton
 import dev.fishpi.mobile.ui.components.VisitorVerifyDialog
 import dev.fishpi.mobile.ui.components.statusSuccessColor
 import kotlinx.coroutines.Dispatchers
@@ -280,7 +254,7 @@ internal fun MainShell(
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                        api.getNoticeUnreadCount(session.apiKey).total
+                        api.getNoticeUnreadCount(session.apiKey, forceRefresh = force).total
                     }
                 }.onSuccess {
                     noticeUnread = it
@@ -373,7 +347,10 @@ internal fun MainShell(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> appInForeground = true
+                Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> {
+                    appInForeground = true
+                    refreshNoticeUnread(force = true)
+                }
                 Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
                     appInForeground = false
                     focusManager.clearFocus(force = true)
@@ -423,7 +400,7 @@ internal fun MainShell(
         if (appInForeground) {
             noticeRealtime.connect(
                 apiKey = session.apiKey,
-                onNotice = { refreshNoticeUnread() },
+                onNotice = { refreshNoticeUnread(force = true) },
             )
         } else {
             noticeRealtime.disconnect()
@@ -685,7 +662,7 @@ internal fun MainShell(
                             chatPane = ChatPane.Home
                             privateChatDetailActive = true
                         },
-                        noticeUnread = totalMessageUnread,
+                        noticeUnread = noticeUnread,
                         onOpenNotice = {
                             noticeOpen = true
                         },
@@ -770,7 +747,7 @@ internal fun MainShell(
                         chatPane = ChatPane.Home
                         privateChatDetailActive = true
                     },
-                    noticeUnread = totalMessageUnread,
+                    noticeUnread = noticeUnread,
                     onOpenNotice = {
                         noticeOpen = true
                     },
@@ -851,9 +828,6 @@ private fun chatConnectionConnected(status: String): Boolean {
         text.contains("connected", ignoreCase = true) ||
         text.contains("reconnected", ignoreCase = true)
 }
-
-private fun chatConnectionLabel(status: String): String =
-    if (chatConnectionConnected(status)) "已连接" else "已断开"
 
 @Composable
 private fun ChatRoomEntryCard(
@@ -948,131 +922,6 @@ private fun InputBlocker() {
 }
 
 @Composable
-private fun NativeAppTopBar(
-    title: String,
-    connectionLabel: String,
-    connectionConnected: Boolean,
-    onReconnectChatRoom: () -> Unit,
-    noticeUnread: Long,
-    onOpenBlocked: () -> Unit,
-    onOpenNotice: () -> Unit,
-    themeLabel: String,
-    onCycleTheme: () -> Unit,
-) {
-    ControlSurface(
-        modifier = Modifier
-            .statusBarsPadding()
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-            .height(56.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                AnimalStatusPill(
-                    label = connectionLabel,
-                    color = if (connectionConnected) statusSuccessColor() else MaterialTheme.colorScheme.error,
-                    leadingDot = true,
-                    onClick = onReconnectChatRoom,
-                )
-            }
-            AnimalMiniIconButton(
-                icon = Icons.Rounded.Palette,
-                contentDescription = "主题：$themeLabel",
-                onClick = onCycleTheme,
-            )
-            AnimalMiniIconButton(
-                icon = Icons.Rounded.VisibilityOff,
-                contentDescription = "查看已屏蔽消息",
-                onClick = onOpenBlocked,
-            )
-            BadgedBox(
-                badge = {
-                    if (noticeUnread > 0) {
-                        Badge(
-                            modifier = Modifier.sizeIn(minWidth = 14.dp, minHeight = 14.dp),
-                        ) {
-                            Text(
-                                text = if (noticeUnread > 99) "99+" else noticeUnread.toString(),
-                                style = MaterialTheme.typography.labelSmall,
-                            )
-                        }
-                    }
-                },
-            ) {
-                AnimalMiniIconButton(
-                    icon = Icons.Rounded.Notifications,
-                    contentDescription = "通知",
-                    onClick = onOpenNotice,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AnimalMiniIconButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit,
-) {
-    IconActionButton(
-        icon = icon,
-        contentDescription = contentDescription,
-        onClick = onClick,
-        size = 36.dp,
-        iconSize = 17.dp,
-    )
-}
-
-@Composable
-private fun ChatConnectionBadge(
-    label: String,
-    connected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val color = if (connected) statusSuccessColor() else MaterialTheme.colorScheme.error
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(color.copy(alpha = 0.12f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(color),
-        )
-        Text(
-            text = label,
-            color = color,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-        )
-    }
-}
-
-@Composable
 private fun NativeBottomNav(
     selected: FishTab,
     onSelect: (FishTab) -> Unit,
@@ -1141,34 +990,3 @@ private fun LiquidNavItem(
         )
     }
 }
-
-@Composable
-private fun AiNavItem(
-    title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxHeight()
-            .clip(RoundedCornerShape(7.dp))
-            .background(if (selected) MaterialTheme.colorScheme.surface.copy(alpha = 0.72f) else Color.Transparent)
-            .border(
-                1.dp,
-                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent,
-                RoundedCornerShape(7.dp),
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        Icon(icon, contentDescription = title, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(4.dp))
-        Text(text = title, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-    }
-}
-
-private fun AnimalIslandTokensDockHeight() = 52.dp
