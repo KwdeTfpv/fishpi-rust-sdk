@@ -150,6 +150,10 @@ object FishPiNative {
 
     external fun thankArticle(apiKey: String, articleId: String): String
 
+    external fun voteComment(apiKey: String, commentId: String, like: Boolean): String
+
+    external fun thankComment(apiKey: String, commentId: String): String
+
     external fun rewardArticle(apiKey: String, articleId: String): String
 
     external fun followArticle(apiKey: String, articleId: String): String

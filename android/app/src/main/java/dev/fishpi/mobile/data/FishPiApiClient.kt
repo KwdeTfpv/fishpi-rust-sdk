@@ -401,6 +401,14 @@ class FishPiApiClient private constructor() {
         FishPiNative.thankArticle(apiKey, articleId).unwrapApiResult()
     }
 
+    fun voteComment(apiKey: String, commentId: String, like: Boolean) {
+        FishPiNative.voteComment(apiKey, commentId, like).unwrapApiResult()
+    }
+
+    fun thankComment(apiKey: String, commentId: String) {
+        FishPiNative.thankComment(apiKey, commentId).unwrapApiResult()
+    }
+
     fun rewardArticle(apiKey: String, articleId: String) {
         FishPiNative.rewardArticle(apiKey, articleId).unwrapApiResult()
     }

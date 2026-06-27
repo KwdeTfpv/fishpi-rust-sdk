@@ -423,10 +423,10 @@ fn parse_chatroom_payload(content: &Value, md: Option<&Value>) -> (ChatRoomMessa
         }
     }
 
-    if let Some(data) = md.and_then(parse_message_payload) {
-        if message_payload_type_is(&data, "music") || message_payload_type_is(&data, "weather") {
-            return (ChatRoomMessageType::Msg, data);
-        }
+    if let Some(data) = md.and_then(parse_message_payload)
+        && (message_payload_type_is(&data, "music") || message_payload_type_is(&data, "weather"))
+    {
+        return (ChatRoomMessageType::Msg, data);
     }
 
     match content {
@@ -487,7 +487,7 @@ impl<'de> Deserialize<'de> for ChatRoomMsg {
             user_name: raw.userName,
             user_nickname: raw.userNickname,
             user_avatar_url: raw.userAvatarURL,
-            sys_metal: sys_metal,
+            sys_metal,
             content,
             md: raw
                 .md

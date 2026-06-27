@@ -359,9 +359,10 @@ impl VoteStatus {
 }
 
 /// 文章状态
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum ArticleStatus {
     /// 正常
+    #[default]
     Normal,
 
     /// 封禁
@@ -378,12 +379,6 @@ impl ArticleStatus {
             1 => ArticleStatus::Ban,
             _ => ArticleStatus::Lock, // 默认值
         }
-    }
-}
-
-impl Default for ArticleStatus {
-    fn default() -> Self {
-        Self::Normal
     }
 }
 
@@ -603,7 +598,7 @@ pub struct ArticleComment {
     #[serde(rename = "commentAuthorURL")]
     pub author_url: String,
     /// 评论状态
-    #[serde(deserialize_with = "deserialize_vote")]
+    #[serde(rename = "commentVote", deserialize_with = "deserialize_vote")]
     pub vote: VoteStatus,
     /// 评论引用数
     #[serde(rename = "commentRevisionCount")]

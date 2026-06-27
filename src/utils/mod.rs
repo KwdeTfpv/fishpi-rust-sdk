@@ -40,8 +40,7 @@ lazy_static::lazy_static! {
 
 const DOMAIN: &str = "fishpi.cn";
 const MAX_UPLOAD_FILE_BYTES: u64 = 20 * 1024 * 1024;
-const VISITOR_VERIFY_MESSAGE: &str =
-    "当前网络触发摸鱼派访客验证，请完成验证后再重试";
+const VISITOR_VERIFY_MESSAGE: &str = "当前网络触发摸鱼派访客验证，请完成验证后再重试";
 
 fn build_client(config: &HttpProxyConfig) -> Result<Client, Error> {
     let builder = Client::builder();
@@ -332,7 +331,11 @@ fn is_visitor_verify_response(path: &str, content_type: &str, body: &str) -> boo
 }
 
 fn is_html_response(content_type: &str, body: &str) -> bool {
-    content_type.contains("text/html") || body.trim_start().to_ascii_lowercase().starts_with("<!doctype html")
+    content_type.contains("text/html")
+        || body
+            .trim_start()
+            .to_ascii_lowercase()
+            .starts_with("<!doctype html")
 }
 
 /// 构造带查询参数的相对 HTTP 路径，自动进行 query 编码

@@ -88,6 +88,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.Title
+import androidx.compose.material.icons.rounded.ThumbDown
 import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material.icons.rounded.Visibility
@@ -256,6 +257,9 @@ internal fun DefaultArticleUi(
             onVideoClick = { dispatch(ArticleAction.ShowVideoPreview(it)) },
             onOpenUserProfile = { dispatch(ArticleAction.OpenUserProfile(it)) },
             onReplyToComment = { dispatch(ArticleAction.ReplyToComment(it)) },
+            onVoteCommentUp = { dispatch(ArticleAction.VoteCommentUp(it)) },
+            onVoteCommentDown = { dispatch(ArticleAction.VoteCommentDown(it)) },
+            onThankComment = { dispatch(ArticleAction.ThankComment(it)) },
             onCancelReply = { dispatch(ArticleAction.CancelReply) },
             emojiPanelOpen = state.emojiPanelOpen,
             emojiGroups = state.emojiGroups,
@@ -1084,6 +1088,9 @@ private fun ArticleDetailPage(
     onVideoClick: (String) -> Unit,
     onOpenUserProfile: (String) -> Unit,
     onReplyToComment: (ArticleCommentView) -> Unit,
+    onVoteCommentUp: (ArticleCommentView) -> Unit,
+    onVoteCommentDown: (ArticleCommentView) -> Unit,
+    onThankComment: (ArticleCommentView) -> Unit,
     onCancelReply: () -> Unit,
     emojiPanelOpen: Boolean,
     emojiGroups: List<EmojiGroupView>,
@@ -1284,6 +1291,10 @@ private fun ArticleDetailPage(
                                             pagerState.animateScrollToPage(1)
                                         }
                                     },
+                                    onVoteUp = { onVoteCommentUp(comment) },
+                                    onVoteDown = { onVoteCommentDown(comment) },
+                                    onThank = { onThankComment(comment) },
+                                    isActionRunning = isArticleActionRunning,
                                 )
                             }
                             if (detail.comments.isEmpty()) {
@@ -2259,6 +2270,10 @@ private fun ArticleCommentRow(
     onVideoClick: (String) -> Unit,
     onOpenUserProfile: (String) -> Unit,
     onReply: () -> Unit,
+    onVoteUp: () -> Unit,
+    onVoteDown: () -> Unit,
+    onThank: () -> Unit,
+    isActionRunning: Boolean,
 ) {
     val profileName = comment.userName.ifBlank { comment.author }.trim()
     val profileClick = if (profileName.isNotBlank()) {
@@ -2338,15 +2353,29 @@ private fun ArticleCommentRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    ArticleCommentStat(
-                        icon = Icons.Rounded.ThumbUp,
-                        value = comment.goodCount,
-                        contentDescription = "评论点赞数",
-                    )
-                    ArticleCommentStat(
+                    ArticleCommentAction(
                         icon = Icons.Rounded.Favorite,
                         value = comment.thankCount,
-                        contentDescription = "评论感谢数",
+                        active = comment.thanked,
+                        enabled = !isActionRunning && !comment.thanked,
+                        contentDescription = "感谢评论",
+                        onClick = onThank,
+                    )
+                    ArticleCommentAction(
+                        icon = Icons.Rounded.ThumbUp,
+                        value = comment.goodCount,
+                        active = comment.voteState == 1,
+                        enabled = !isActionRunning,
+                        contentDescription = "点赞评论",
+                        onClick = onVoteUp,
+                    )
+                    ArticleCommentAction(
+                        icon = Icons.Rounded.ThumbDown,
+                        value = comment.badCount,
+                        active = comment.voteState == -1,
+                        enabled = !isActionRunning,
+                        contentDescription = "点踩评论",
+                        onClick = onVoteDown,
                     )
                     Spacer(Modifier.weight(1f))
                     Icon(
@@ -2677,22 +2706,33 @@ private fun ArticleMarkdownText(
 }
 
 @Composable
-private fun ArticleCommentStat(
+private fun ArticleCommentAction(
     icon: ImageVector,
     value: Long,
+    active: Boolean,
+    enabled: Boolean,
     contentDescription: String,
+    onClick: () -> Unit,
 ) {
     Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(13.dp),
         )
-        Text(text = value.toString(), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+        Text(
+            text = value.toString(),
+            color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp,
+        )
     }
 }
 

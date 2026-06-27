@@ -92,6 +92,12 @@ impl Comment {
 
         let rsp = post(&url, Some(data_json)).await?;
 
+        if rsp.get("code").and_then(|c| c.as_i64()).unwrap_or(-1) != 0 {
+            return Err(Error::Api(
+                rsp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
+
         ResponseResult::from_value(&rsp)
     }
 
@@ -147,7 +153,8 @@ impl Comment {
             ));
         }
 
-        Ok(rsp["type"].as_i64().unwrap_or(-1) == 0)
+        let previous_vote = rsp["type"].as_i64().unwrap_or(-1);
+        Ok(like && previous_vote != 0)
     }
 
     /// 评论感谢
@@ -165,6 +172,12 @@ impl Comment {
         });
 
         let rsp = post(&url, Some(data_json)).await?;
+
+        if rsp.get("code").and_then(|c| c.as_i64()).unwrap_or(-1) != 0 {
+            return Err(Error::Api(
+                rsp["msg"].as_str().unwrap_or("API error").to_string(),
+            ));
+        }
 
         ResponseResult::from_value(&rsp)
     }

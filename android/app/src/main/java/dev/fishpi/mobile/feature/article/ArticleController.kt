@@ -69,6 +69,9 @@ internal class ArticleController(
             ArticleAction.VoteUp -> runArticleAction("点赞") { articleId -> api.voteArticle(apiKey, articleId, true) }
             ArticleAction.VoteDown -> runArticleAction("点踩") { articleId -> api.voteArticle(apiKey, articleId, false) }
             ArticleAction.Thank -> runArticleAction("感谢") { articleId -> api.thankArticle(apiKey, articleId) }
+            is ArticleAction.VoteCommentUp -> voteComment(action.comment, like = true)
+            is ArticleAction.VoteCommentDown -> voteComment(action.comment, like = false)
+            is ArticleAction.ThankComment -> thankComment(action.comment)
             ArticleAction.ToggleFollow -> toggleFollow()
             ArticleAction.Watch -> runArticleAction("关注") { articleId -> api.watchArticle(apiKey, articleId) }
             ArticleAction.RequestRewardArticle -> _state.update { it.copy(rewardConfirmOpen = true) }
@@ -455,6 +458,83 @@ internal class ArticleController(
             runArticleAction("收藏") { articleId -> api.followArticle(apiKey, articleId) }
         }
     }
+
+    private fun voteComment(comment: dev.fishpi.mobile.data.ArticleCommentView, like: Boolean) {
+        val commentId = comment.id.trim()
+        if (commentId.isBlank() || _state.value.isArticleActionRunning) return
+        _state.update { it.copy(isArticleActionRunning = true, error = null) }
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { api.voteComment(apiKey, commentId, like) }
+            }.onSuccess {
+                updateCommentVote(commentId, like)
+                emitEffect(ArticleEffect.ShowMessage(if (like) "评论点赞成功" else "评论点踩成功"))
+            }.onFailure {
+                setError(it.message ?: "评论点赞失败")
+                emitEffect(ArticleEffect.ShowError(it.message ?: "评论点赞失败"))
+            }
+            _state.update { it.copy(isArticleActionRunning = false) }
+        }
+    }
+
+    private fun thankComment(comment: dev.fishpi.mobile.data.ArticleCommentView) {
+        val commentId = comment.id.trim()
+        if (commentId.isBlank() || comment.thanked || _state.value.isArticleActionRunning) return
+        _state.update { it.copy(isArticleActionRunning = true, error = null) }
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { api.thankComment(apiKey, commentId) }
+            }.onSuccess {
+                updateCommentThank(commentId)
+                emitEffect(ArticleEffect.ShowMessage("评论感谢成功"))
+            }.onFailure {
+                setError(it.message ?: "评论感谢失败")
+                emitEffect(ArticleEffect.ShowError(it.message ?: "评论感谢失败"))
+            }
+            _state.update { it.copy(isArticleActionRunning = false) }
+        }
+    }
+
+    private fun updateCommentVote(commentId: String, like: Boolean) {
+        _state.update { state ->
+            val detail = state.detail ?: return@update state
+            state.copy(
+                detail = detail.copy(
+                    comments = detail.comments.map { comment ->
+                        if (comment.id != commentId) return@map comment
+                        val nextVote = if (like) 1 else -1
+                        val oldVote = comment.voteState
+                        val resolvedVote = if (oldVote == nextVote) 0 else nextVote
+                        comment.copy(
+                            voteState = resolvedVote,
+                            goodCount = (comment.goodCount + voteDelta(oldVote, resolvedVote, 1)).coerceAtLeast(0),
+                            badCount = (comment.badCount + voteDelta(oldVote, resolvedVote, -1)).coerceAtLeast(0),
+                        )
+                    },
+                ),
+            )
+        }
+    }
+
+    private fun updateCommentThank(commentId: String) {
+        _state.update { state ->
+            val detail = state.detail ?: return@update state
+            state.copy(
+                detail = detail.copy(
+                    comments = detail.comments.map { comment ->
+                        if (comment.id == commentId && !comment.thanked) {
+                            comment.copy(thanked = true, thankCount = comment.thankCount + 1)
+                        } else {
+                            comment
+                        }
+                    },
+                ),
+            )
+        }
+    }
+
+    private fun voteDelta(oldVote: Int, newVote: Int, targetVote: Int): Long =
+        (if (newVote == targetVote) 1L else 0L) - (if (oldVote == targetVote) 1L else 0L)
 
     private fun rewardArticle() {
         val current = _state.value.detail ?: return

@@ -20,7 +20,11 @@ struct AndroidArticleConnection {
 
 fn blank_to_none(value: String) -> Option<String> {
     let trimmed = value.trim().to_string();
-    if trimmed.is_empty() { None } else { Some(trimmed) }
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
 }
 
 fn reward_point_or_none(value: String) -> Option<String> {
@@ -445,10 +449,11 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_publishArticle(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let article_id = timeout(Duration::from_secs(20), user.article.post_article(&payload))
-                    .await
-                    .map_err(|_| "发布帖子超时".to_string())?
-                    .map_err(|err| format!("发布帖子失败: {err}"))?;
+                let article_id =
+                    timeout(Duration::from_secs(20), user.article.post_article(&payload))
+                        .await
+                        .map_err(|_| "发布帖子超时".to_string())?
+                        .map_err(|err| format!("发布帖子失败: {err}"))?;
                 Ok(json!({ "articleId": article_id }))
             })
         }))
@@ -554,6 +559,69 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_thankArticle(
                 if !result.success {
                     return Err(if result.msg.is_empty() {
                         "感谢帖子失败".to_string()
+                    } else {
+                        result.msg
+                    });
+                }
+                Ok(Value::Null)
+            })
+        }))
+    })()
+    .unwrap_or_else(|err: String| json!({ "ok": false, "error": err }).to_string());
+
+    to_jstring(&mut env, result)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_voteComment(
+    mut env: JNIEnv,
+    _class: JClass,
+    api_key: JString,
+    comment_id: JString,
+    like: jni::sys::jboolean,
+) -> jstring {
+    let result = (|| {
+        let token = string_arg(&mut env, api_key)?;
+        let id = string_arg(&mut env, comment_id)?;
+        let is_like = like != 0;
+        Ok(runtime_json(|rt| {
+            rt.block_on(async {
+                let user = current_user(&token).await?;
+                let comment = &user.comment;
+                timeout(Duration::from_secs(15), comment.vote(&id, is_like))
+                    .await
+                    .map_err(|_| "评论点赞超时".to_string())?
+                    .map_err(|err| format!("评论点赞失败: {err}"))?;
+                Ok(Value::Null)
+            })
+        }))
+    })()
+    .unwrap_or_else(|err: String| json!({ "ok": false, "error": err }).to_string());
+
+    to_jstring(&mut env, result)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_thankComment(
+    mut env: JNIEnv,
+    _class: JClass,
+    api_key: JString,
+    comment_id: JString,
+) -> jstring {
+    let result = (|| {
+        let token = string_arg(&mut env, api_key)?;
+        let id = string_arg(&mut env, comment_id)?;
+        Ok(runtime_json(|rt| {
+            rt.block_on(async {
+                let user = current_user(&token).await?;
+                let comment = &user.comment;
+                let result = timeout(Duration::from_secs(15), comment.thank(&id))
+                    .await
+                    .map_err(|_| "感谢评论超时".to_string())?
+                    .map_err(|err| format!("感谢评论失败: {err}"))?;
+                if !result.success {
+                    return Err(if result.msg.is_empty() {
+                        "感谢评论失败".to_string()
                     } else {
                         result.msg
                     });

@@ -31,6 +31,9 @@ internal sealed interface ArticleAction {
     data object VoteUp : ArticleAction
     data object VoteDown : ArticleAction
     data object Thank : ArticleAction
+    data class VoteCommentUp(val comment: ArticleCommentView) : ArticleAction
+    data class VoteCommentDown(val comment: ArticleCommentView) : ArticleAction
+    data class ThankComment(val comment: ArticleCommentView) : ArticleAction
     data object ToggleFollow : ArticleAction
     data object Watch : ArticleAction
     data object RequestRewardArticle : ArticleAction

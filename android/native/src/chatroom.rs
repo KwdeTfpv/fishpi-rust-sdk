@@ -571,8 +571,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_parseChatRoomWsM
                 "event": "revoke",
                 "id": json_value["oId"].as_str().unwrap_or(""),
             }),
-            ChatRoomMessageType::Msg
-            | ChatRoomMessageType::RedPacket => {
+            ChatRoomMessageType::Msg | ChatRoomMessageType::RedPacket => {
                 let msg = ChatRoomMsg::from_value(&json_value).map_err(|err| err.to_string())?;
                 json!({
                     "event": "message",
