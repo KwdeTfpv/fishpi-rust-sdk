@@ -537,6 +537,25 @@ pub(crate) fn article_list_type_from_str(raw: &str) -> ArticleListType {
     }
 }
 
+fn article_display_title(item: &ArticleDetail) -> String {
+    let title = item.title_emoji_unicode.trim();
+    if !title.is_empty() {
+        return title.to_string();
+    }
+
+    let title = item.title_emoji.trim();
+    if !title.is_empty() {
+        return title.to_string();
+    }
+
+    let title = item.title.trim();
+    if title.is_empty() {
+        "[无标题]".to_string()
+    } else {
+        title.to_string()
+    }
+}
+
 pub(crate) fn article_summary_to_json(item: ArticleDetail) -> Value {
     let thumbnail = if !item.img1_url.trim().is_empty() {
         item.img1_url.clone()
@@ -545,7 +564,7 @@ pub(crate) fn article_summary_to_json(item: ArticleDetail) -> Value {
     };
     json!({
         "id": item.oId,
-        "title": if item.title.trim().is_empty() { "[无标题]".to_string() } else { item.title },
+        "title": article_display_title(&item),
         "author": item.author_name,
         "authorUserName": item.author_name,
         "time": if item.time_ago.trim().is_empty() { item.create_time_str } else { item.time_ago },
@@ -567,6 +586,7 @@ pub(crate) fn article_detail_to_json(item: ArticleDetail, page: u32) -> Value {
         VoteStatus::Down => -1,
         VoteStatus::Normal => 0,
     };
+    let title = article_display_title(&item);
     let comments = item
         .comments
         .into_iter()
@@ -587,7 +607,7 @@ pub(crate) fn article_detail_to_json(item: ArticleDetail, page: u32) -> Value {
 
     json!({
         "id": item.oId,
-        "title": if item.title.trim().is_empty() { "[无标题]".to_string() } else { item.title },
+        "title": title,
         "author": item.author_name,
         "authorUserName": item.author_name,
         "avatar": item.thumbnail_url48,
