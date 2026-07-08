@@ -261,9 +261,14 @@ impl User {
 
         let resp = post("point/transfer", Some(data)).await?;
 
-        if resp["code"] != 0 {
+        let code = resp.get("code").and_then(|value| value.as_i64());
+        let message = resp
+            .get("msg")
+            .and_then(|value| value.as_str())
+            .unwrap_or("API error");
+        if code != Some(0) {
             return Err(Error::Api(
-                resp["msg"].as_str().unwrap_or("API error").to_string(),
+                message.to_string(),
             ));
         }
 

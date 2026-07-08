@@ -1046,7 +1046,8 @@ private fun DefaultChatUiContent(
                     top = 2.dp,
                     bottom = 8.dp,
                 )
-                .imePadding(),
+                .imePadding()
+                .navigationBarsPadding(),
         )
     }
 
