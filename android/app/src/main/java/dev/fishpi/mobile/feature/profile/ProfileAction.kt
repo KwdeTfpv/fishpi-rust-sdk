@@ -33,7 +33,7 @@ internal sealed interface ProfileAction {
     data object LoadMoreArticles : ProfileAction
     data object LoadMoreBreezemoons : ProfileAction
     data object ToggleFollow : ProfileAction
-    data class Transfer(val amount: Int, val memo: String) : ProfileAction
+    data class Transfer(val amount: Int, val memo: String, val username: String? = null) : ProfileAction
     data class OpenArticle(val articleId: String) : ProfileAction
     data class OpenPrivateChat(val username: String) : ProfileAction
     data object OpenNotice : ProfileAction

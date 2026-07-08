@@ -74,7 +74,7 @@ internal class ProfileController(
                 loadUserBreezemoons(page = page, append = true)
             }
             ProfileAction.ToggleFollow -> toggleUserFollow()
-            is ProfileAction.Transfer -> transfer(action.amount, action.memo)
+            is ProfileAction.Transfer -> transfer(action.amount, action.memo, action.username)
             is ProfileAction.OpenArticle -> emit(ProfileEffect.OpenArticle(action.articleId))
             is ProfileAction.OpenPrivateChat -> emit(ProfileEffect.OpenPrivateChat(action.username))
             ProfileAction.OpenNotice -> emit(ProfileEffect.OpenNotice)
@@ -355,8 +355,12 @@ internal class ProfileController(
         }
     }
 
-    private fun transfer(amount: Int, memo: String) {
-        val target = _state.value.user.userName
+    private fun transfer(amount: Int, memo: String, username: String?) {
+        val target = username?.trim().orEmpty().ifBlank { _state.value.user.userName }
+        if (target.isBlank()) {
+            emit(ProfileEffect.ShowError("请输入转账用户名"))
+            return
+        }
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) { api.transferPoint(apiKey, target, amount, memo) }

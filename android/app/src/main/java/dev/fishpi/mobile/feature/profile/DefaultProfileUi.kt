@@ -351,8 +351,9 @@ internal fun DefaultProfileUi(
     if (state.transferOpen) {
         ProfileTransferDialog(
             user = user,
+            requireUsername = state.isSelfProfile,
             onDismiss = { dispatch(ProfileAction.DismissTransfer) },
-            onTransfer = { amount, memo -> dispatch(ProfileAction.Transfer(amount, memo)) },
+            onTransfer = { username, amount, memo -> dispatch(ProfileAction.Transfer(amount, memo, username)) },
         )
     }
 
@@ -1567,6 +1568,11 @@ private fun ProfileOverviewCard(
                         onClick = onScanWebLogin,
                     )
                     AnimalIconButton(
+                        icon = Icons.Rounded.AttachMoney,
+                        contentDescription = "转账",
+                        onClick = onTransfer,
+                    )
+                    AnimalIconButton(
                         icon = Icons.Rounded.Settings,
                         contentDescription = "设置",
                         onClick = onOpenSettings,
@@ -1686,11 +1692,14 @@ private fun ProfileHeaderAction(
 @Composable
 private fun ProfileTransferDialog(
     user: FishPiUser,
+    requireUsername: Boolean = false,
     onDismiss: () -> Unit,
-    onTransfer: (Int, String) -> Unit,
+    onTransfer: (String?, Int, String) -> Unit,
 ) {
+    var usernameText by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
     var memo by remember { mutableStateOf("") }
+    val username = usernameText.trim()
     val amount = amountText.toIntOrNull() ?: 0
     Dialog(
         onDismissRequest = onDismiss,
@@ -1725,7 +1734,7 @@ private fun ProfileTransferDialog(
                         )
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
-                                text = "转账给 ${user.displayName}",
+                                text = if (requireUsername) "转账" else "转账给 ${user.displayName}",
                                 color = FishPiTheme.onSurface,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 17.sp,
@@ -1733,7 +1742,7 @@ private fun ProfileTransferDialog(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                text = "@${user.userName}",
+                                text = if (requireUsername) "填写对方用户名、积分数量和备注" else "@${user.userName}",
                                 color = FishPiTheme.weakText,
                                 fontSize = 12.sp,
                                 maxLines = 1,
@@ -1742,6 +1751,16 @@ private fun ProfileTransferDialog(
                         }
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem)) {
+                        if (requireUsername) {
+                            TextField(
+                                value = usernameText,
+                                onValueChange = { usernameText = it.trim().take(48) },
+                                label = "用户名",
+                                placeholder = "输入对方用户名",
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                         TextField(
                             value = amountText,
                             onValueChange = { amountText = it.filter(Char::isDigit).take(8) },
@@ -1774,8 +1793,8 @@ private fun ProfileTransferDialog(
                         )
                         FishPiPillButton(
                             text = "确认转账",
-                            onClick = { onTransfer(amount, memo) },
-                            enabled = amount > 0,
+                            onClick = { onTransfer(username.takeIf { requireUsername }, amount, memo) },
+                            enabled = amount > 0 && (!requireUsername || username.isNotBlank()),
                             compact = true,
                             containerColor = profileAccentSoft(),
                             contentColor = profileAccentColor(),
