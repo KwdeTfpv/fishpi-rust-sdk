@@ -56,6 +56,8 @@ internal class ExtensionStoreController(
             ExtensionStoreAction.LoadDrafts -> loadDrafts()
             is ExtensionStoreAction.OpenDraft -> openDraft(action.item)
             ExtensionStoreAction.ClearEditingDraft -> _state.update { it.copy(editingDraft = null) }
+            is ExtensionStoreAction.DeleteDraft -> deleteDraft(action.item)
+            is ExtensionStoreAction.PublishDraft -> publishDraft(action.item)
         }
     }
 
@@ -165,11 +167,22 @@ internal class ExtensionStoreController(
             return
         }
         if (_state.value.isUploading) return
+        val draftId = request.draftId
         scope.launch {
             _state.update { it.copy(isUploading = true) }
             runCatching {
                 withContext(Dispatchers.IO) {
-                    client.uploadItem(token, request)
+                    when {
+                        // 编辑已有草稿并提交审核：先保存最新改动到草稿，再走发布草稿接口
+                        draftId != null && !request.isDraft -> {
+                            client.updateDraft(token, draftId, request.copy(isDraft = true))
+                            client.publishDraft(token, draftId)
+                        }
+                        // 编辑已有草稿并存草稿：更新原草稿，不再新建副本
+                        draftId != null -> client.updateDraft(token, draftId, request)
+                        // 新建作品：发布或首次存草稿
+                        else -> client.uploadItem(token, request)
+                    }
                 }
             }.onSuccess {
                 _state.update {
@@ -179,11 +192,7 @@ internal class ExtensionStoreController(
                     )
                 }
                 emitEffect(ExtensionStoreEffect.UploadFinished)
-                emitEffect(
-                    ExtensionStoreEffect.ShowMessage(
-                        if (request.isDraft) "草稿已保存" else "发布成功，作品已进入审核流程",
-                    ),
-                )
+                emitEffect(ExtensionStoreEffect.ShowMessage(uploadSuccessMessage(request)))
                 loadStore()
                 if (_state.value.drafts.isNotEmpty() || _state.value.isLoadingDrafts) {
                     loadDrafts()
@@ -192,9 +201,68 @@ internal class ExtensionStoreController(
                 _state.update { it.copy(isUploading = false) }
                 emitEffect(
                     ExtensionStoreEffect.ShowError(
-                        "${if (request.isDraft) "保存草稿" else "发布"}失败：${throwable.message ?: "未知错误"}",
+                        "${uploadActionLabel(request)}失败：${throwable.message ?: "未知错误"}",
                     ),
                 )
+            }
+        }
+    }
+
+    private fun uploadActionLabel(request: ExtensionStoreUploadRequest): String =
+        if (request.isDraft) "保存草稿" else "发布"
+
+    private fun uploadSuccessMessage(request: ExtensionStoreUploadRequest): String =
+        if (request.isDraft) "草稿已保存" else "发布成功，作品已进入审核流程"
+
+    private fun deleteDraft(item: ExtensionStoreItem) {
+        val token = _state.value.session?.accessToken
+        if (token.isNullOrBlank()) {
+            emitEffect(ExtensionStoreEffect.ShowError("请先完成集市鉴权"))
+            return
+        }
+        if (_state.value.deletingDraftId != null) return
+        scope.launch {
+            _state.update { it.copy(deletingDraftId = item.id) }
+            runCatching {
+                withContext(Dispatchers.IO) { client.deleteItem(token, item.id) }
+            }.onSuccess {
+                _state.update {
+                    it.copy(
+                        deletingDraftId = null,
+                        drafts = it.drafts.filterNot { draft -> draft.id == item.id },
+                    )
+                }
+                emitEffect(ExtensionStoreEffect.ShowMessage("${item.displayName()} 已删除"))
+            }.onFailure { throwable ->
+                _state.update { it.copy(deletingDraftId = null) }
+                emitEffect(ExtensionStoreEffect.ShowError("删除草稿失败：${throwable.message ?: "未知错误"}"))
+            }
+        }
+    }
+
+    private fun publishDraft(item: ExtensionStoreItem) {
+        val token = _state.value.session?.accessToken
+        if (token.isNullOrBlank()) {
+            emitEffect(ExtensionStoreEffect.ShowError("请先完成集市鉴权"))
+            return
+        }
+        if (_state.value.publishingDraftId != null) return
+        scope.launch {
+            _state.update { it.copy(publishingDraftId = item.id) }
+            runCatching {
+                withContext(Dispatchers.IO) { client.publishDraft(token, item.id) }
+            }.onSuccess {
+                _state.update {
+                    it.copy(
+                        publishingDraftId = null,
+                        drafts = it.drafts.filterNot { draft -> draft.id == item.id },
+                    )
+                }
+                emitEffect(ExtensionStoreEffect.ShowMessage("${item.displayName()} 已提交审核"))
+                loadStore()
+            }.onFailure { throwable ->
+                _state.update { it.copy(publishingDraftId = null) }
+                emitEffect(ExtensionStoreEffect.ShowError("发布草稿失败：${throwable.message ?: "未知错误"}"))
             }
         }
     }

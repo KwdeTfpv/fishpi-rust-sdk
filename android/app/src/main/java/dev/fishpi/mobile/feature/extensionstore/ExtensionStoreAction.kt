@@ -13,4 +13,6 @@ internal sealed interface ExtensionStoreAction {
     data object LoadDrafts : ExtensionStoreAction
     data class OpenDraft(val item: ExtensionStoreItem) : ExtensionStoreAction
     data object ClearEditingDraft : ExtensionStoreAction
+    data class DeleteDraft(val item: ExtensionStoreItem) : ExtensionStoreAction
+    data class PublishDraft(val item: ExtensionStoreItem) : ExtensionStoreAction
 }

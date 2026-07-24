@@ -39,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Drafts
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Palette
@@ -53,6 +54,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -279,9 +281,11 @@ internal fun DefaultExtensionStoreUi(
             isLoading = state.isLoadingDrafts,
             error = state.draftsError,
             openingId = state.openingDraftId,
+            deletingId = state.deletingDraftId,
             onBack = { draftsOpen = false },
             onRefresh = { dispatch(ExtensionStoreAction.LoadDrafts) },
             onOpenDraft = { dispatch(ExtensionStoreAction.OpenDraft(it)) },
+            onDeleteDraft = { dispatch(ExtensionStoreAction.DeleteDraft(it)) },
         )
         return
     }
@@ -641,6 +645,7 @@ private fun StoreUploadPage(
                 code = cleanCode,
                 language = if (type == ExtensionStoreClient.TypeAppTheme) "json" else "javascript",
                 isDraft = isDraft,
+                draftId = initial?.id,
             ),
         )
     }
@@ -768,10 +773,14 @@ private fun StoreDraftsPage(
     isLoading: Boolean,
     error: String?,
     openingId: Long?,
+    deletingId: Long?,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     onOpenDraft: (ExtensionStoreItem) -> Unit,
+    onDeleteDraft: (ExtensionStoreItem) -> Unit,
 ) {
+    var deleteConfirm by remember { mutableStateOf<ExtensionStoreItem?>(null) }
+    val busy = openingId != null || deletingId != null
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -812,12 +821,28 @@ private fun StoreDraftsPage(
                     StoreDraftRow(
                         item = draft,
                         opening = openingId == draft.id,
-                        enabled = openingId == null,
+                        deleting = deletingId == draft.id,
+                        enabled = !busy,
                         onClick = { onOpenDraft(draft) },
+                        onDelete = { deleteConfirm = draft },
                     )
                 }
             }
         }
+    }
+
+    deleteConfirm?.let { pending ->
+        StoreDraftConfirmDialog(
+            title = "删除草稿",
+            message = "确定删除「${pending.displayName()}」吗？删除后无法恢复。",
+            confirmText = "删除",
+            destructive = true,
+            onDismiss = { deleteConfirm = null },
+            onConfirm = {
+                deleteConfirm = null
+                onDeleteDraft(pending)
+            },
+        )
     }
 }
 
@@ -825,8 +850,10 @@ private fun StoreDraftsPage(
 private fun StoreDraftRow(
     item: ExtensionStoreItem,
     opening: Boolean,
+    deleting: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val isTheme = item.type == ExtensionStoreClient.TypeAppTheme
     Surface(
@@ -834,51 +861,105 @@ private fun StoreDraftRow(
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
         border = BorderStroke(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(
-                    enabled = enabled,
-                    onClickLabel = "编辑${item.displayName()}",
-                    role = Role.Button,
-                    onClick = onClick,
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        enabled = enabled,
+                        onClickLabel = "编辑${item.displayName()}",
+                        role = Role.Button,
+                        onClick = onClick,
+                    )
+                    .padding(horizontal = 12.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                StoreTypeIcon(
+                    icon = if (isTheme) Icons.Rounded.Palette else Icons.Rounded.Extension,
+                    contentDescription = if (isTheme) "APP 主题" else "APP 插件",
                 )
-                .padding(horizontal = 12.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            StoreTypeIcon(
-                icon = if (isTheme) Icons.Rounded.Palette else Icons.Rounded.Extension,
-                contentDescription = if (isTheme) "APP 主题" else "APP 插件",
-            )
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = item.displayName(),
-                    color = FishPiTheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = item.metaLine(),
-                    color = FishPiTheme.weakText,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = item.displayName(),
+                        color = FishPiTheme.onSurface,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = item.metaLine(),
+                        color = FishPiTheme.weakText,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (opening) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(
+                        Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = FishPiTheme.weakText,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
-            if (opening) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(
-                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = FishPiTheme.weakText,
-                    modifier = Modifier.size(18.dp),
-                )
+            HorizontalDivider(
+                thickness = FishPiTheme.borderWidth,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(
+                    onClick = onDelete,
+                    enabled = enabled,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                ) {
+                    if (deleting) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Rounded.DeleteOutline, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("删除", fontSize = 12.sp)
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun StoreDraftConfirmDialog(
+    title: String,
+    message: String,
+    confirmText: String,
+    destructive: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, fontWeight = FontWeight.SemiBold) },
+        text = { Text(message, fontSize = 13.sp) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    confirmText,
+                    color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
 }
 
 @Composable

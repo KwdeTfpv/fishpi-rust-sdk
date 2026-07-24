@@ -57,6 +57,7 @@ data class ExtensionStoreUploadRequest(
     val language: String,
     val upgradeFromId: Long? = null,
     val isDraft: Boolean = false,
+    val draftId: Long? = null,
 )
 
 class ExtensionStoreClient private constructor(
@@ -226,27 +227,60 @@ class ExtensionStoreClient private constructor(
     }
 
     fun uploadItem(token: String, request: ExtensionStoreUploadRequest): ExtensionStoreItem {
-        require(request.type == TypeAppExtension || request.type == TypeAppTheme) { "只能发布 APP 扩展或 APP 主题" }
-        val body = JSONObject()
-            .put("name", request.name)
-            .put("description", request.description)
-            .put("identifier", request.identifier)
-            .put("price", request.price)
-            .put("type", request.type)
-            .put("code", request.code)
-            .put("language", request.language)
-            .put("matchUrls", JSONArray())
-            .put("isDraft", request.isDraft)
-            .put("dependencyIds", JSONArray())
-        request.upgradeFromId?.let { body.put("upgradeFromId", it) }
         val data = requestJson(
             method = "POST",
             path = "/items/upload",
             headers = authHeaders(token),
-            body = body,
+            body = request.toUploadBody(),
         ).unwrapData()
         return (data as? JSONObject)?.toExtensionStoreItem()
             ?: error("鱼排扩展集市发布返回为空")
+    }
+
+    fun updateDraft(token: String, id: Long, request: ExtensionStoreUploadRequest): ExtensionStoreItem {
+        val data = requestJson(
+            method = "POST",
+            path = "/items/draft/$id/update",
+            headers = authHeaders(token),
+            body = request.toUploadBody(),
+        ).unwrapData()
+        return (data as? JSONObject)?.toExtensionStoreItem()
+            ?: error("鱼排扩展集市草稿更新返回为空")
+    }
+
+    fun publishDraft(token: String, id: Long): ExtensionStoreItem {
+        val data = requestJson(
+            method = "POST",
+            path = "/items/draft/$id/publish",
+            headers = authHeaders(token),
+        ).unwrapData()
+        return (data as? JSONObject)?.toExtensionStoreItem()
+            ?: error("鱼排扩展集市草稿发布返回为空")
+    }
+
+    fun deleteItem(token: String, id: Long) {
+        requestJson(
+            method = "DELETE",
+            path = "/items/$id",
+            headers = authHeaders(token),
+        ).unwrapData()
+    }
+
+    private fun ExtensionStoreUploadRequest.toUploadBody(): JSONObject {
+        require(type == TypeAppExtension || type == TypeAppTheme) { "只能发布 APP 扩展或 APP 主题" }
+        val body = JSONObject()
+            .put("name", name)
+            .put("description", description)
+            .put("identifier", identifier)
+            .put("price", price)
+            .put("type", type)
+            .put("code", code)
+            .put("language", language)
+            .put("matchUrls", JSONArray())
+            .put("isDraft", isDraft)
+            .put("dependencyIds", JSONArray())
+        upgradeFromId?.let { body.put("upgradeFromId", it) }
+        return body
     }
 
     fun downloadItemContent(item: ExtensionStoreItem): String {

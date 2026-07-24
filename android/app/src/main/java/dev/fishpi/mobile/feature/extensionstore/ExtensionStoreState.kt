@@ -22,4 +22,5 @@ internal data class ExtensionStoreState(
     val draftsError: String? = null,
     val openingDraftId: Long? = null,
     val editingDraft: ExtensionStoreItem? = null,
+    val deletingDraftId: Long? = null,
 )
