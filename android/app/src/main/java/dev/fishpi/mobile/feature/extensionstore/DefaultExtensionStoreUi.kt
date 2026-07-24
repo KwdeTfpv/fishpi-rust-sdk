@@ -161,12 +161,10 @@ internal fun DefaultExtensionStoreUi(
     var draftsOpen by remember { mutableStateOf(false) }
     var editingInitial by remember { mutableStateOf<ExtensionStoreItem?>(null) }
 
-    // 草稿详情加载完成后，带着正文进入编辑（发布）表单
     LaunchedEffect(state.editingDraft) {
         val draft = state.editingDraft
         if (draft != null) {
             editingInitial = draft
-            draftsOpen = false
             uploadOpen = true
             dispatch(ExtensionStoreAction.ClearEditingDraft)
         }
@@ -832,11 +830,8 @@ private fun StoreDraftsPage(
     }
 
     deleteConfirm?.let { pending ->
-        StoreDraftConfirmDialog(
-            title = "删除草稿",
-            message = "确定删除「${pending.displayName()}」吗？删除后无法恢复。",
-            confirmText = "删除",
-            destructive = true,
+        StoreDeleteDraftDialog(
+            draftName = pending.displayName(),
             onDismiss = { deleteConfirm = null },
             onConfirm = {
                 deleteConfirm = null
@@ -936,24 +931,18 @@ private fun StoreDraftRow(
 }
 
 @Composable
-private fun StoreDraftConfirmDialog(
-    title: String,
-    message: String,
-    confirmText: String,
-    destructive: Boolean,
+private fun StoreDeleteDraftDialog(
+    draftName: String,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, fontWeight = FontWeight.SemiBold) },
-        text = { Text(message, fontSize = 13.sp) },
+        title = { Text("删除草稿", fontWeight = FontWeight.SemiBold) },
+        text = { Text("确定删除「$draftName」吗？删除后无法恢复。", fontSize = 13.sp) },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text(
-                    confirmText,
-                    color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                )
+                Text("删除", color = MaterialTheme.colorScheme.error)
             }
         },
         dismissButton = {
