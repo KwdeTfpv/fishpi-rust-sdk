@@ -18,7 +18,7 @@ internal fun HomeRoute(
     onOpenArticle: () -> Unit,
     onOpenArticleDetail: (String) -> Unit,
     onOpenBreezemoon: () -> Unit,
-    onOpenFun: () -> Unit,
+    onOpenStore: () -> Unit,
     onOpenProfile: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -47,7 +47,7 @@ internal fun HomeRoute(
                 HomeEffect.NavigateToArticle -> onOpenArticle()
                 is HomeEffect.NavigateToArticleDetail -> onOpenArticleDetail(effect.articleId)
                 HomeEffect.NavigateToBreezemoon -> onOpenBreezemoon()
-                HomeEffect.NavigateToFun -> onOpenFun()
+                HomeEffect.NavigateToStore -> onOpenStore()
                 HomeEffect.NavigateToProfile -> onOpenProfile()
                 is HomeEffect.ShowMessage -> FishPiNotifier.success(effect.message)
                 is HomeEffect.ShowError -> FishPiNotifier.error(effect.message)

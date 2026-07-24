@@ -2,6 +2,8 @@ package dev.fishpi.mobile.shared.message.native
 
 import dev.fishpi.mobile.shared.message.RepeatStackInfo
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -82,6 +84,17 @@ internal class NativeMessageAdapter(
     private val avatarDrawableStore = SharedAvatarDrawableStore()
     private val messageDrawableStore = SharedMessageDrawableStore()
 
+    private val pendingEntranceKeys = HashSet<String>()
+    private val playedEntranceKeys = object : LinkedHashSet<String>() {
+        override fun add(element: String): Boolean {
+            val added = super.add(element)
+            if (added && size > PLAYED_ENTRANCE_CAP) {
+                iterator().let { if (it.hasNext()) { it.next(); it.remove() } }
+            }
+            return added
+        }
+    }
+
     fun updatePresentation(
         theme: NativeMessageTheme,
         markdownRenderer: MarkwonChatRenderer,
@@ -110,6 +123,12 @@ internal class NativeMessageAdapter(
             return false
         }
         if (previous.isNotEmpty() && items.size > previous.size && items.startsWithSameContent(previous)) {
+            for (index in previous.size until items.size) {
+                val key = items[index].message.stableNativeKey()
+                if (key !in playedEntranceKeys) {
+                    pendingEntranceKeys.add(key)
+                }
+            }
             currentItems = items
             avatarDrawableStore.retainAvatarUrls(items)
             messageDrawableStore.retainMediaUrls(items)
@@ -172,6 +191,16 @@ internal class NativeMessageAdapter(
     override fun onViewAttachedToWindow(holder: NativeMessageViewHolder) {
         super.onViewAttachedToWindow(holder)
         holder.resumeAnimations()
+        maybePlayEntrance(holder)
+    }
+
+    private fun maybePlayEntrance(holder: NativeMessageViewHolder) {
+        val position = holder.bindingAdapterPosition
+        if (position == RecyclerView.NO_POSITION || position >= currentItems.size) return
+        val key = currentItems[position].message.stableNativeKey()
+        if (!pendingEntranceKeys.remove(key)) return
+        playedEntranceKeys.add(key)
+        holder.playEntranceAnimation()
     }
 
     override fun onViewDetachedFromWindow(holder: NativeMessageViewHolder) {
@@ -182,6 +211,12 @@ internal class NativeMessageAdapter(
 
 private const val NativeRedPacketBackground = 0xFFE94E2F.toInt()
 private const val NativeRedPacketText = 0xFFFFF7EC.toInt()
+private const val PLAYED_ENTRANCE_CAP = 200
+private const val ENTRANCE_DURATION_MS = 260L
+private const val ENTRANCE_RISE_DP = 16f
+private const val ENTRANCE_START_SCALE = 0.92f
+private val entranceInterpolator: android.view.animation.Interpolator =
+    android.view.animation.PathInterpolator(0f, 0f, 0.2f, 1f)
 private val HtmlAnchorTextRegex = Regex(
     "<a\\b[^>]*>(.*?)</a>",
     setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
@@ -214,7 +249,7 @@ private class ChatItemDiff(
 }
 
 private fun ChatRoomMessage.stableNativeKey(): String =
-    oId.ifBlank { "$time:$userName:${content.hashCode()}" }
+    echoKey.ifBlank { oId.ifBlank { "$time:$userName:${content.hashCode()}" } }
 
 private fun List<ChatListItem>.sameContentAs(other: List<ChatListItem>): Boolean {
     if (size != other.size) return false
@@ -485,6 +520,8 @@ internal class NativeMessageViewHolder(
         renderJob?.cancel()
         renderJob = null
         dismissSourcePopup()
+        view.animate().cancel()
+        resetEntranceTransforms()
         view.stopAnimatedDrawables()
         view.stopVideoViews()
         view.removeAllViews()
@@ -496,6 +533,48 @@ internal class NativeMessageViewHolder(
 
     fun resumeAnimations() {
         view.resumeAnimatedDrawables()
+    }
+
+    fun playEntranceAnimation() {
+        view.animate().cancel()
+        val riseFromPx = ENTRANCE_RISE_DP * view.resources.displayMetrics.density
+        view.alpha = 0f
+        view.translationY = riseFromPx
+        view.scaleX = ENTRANCE_START_SCALE
+        view.scaleY = ENTRANCE_START_SCALE
+        view.post {
+            if (!view.isAttachedToWindow) {
+                resetEntranceTransforms()
+                return@post
+            }
+            view.pivotX = view.width / 2f
+            view.pivotY = view.height.toFloat()
+            view.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(ENTRANCE_DURATION_MS)
+                .setInterpolator(entranceInterpolator)
+                .setListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        resetEntranceTransforms()
+                        view.animate().setListener(null)
+                    }
+
+                    override fun onAnimationCancel(animation: Animator) {
+                        resetEntranceTransforms()
+                    }
+                })
+                .start()
+        }
+    }
+
+    private fun resetEntranceTransforms() {
+        view.alpha = 1f
+        view.translationY = 0f
+        view.scaleX = 1f
+        view.scaleY = 1f
     }
 
     fun bind(

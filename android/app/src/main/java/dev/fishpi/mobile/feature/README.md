@@ -16,7 +16,7 @@
 
 UI 组件只能接收 state 切片、展示数据、`dispatch/onAction` 和简单 UI 参数。UI 组件不能直接调用 `FishPiApiClient`、`FishPiNative`、RealtimeClient、Repository、`SessionStore` 网络逻辑或 `PluginManager`。业务行为放 Controller，页面进出放 Route，复用视觉组件放 `ui/components`。
 
-根目录 `dev.fishpi.mobile` 只保留 app-level 文件，例如 `MainActivity.kt`、`FishPiApp.kt`、`MainShell.kt`、`LoginScreen.kt`、`NoticeScreen.kt`、`FunApiScreen.kt` 等。不要在根目录新增 feature 私有 UI、旧 Screen、ContentUi 或只转发到 Route/DefaultUi 的薄包装。
+根目录 `dev.fishpi.mobile` 只保留 app-level 文件，例如 `MainActivity.kt`、`FishPiApp.kt`、`MainShell.kt`、`LoginScreen.kt`、`NoticeScreen.kt` 等。不要在根目录新增 feature 私有 UI、旧 Screen、ContentUi 或只转发到 Route/DefaultUi 的薄包装。
 
 ## 当前默认 UI 风格
 

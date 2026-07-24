@@ -1,6 +1,9 @@
 package dev.fishpi.mobile.feature.privatechat
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import dev.fishpi.mobile.ui.motion.FishPiMotion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,11 +26,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddAPhoto
 import androidx.compose.material.icons.rounded.AttachFile
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -58,14 +58,12 @@ import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.ui.components.ChatInputBar
 import dev.fishpi.mobile.shared.message.ChatListItem
 import dev.fishpi.mobile.shared.message.ChatQuote
-import dev.fishpi.mobile.ui.components.FishPiIconButton
 import dev.fishpi.mobile.ui.components.PlainBackButton
 import dev.fishpi.mobile.ui.overlay.ImagePreviewOverlay
 import dev.fishpi.mobile.ui.overlay.LinkPreviewOverlay
 import dev.fishpi.mobile.ui.components.LoadingScreen
 import dev.fishpi.mobile.ui.components.FloatingNoticePill
 import dev.fishpi.mobile.shared.message.ui.MessageActionSheet
-import dev.fishpi.mobile.ui.components.QuoteThumbnail
 import dev.fishpi.mobile.shared.message.canBeRevokedBy
 import dev.fishpi.mobile.shared.message.copyToClipboard
 import dev.fishpi.mobile.shared.message.copyableText
@@ -130,7 +128,16 @@ internal fun DefaultPrivateChatUi(
         ),
     )
 
-    if (conversation.selectedPeer == null) {
+    AnimatedContent(
+        targetState = conversation.selectedPeer,
+        contentKey = { it != null },
+        transitionSpec = {
+            val enteringDetail = initialState == null && targetState != null
+            FishPiMotion.pushTransform(enteringDetail).using(SizeTransform(clip = false))
+        },
+        label = "privateChatListDetail",
+    ) { selectedPeer ->
+    if (selectedPeer == null) {
         PrivateSessionList(
             sessions = state.sessions,
             isLoading = state.isLoadingSessions,
@@ -140,7 +147,7 @@ internal fun DefaultPrivateChatUi(
         )
     } else {
         PrivateConversation(
-            peer = conversation.selectedPeer,
+            peer = selectedPeer,
             peerAvatar = conversation.selectedPeerAvatar,
             messages = conversation.messages,
             input = conversation.input,
@@ -182,6 +189,7 @@ internal fun DefaultPrivateChatUi(
             onMessageLongPress = { dispatch(PrivateChatAction.ShowMessageActions(it)) },
             onSend = { dispatch(PrivateChatAction.SendText) },
         )
+    }
     }
 
     conversation.actionMessage?.let { message ->
@@ -658,47 +666,4 @@ private fun PrivateAvatar(url: String, name: String, sizeDp: Int = 44) {
         },
         modifier = modifier,
     )
-}
-
-@Composable
-private fun PrivateQuotePreviewBar(
-    quote: ChatQuote,
-    onCancel: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(
-                horizontal = FishPiTheme.spacingPage,
-                vertical = FishPiTheme.spacingItem * 0.5f,
-            )
-            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .padding(
-                horizontal = FishPiTheme.spacingControl,
-                vertical = FishPiTheme.spacingControl,
-            ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        quote.imageUrls.firstOrNull()?.let { url ->
-            QuoteThumbnail(url = url)
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "正在引用 @${quote.username}",
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(text = quote.preview, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-        FishPiIconButton(
-            icon = Icons.Rounded.Close,
-            contentDescription = "取消引用",
-            onClick = onCancel,
-            background = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f),
-            sizeDp = 32,
-            iconSizeDp = 18,
-        )
-    }
 }

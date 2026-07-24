@@ -3,7 +3,6 @@ package dev.fishpi.mobile.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -33,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.LocalFishPiPalette
 import dev.fishpi.mobile.LocalFishPiThemeTokens
+import dev.fishpi.mobile.ui.motion.fishClickable
 
 internal object UiLayerTokens {
     const val ZPage = 0f
@@ -162,7 +162,7 @@ internal fun ActionChipButton(
                 if (selected) fg.copy(alpha = 0.28f) else palette.outline.copy(alpha = 0.18f),
                 shape,
             )
-            .clickable(enabled = enabled, onClick = onClick)
+            .fishClickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = FishPiTheme.spacingControl, vertical = FishPiTheme.spacingControl * 0.45f),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem * 0.75f),
@@ -202,7 +202,7 @@ internal fun IconActionButton(
                 if (selected) palette.accent.copy(alpha = 0.26f) else palette.outline.copy(alpha = 0.14f),
                 shape,
             )
-            .clickable(enabled = enabled, onClick = onClick),
+            .fishClickable(enabled = enabled, rippleBounded = false, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

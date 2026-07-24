@@ -1,7 +1,6 @@
 package dev.fishpi.mobile.feature.article
 
 import dev.fishpi.mobile.ui.components.*
-import dev.fishpi.mobile.ui.animal.AnimalIconButton
 import dev.fishpi.mobile.ui.animal.AnimalStatusPill
 
 import dev.fishpi.mobile.shared.message.previewableContentLinkUrls
@@ -10,11 +9,15 @@ import android.content.Context
 import dev.fishpi.mobile.*
 import android.text.Html
 import android.text.method.LinkMovementMethod
-import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.zIndex
+import dev.fishpi.mobile.ui.motion.FishPiMotion
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -46,14 +49,10 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -120,7 +119,6 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.toArgb
@@ -186,11 +184,15 @@ private val TaggedArticleFilters = BaseArticleFilters + listOf(
 private fun articleFiltersForTag(tag: String): List<ArticleFilter> =
     if (tag.isBlank()) RecentArticleFilters else TaggedArticleFilters
 
+private enum class ArticleScreenState { List, JumpLoading, Detail }
+
 @Composable
 @OptIn(FlowPreview::class)
 internal fun DefaultArticleUi(
     state: ArticleState,
     dispatch: (ArticleAction) -> Unit,
+    pendingJump: Boolean = false,
+    pendingJumpSummary: ArticleSummary? = null,
 ) {
     val listState = rememberLazyListState()
 
@@ -205,7 +207,40 @@ internal fun DefaultArticleUi(
             }
     }
 
-    if (state.selected == null) {
+
+    val screenState: ArticleScreenState = when {
+        state.selected != null -> ArticleScreenState.Detail
+        pendingJumpSummary != null -> ArticleScreenState.Detail
+        pendingJump -> ArticleScreenState.JumpLoading
+        else -> ArticleScreenState.List
+    }
+    var lastArticleSummary by remember { mutableStateOf(state.selected) }
+    LaunchedEffect(state.selected) {
+        if (state.selected != null) lastArticleSummary = state.selected
+    }
+    AnimatedContent(
+        targetState = screenState,
+        transitionSpec = {
+            val enteringDetail = targetState == ArticleScreenState.Detail
+            val involvesDetail = enteringDetail || initialState == ArticleScreenState.Detail
+            when {
+                !involvesDetail ->
+                    (EnterTransition.None togetherWith ExitTransition.None)
+                        .using(androidx.compose.animation.SizeTransform(clip = false))
+                enteringDetail && pendingJumpSummary != null ->
+                    (EnterTransition.None togetherWith ExitTransition.None)
+                        .using(androidx.compose.animation.SizeTransform(clip = false))
+                else ->
+                    FishPiMotion.pushTransform(enteringDetail).using(
+                        androidx.compose.animation.SizeTransform(clip = false),
+                    )
+            }
+        },
+        label = "articleListDetail",
+    ) { screen ->
+    if (screen == ArticleScreenState.JumpLoading) {
+        LoadingScreen("加载帖子详情...")
+    } else if (screen == ArticleScreenState.List) {
         ArticleListPage(
             articles = state.rawArticles,
             filter = ArticleFilter(state.filter.key, state.filter.label),
@@ -224,8 +259,10 @@ internal fun DefaultArticleUi(
             onCreateArticle = { dispatch(ArticleAction.OpenPublish) },
         )
     } else {
+        val detailSummary = state.selected ?: pendingJumpSummary ?: lastArticleSummary
+        if (detailSummary == null) return@AnimatedContent
         ArticleDetailPage(
-            summary = state.selected,
+            summary = detailSummary,
             detail = state.detail,
             articleHeat = state.articleHeat,
             commentInput = state.commentInput,
@@ -276,6 +313,7 @@ internal fun DefaultArticleUi(
             onCaptureCommentImage = { dispatch(ArticleAction.CaptureCommentImage) },
             onShare = { dispatch(ArticleAction.ShareArticle) },
         )
+    }
     }
 
     BackHandler(enabled = state.selected != null) {
@@ -527,28 +565,18 @@ internal fun DefaultArticlePublishUi(
                         isError = state.tagsError != null,
                         errorText = state.tagsError,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        ArticleRecommendedTags.take(4).forEach { tag ->
-                            SuggestionChip(
-                                onClick = { dispatch(ArticlePublishAction.AppendTag(tag)) },
-                                label = { Text(tag) },
-                                colors = SuggestionChipDefaults.suggestionChipColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                ),
-                            )
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        ArticleRecommendedTags.drop(4).forEach { tag ->
-                            SuggestionChip(
-                                onClick = { dispatch(ArticlePublishAction.AppendTag(tag)) },
-                                label = { Text(tag) },
-                                colors = SuggestionChipDefaults.suggestionChipColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                ),
-                            )
+                    ArticleRecommendedTags.chunked(4).forEach { rowTags ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            rowTags.forEach { tag ->
+                                SuggestionChip(
+                                    onClick = { dispatch(ArticlePublishAction.AppendTag(tag)) },
+                                    label = { Text(tag) },
+                                    colors = SuggestionChipDefaults.suggestionChipColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    ),
+                                )
+                            }
                         }
                     }
                 }
@@ -1365,75 +1393,6 @@ private fun ArticleDetailPage(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ArticleReaderTopBar(
-    onBack: () -> Unit,
-    selectedPage: Int,
-    onBodyClick: () -> Unit,
-    onCommentsClick: () -> Unit,
-    onShare: () -> Unit,
-) {
-    TopAppBar(
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ArticleReaderTab(text = "正文", selected = selectedPage == 0, onClick = onBodyClick)
-                ArticleReaderTab(text = "评论", selected = selectedPage == 1, onClick = onCommentsClick)
-            }
-        },
-        navigationIcon = {
-            PlainBackButton(onClick = onBack, contentDescription = "返回帖子列表")
-        },
-        actions = {
-            IconButton(onClick = onShare) {
-                Icon(
-                    imageVector = Icons.Rounded.IosShare,
-                    contentDescription = "分享帖子",
-                )
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            titleContentColor = MaterialTheme.colorScheme.onSurface,
-            navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
-            actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        ),
-    )
-}
-
-@Composable
-private fun ArticleReaderTab(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 5.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(
-            text = text,
-            color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Bold,
-            fontSize = 17.sp,
-        )
-        Box(
-            modifier = Modifier
-                .size(width = 34.dp, height = 3.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(if (selected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent),
-        )
-    }
-}
-
 @Composable
 private fun ArticleReaderHeader(
     summary: ArticleSummary,
@@ -2228,8 +2187,6 @@ private fun ArticleBottomAction(
     }
 }
 
-private fun articleCommentsAnchorIndex(detail: ArticleDetailView): Int = 2
-
 private fun articleHeroImage(summary: ArticleSummary, detail: ArticleDetailView): String? =
     detail.imageUrls.firstOrNull()?.ifBlank { null }
 
@@ -2895,28 +2852,6 @@ private fun String.toArticleLinkTitle(): String {
     }.getOrDefault(this)
 }
 
-private fun Context.dp(value: Int): Int =
-    (value * resources.displayMetrics.density).toInt()
-
-private fun Context.dpFloat(value: Int): Float =
-    value * resources.displayMetrics.density
-
-private fun ArticleDetailView.toSummary(): ArticleSummary =
-    ArticleSummary(
-        id = id,
-        title = title,
-        author = author,
-        avatar = avatar,
-        time = time,
-        tags = tags,
-        preview = markdown,
-        commentCount = commentCount,
-        goodCount = goodCount,
-        viewCount = viewCount,
-        sticky = false,
-        perfect = false,
-        thumbnail = imageUrls.firstOrNull().orEmpty(),
-    )
 
 
 

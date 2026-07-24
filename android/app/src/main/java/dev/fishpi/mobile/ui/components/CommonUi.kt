@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.ui.components
 
 import dev.fishpi.mobile.*
+import dev.fishpi.mobile.ui.motion.fishClickable
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
@@ -9,8 +10,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,7 +34,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -157,7 +155,7 @@ internal fun FishPiPillButton(
                 if (enabled) MaterialTheme.colorScheme.outline.copy(alpha = 0.18f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
                 buttonShape,
             )
-            .clickable(enabled = enabled, onClick = onClick)
+            .fishClickable(enabled = enabled, onClick = onClick)
             .padding(
                 horizontal = if (compact) FishPiTheme.spacingControl else FishPiTheme.spacingControl + 4.dp,
                 vertical = if (compact) 5.dp else 7.dp,
@@ -192,7 +190,7 @@ internal fun FishPiIconButton(
             .clip(shape)
             .background(if (enabled) background else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.58f))
             .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f + FishPiTheme.depth * 0.08f), shape)
-            .clickable(enabled = enabled, onClick = onClick),
+            .fishClickable(enabled = enabled, rippleBounded = false, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -215,11 +213,7 @@ internal fun PlainBackButton(
         modifier = modifier
             .size(36.dp)
             .semantics { this.contentDescription = contentDescription }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
+            .fishClickable(rippleBounded = false, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(modifier = Modifier.size(width = 11.dp, height = 17.dp)) {

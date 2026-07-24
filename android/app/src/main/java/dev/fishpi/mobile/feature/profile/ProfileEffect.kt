@@ -1,12 +1,13 @@
 package dev.fishpi.mobile.feature.profile
 
+import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.SavedAccount
 
 internal sealed interface ProfileEffect {
     data class ShowMessage(val message: String) : ProfileEffect
     data class ShowError(val message: String) : ProfileEffect
-    data class OpenArticle(val articleId: String) : ProfileEffect
+    data class OpenArticle(val articleId: String, val summary: ArticleSummary? = null) : ProfileEffect
     data class OpenPrivateChat(val username: String) : ProfileEffect
     data object OpenNotice : ProfileEffect
     data object CheckUpdate : ProfileEffect

@@ -72,70 +72,19 @@ internal fun ChatRoomMessage.canQuote(): Boolean {
 private data class QuoteParts(
     val content: String,
     val imageUrls: List<String>,
-    val tail: String,
 )
 
 private fun ChatRoomMessage.toQuoteParts(): QuoteParts {
     val source = md.ifBlank { contentHtml.ifBlank { content } }
-    val split = source.splitQuoteTail()
     val images = allQuoteImageUrls()
-    val body = split.body
+
+    val body = source
         .removeQuoteImages()
         .toQuotePlainText()
     return QuoteParts(
         content = body,
         imageUrls = images,
-        tail = split.tail.toQuotePlainText(),
     )
-}
-
-private data class QuoteSplit(
-    val body: String,
-    val tail: String,
-)
-
-private fun String.splitQuoteTail(): QuoteSplit {
-    val html = trim()
-    if (html.isBlank()) {
-        return QuoteSplit("", "")
-    }
-    splitTrailingHtmlBlockquote()?.let { return it }
-    splitMarkdownTail()?.let { return it }
-    return QuoteSplit(html, "")
-}
-
-private fun String.splitTrailingHtmlBlockquote(): QuoteSplit? {
-    val regex = Regex("<blockquote\\b[^>]*>.*?</blockquote>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
-    val match = regex.findAll(this).lastOrNull() ?: return null
-    if (substring(match.range.last + 1).isNotBlank()) {
-        return null
-    }
-    val body = substring(0, match.range.first).trim()
-    val tail = match.value.trim()
-    if (tail.isBlank()) {
-        return null
-    }
-    return QuoteSplit(body, tail)
-}
-
-private fun String.splitMarkdownTail(): QuoteSplit? {
-    val lines = lines()
-    val tailStart = lines.indexOfFirst { it.trimStart().startsWith(">") }
-    if (tailStart < 0) {
-        return null
-    }
-    val body = lines.take(tailStart).joinToString("\n").trim()
-    val tail = lines.drop(tailStart)
-        .joinToString("\n")
-        .lineSequence()
-        .map { it.trim().removePrefix(">").trim() }
-        .filter(String::isNotBlank)
-        .joinToString("\n")
-        .trim()
-    if (tail.isBlank()) {
-        return null
-    }
-    return QuoteSplit(body, tail)
 }
 
 private fun ChatRoomMessage.allQuoteImageUrls(): List<String> {

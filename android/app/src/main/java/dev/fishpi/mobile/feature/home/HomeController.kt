@@ -90,7 +90,7 @@ internal class HomeController(
             HomeAction.OpenArticle -> emitEffect(HomeEffect.NavigateToArticle)
             is HomeAction.OpenArticleDetail -> emitEffect(HomeEffect.NavigateToArticleDetail(action.articleId))
             HomeAction.OpenBreezemoon -> emitEffect(HomeEffect.NavigateToBreezemoon)
-            HomeAction.OpenFun -> emitEffect(HomeEffect.NavigateToFun)
+            HomeAction.OpenStore -> emitEffect(HomeEffect.NavigateToStore)
             HomeAction.OpenProfile -> emitEffect(HomeEffect.NavigateToProfile)
             HomeAction.OpenLivenessHelp -> emitEffect(HomeEffect.NavigateToArticleDetail(HomeLivenessHelpArticleId))
             HomeAction.ClearError -> _state.update { it.copy(homeError = null, recommendedError = null) }

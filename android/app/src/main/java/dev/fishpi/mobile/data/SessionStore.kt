@@ -34,7 +34,10 @@ data class ChatFilterConfig(
     }
 
     fun matchesBlockedRegex(content: String): Boolean =
-        compiledBlockedRegex.any { regex -> regex.containsMatchIn(content) }
+
+        compiledBlockedRegex.any { regex ->
+            runCatching { regex.containsMatchIn(content) }.getOrDefault(false)
+        }
 
     companion object {
         val DefaultBlockedUsers = listOf("xiaoIce", "sevenSummer", "b", "xds")

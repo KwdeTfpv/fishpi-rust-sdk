@@ -355,6 +355,14 @@ internal class ChatController(
         syncComposerFromLegacy()
     }
 
+    fun clearSynthesizedMessages() {
+        val current = rawMessages.value
+        val next = current.filterNot { it.isLocallySynthesized }
+        if (next.size == current.size) return
+        rawMessages.value = next
+        _state.update { it.copy(messages = next.toChatMessageUiModels(currentUsername)) }
+    }
+
     fun refreshHistory(
         skipIfLoaded: Boolean = false,
         onSuccess: (List<ChatRoomMessage>) -> Unit = {},
@@ -366,6 +374,8 @@ internal class ChatController(
             onFinally()
             return
         }
+
+        lastRealtimeRefreshAtMs = System.currentTimeMillis()
         requestedHistoryPages.clear()
         _state.update {
             it.copy(
@@ -381,10 +391,27 @@ internal class ChatController(
                     api.getChatRoomHistory(apiKey, selfUsername = currentUsername)
                 }
             }.onSuccess { history ->
-                rawMessages.value = history
+
+                val previous = rawMessages.value
+                val locallySynthesized = previous
+                    .filter { it.isLocallySynthesized }
+                    .takeLast(MaxRetainedSynthesizedMessages)
+                val echoKeyByOId = previous
+                    .filter { it.echoKey.isNotBlank() && it.oId.isNotBlank() }
+                    .associate { it.oId to it.echoKey }
+                val historyWithEcho = if (echoKeyByOId.isEmpty()) {
+                    history
+                } else {
+                    history.map { message ->
+                        val echoKey = echoKeyByOId[message.oId]
+                        if (echoKey != null && message.echoKey.isBlank()) message.copy(echoKey = echoKey) else message
+                    }
+                }
+                val merged = if (locallySynthesized.isEmpty()) historyWithEcho else historyWithEcho + locallySynthesized
+                rawMessages.value = merged
                 _state.update {
                     it.copy(
-                        messages = history.toChatMessageUiModels(currentUsername),
+                        messages = merged.toChatMessageUiModels(currentUsername),
                         isLoading = false,
                         loadState = UiLoadState.Idle,
                         nextHistoryPage = 2,
@@ -504,7 +531,28 @@ internal class ChatController(
             }
             return
         }
-        val nextMessages = rawMessages.value + incoming
+        val current = rawMessages.value
+
+        val optimisticIndex = if (incoming.userName.equals(currentUsername, ignoreCase = true)) {
+            current.indexOfFirst { it.oId.startsWith("local:") && it.matchesOptimistic(incoming) }
+        } else {
+            -1
+        }
+        if (optimisticIndex >= 0) {
+            val echoKey = current[optimisticIndex].oId
+            val replaced = current.toMutableList().apply {
+                this[optimisticIndex] = incoming.copy(echoKey = echoKey)
+            }
+            rawMessages.value = replaced
+            _state.update { it.copy(messages = replaced.toChatMessageUiModels(currentUsername)) }
+            return
+        }
+
+        if (incoming.oId.isNotBlank() && current.any { it.oId == incoming.oId }) {
+            return
+        }
+
+        val nextMessages = current + incoming
         val retainedMessages = if (keepFollowing && nextMessages.size > maxRetained) {
             nextMessages.takeLast(trimTo)
         } else {
@@ -526,6 +574,12 @@ internal class ChatController(
                 },
             )
         }
+    }
+
+    private fun ChatRoomMessage.matchesOptimistic(incoming: ChatRoomMessage): Boolean {
+        val mineText = md.ifBlank { content }.trim()
+        val theirText = incoming.md.ifBlank { incoming.content }.trim()
+        return mineText.isNotEmpty() && mineText == theirText
     }
 
     private fun onRevoke(messageId: String) {
@@ -704,37 +758,45 @@ internal class ChatController(
             return
         }
         val rawContent = composer.quote?.appendTo(normalizedContent) ?: normalizedContent
-        _legacyComposerState.update { it.copy(isSending = true) }
+        val restoreInput = composer.input
+        val restoreQuote = composer.quote
+        val restoreAttachments = composer.pendingAttachments
+        _legacyComposerState.update {
+            it.copy(
+                input = "",
+                quote = null,
+                pendingAttachments = emptyList(),
+                emojiPanelOpen = false,
+                inputResetKey = it.inputResetKey + 1,
+                isSending = true,
+            )
+        }
         updateComposer { it.copy(isSending = true) }
         scope.launch {
             val sendContent = withContext(Dispatchers.Default) {
                 pluginManager.applySendHook(rawContent)
             }
+            val optimisticId = insertOptimisticMessage(sendContent)
             runCatching {
                 withContext(Dispatchers.IO) {
                     api.sendChatRoomMessage(apiKey, sendContent)
                 }
             }.onSuccess {
+                _legacyComposerState.update { it.copy(isSending = false) }
+                _state.update { it.copy(composer = ChatComposerState()) }
+            }.onFailure { throwable ->
+                removeOptimisticMessage(optimisticId)
+                val reason = throwable.message ?: "发送失败"
                 _legacyComposerState.update {
                     it.copy(
-                        input = "",
-                        quote = null,
-                        pendingAttachments = emptyList(),
-                        emojiPanelOpen = false,
+                        input = restoreInput,
+                        quote = restoreQuote,
+                        pendingAttachments = restoreAttachments,
                         inputResetKey = it.inputResetKey + 1,
-                        scrollToBottomRequest = it.scrollToBottomRequest + 1,
+                        error = reason,
                         isSending = false,
                     )
                 }
-                _state.update {
-                    it.copy(
-                        scrollToBottomRequest = it.scrollToBottomRequest + 1,
-                        composer = ChatComposerState(),
-                    )
-                }
-            }.onFailure { throwable ->
-                val reason = throwable.message ?: "发送失败"
-                _legacyComposerState.update { it.copy(error = reason, isSending = false) }
                 _state.update {
                     it.copy(
                         error = reason,
@@ -743,6 +805,44 @@ internal class ChatController(
                 }
             }
         }
+    }
+
+    /**
+     * 在消息列表尾部插入一条本地乐观占位消息，返回其临时 oId（local: 前缀）。
+     * 头像/昵称复用自己最近一条消息，避免占位显示成匿名。
+     */
+    private fun insertOptimisticMessage(sendContent: String): String {
+        val optimisticId = "local:${System.currentTimeMillis()}"
+        val mine = rawMessages.value.lastOrNull {
+            it.userName.equals(currentUsername, ignoreCase = true) && !it.oId.startsWith("local:")
+        }
+        val optimistic = ChatRoomMessage(
+            oId = optimisticId,
+            userName = currentUsername,
+            userNickname = mine?.userNickname.orEmpty(),
+            userAvatarURL = mine?.userAvatarURL.orEmpty(),
+            content = sendContent,
+            md = sendContent,
+            time = java.time.Instant.now().toString(),
+            client = "Android",
+            type = "msg",
+        )
+        val next = rawMessages.value + optimistic
+        rawMessages.value = next
+        _state.update {
+            it.copy(
+                messages = next.toChatMessageUiModels(currentUsername),
+                scrollToBottomRequest = it.scrollToBottomRequest + 1,
+            )
+        }
+        return optimisticId
+    }
+
+    private fun removeOptimisticMessage(optimisticId: String) {
+        val next = rawMessages.value.filterNot { it.oId == optimisticId }
+        if (next.size == rawMessages.value.size) return
+        rawMessages.value = next
+        _state.update { it.copy(messages = next.toChatMessageUiModels(currentUsername)) }
     }
 
     private fun openBarragerComposer() {
@@ -1341,6 +1441,7 @@ internal class ChatController(
         const val MaxDuplicateHistoryPageStreak = 6
         const val MaxBarragerLength = 80
         const val DefaultBarragerColor = "#ffffff"
+        const val MaxRetainedSynthesizedMessages = 10
     }
 
     private var lastRealtimeRefreshAtMs: Long = 0L
@@ -1365,7 +1466,6 @@ internal data class ChatLegacyComposerState(
     val atQuery: String? = null,
     val atCandidates: List<String> = emptyList(),
     val error: String? = null,
-    val scrollToBottomRequest: Int = 0,
 )
 
 internal data class ChatLegacyInteractionState(
@@ -1425,3 +1525,10 @@ private data class RealtimeConnectConfig(
     val maxRetainedMessages: Int,
     val trimMessagesTo: Int,
 )
+
+/**
+ * 本地合成的消息：进出场提示（custom:）、话题变更（discuss:）、插件提示（plugin:）。
+ * 这些消息由实时事件在客户端就地生成，历史接口不返回它们，故刷新历史时需单独保留。
+ */
+private val ChatRoomMessage.isLocallySynthesized: Boolean
+    get() = oId.startsWith("custom:") || oId.startsWith("discuss:") || oId.startsWith("plugin:")

@@ -6,8 +6,6 @@ import dev.fishpi.mobile.feature.chat.ui.ChatLivenessFloatingOrb
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Rect
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
@@ -28,7 +26,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -36,7 +33,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -56,7 +52,6 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddAPhoto
 import androidx.compose.material.icons.rounded.AttachFile
-import androidx.compose.material.icons.rounded.InsertEmoticon
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.CardGiftcard
 import androidx.compose.material.icons.rounded.Extension
@@ -67,10 +62,6 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Tag
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.automirrored.rounded.Send
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.IconButton
@@ -91,16 +82,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -109,15 +92,12 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -125,7 +105,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.SubcomposeAsyncImage
@@ -178,7 +157,6 @@ import dev.fishpi.mobile.plugin.PluginMenuAction
 import dev.fishpi.mobile.utils.appendDraftBlock
 import dev.fishpi.mobile.utils.appendMentionDraft
 import dev.fishpi.mobile.utils.isDirectVideoUrl
-import java.net.URLEncoder
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1499,9 +1477,6 @@ private fun String.isAnimatedListImageUrl(): Boolean {
     return path.endsWith(".gif") || contains("image/gif", ignoreCase = true)
 }
 
-private fun ChatRoomMessage.stableListKey(): String =
-    oId.ifBlank { "$time:$userName:${content.hashCode()}" }
-
 private fun ChatRoomMessage.stableMessageIdentity(): String =
     oId.ifBlank { "$time:${displayName}:$content" }
 
@@ -1542,7 +1517,10 @@ private fun buildStackedItems(messages: List<ChatRoomMessage>): List<StackGroup>
     return groups
 }
 
-internal fun ChatFilterConfig.blocksChatMessage(message: ChatRoomMessage): Boolean {
+internal fun ChatFilterConfig.blocksChatMessage(message: ChatRoomMessage): Boolean =
+    runCatching { blocksChatMessageInternal(message) }.getOrDefault(false)
+
+private fun ChatFilterConfig.blocksChatMessageInternal(message: ChatRoomMessage): Boolean {
     val sender = message.userName.trim()
     val author = message.displayName.trim()
     blockedUsers.forEach { item ->
@@ -1576,9 +1554,6 @@ internal fun ChatFilterConfig.blocksChatMessage(message: ChatRoomMessage): Boole
     return false
 }
 
-private fun ChatFilterConfig.activeRuleCount(): Int =
-    blockedUsers.size + blockedKeywords.size + blockedPrefixKeywords.size + blockedRegex.size
-
 private fun List<String>.withUniqueRule(rule: String, exactCase: Boolean = false): List<String> {
     val value = rule.trim()
     if (value.isBlank()) {
@@ -1603,21 +1578,6 @@ private fun appendTopicReferenceDraft(current: String, topic: String): String {
         return current
     }
     return appendDraftBlock(current, reference)
-}
-
-private fun replaceTopicTriggerDraft(current: String, topic: String): String {
-    val reference = formatTopicReferenceMarkdown(topic)
-    if (reference.isBlank()) {
-        return current
-    }
-    val trimmed = current.trimEnd()
-    val tokenStart = trimmed.indexOfLast { it.isWhitespace() } + 1
-    val token = trimmed.substring(tokenStart)
-    if (!token.startsWith("#") || token.count { it == '#' } != 1) {
-        return appendDraftBlock(current, reference)
-    }
-    val prefix = trimmed.substring(0, tokenStart)
-    return (prefix + reference).trimEnd()
 }
 
 private fun normalizeTopicReferenceDraft(input: String): String {
@@ -2347,18 +2307,6 @@ internal fun ChatUserProfileOverlay(
     }
 }
 
-private fun applyAtCandidate(input: String, anchor: Int, username: String): String {
-    val safeAnchor = anchor.coerceIn(0, input.length)
-    val before = input.substring(0, safeAnchor)
-    val afterQuery = input
-        .substring(safeAnchor)
-        .indexOfFirst { it.isWhitespace() }
-        .takeIf { it >= 0 }
-        ?.let { offset -> input.substring(safeAnchor + offset) }
-        .orEmpty()
-    return "$before@$username $afterQuery".trimEnd().let { "$it " }
-}
-
 private fun insertMentionDraft(current: String, cursor: Int, username: String): Pair<String, Int> {
     val user = username.trim()
     if (user.isBlank()) {
@@ -2422,84 +2370,6 @@ private fun ChatRoomContextBar(
         onBack = onBack,
         modifier = modifier,
     )
-    return
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(FishPiTheme.radiusBox),
-        color = FishPiTheme.surface.copy(alpha = 0.82f),
-        border = BorderStroke(FishPiTheme.borderWidth, FishPiTheme.outline.copy(alpha = 0.12f)),
-        shadowElevation = 0.dp,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 11.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(5.dp),
-                ) {
-                    Text(
-                        text = "聊天室",
-                        color = FishPiTheme.onSurface,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(7.dp),
-                    ) {
-                        ChatConnectionChip(
-                            label = if (connectionLabel.isBlank()) "连接中" else connectionLabel,
-                            connected = connected,
-                            onClick = onReconnect,
-                        )
-                        Text(
-                            text = "$onlineCount 在线 · $visibleCount 条消息",
-                            color = FishPiTheme.weakText,
-                            style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                ChatTopicChip(
-                    text = topicLabel,
-                    onClick = onQuoteTopic,
-                    modifier = Modifier.weight(1f),
-                )
-                ChatHeaderIconAction(
-                    icon = Icons.Rounded.Refresh,
-                    contentDescription = "刷新聊天室",
-                    onClick = onRefresh,
-                )
-                ChatHeaderIconAction(
-                    icon = Icons.Rounded.Palette,
-                    contentDescription = if (themeLabel.isBlank()) "切换主题" else "主题：$themeLabel",
-                    onClick = onCycleTheme,
-                )
-                ChatHeaderIconAction(
-                    icon = Icons.Rounded.VisibilityOff,
-                    contentDescription = "查看已屏蔽消息",
-                    onClick = onOpenBlocked,
-                )
-            }
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -3516,61 +3386,6 @@ private fun ChatActionSheetItem(
     }
 }
 
-@Composable
-private fun ChatHeaderIconAction(
-    icon: ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit,
-) {
-    IconActionButton(
-        icon = icon,
-        contentDescription = contentDescription,
-        onClick = onClick,
-        size = 34.dp,
-        iconSize = 18.dp,
-    )
-}
-
-@Composable
-private fun ChatTopicChip(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    contentColor: Color = FishPiTheme.onSurface.copy(alpha = 0.82f),
-    weakColor: Color = FishPiTheme.weakText,
-    dotColor: Color = FishPiTheme.accent.copy(alpha = 0.72f),
-) {
-    Row(
-        modifier = modifier
-            .clickable(onClick = onClick)
-            .padding(horizontal = 2.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(dotColor),
-        )
-        Text(
-            text = text,
-            color = contentColor,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = "引用",
-            color = weakColor,
-            style = MaterialTheme.typography.labelSmall,
-            maxLines = 1,
-        )
-    }
-}
-
 private fun chatConnectionConnected(status: String): Boolean {
     val text = status.trim()
     return text == "已连接" ||
@@ -3613,37 +3428,6 @@ private fun ChatConnectionDot(
                 .size(7.dp)
                 .clip(CircleShape)
                 .background(chatConnectionDotColor(label, connected)),
-        )
-    }
-}
-
-@Composable
-private fun ChatConnectionChip(
-    label: String,
-    connected: Boolean,
-    onClick: () -> Unit,
-) {
-    val color = if (connected) FishPiTheme.success else FishPiTheme.error
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 2.dp, vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(color),
-        )
-        Text(
-            text = if (connected) "已连接" else label,
-            color = color,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
         )
     }
 }
@@ -3749,43 +3533,4 @@ private fun ChatOverlayPill(
 ) {
     FloatingNoticePill(text = text, onClick = onClick, modifier = modifier, enabled = enabled)
 }
-
-@Composable
-private fun TimeSeparatorBar(text: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(FishPiTheme.radiusField))
-                .background(FishPiTheme.surfaceContainer)
-                .padding(horizontal = 10.dp, vertical = 5.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = text, color = FishPiTheme.accent)
-        }
-    }
-}
-
-@Composable
-private fun HistoryLoadState(
-    isLoadingMore: Boolean,
-    hasMoreHistory: Boolean,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        val text = when {
-            isLoadingMore -> "正在加载更早消息..."
-            !hasMoreHistory -> "已经到最早消息了"
-            else -> "上滑加载更早消息"
-        }
-        Text(text = text, color = FishPiTheme.accent)
-    }
-}
-
-
-
 

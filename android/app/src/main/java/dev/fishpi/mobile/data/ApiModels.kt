@@ -56,6 +56,7 @@ data class ChatRoomMessage(
     val barragerColor: String = "",
     val type: String = "msg",
     val revoked: Boolean = false,
+    val echoKey: String = "",
     val reactionSummary: List<ReactionSummaryItem> = emptyList(),
     val currentUserReaction: String = "",
     val redPacket: RedPacketPreview? = null,

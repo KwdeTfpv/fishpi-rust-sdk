@@ -37,7 +37,6 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -58,7 +57,6 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -72,6 +70,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
+import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.FishPiApiClient
@@ -97,6 +96,7 @@ import dev.fishpi.mobile.feature.profile.ProfileRoute
 import dev.fishpi.mobile.ui.animal.AnimalChatGlyph
 import dev.fishpi.mobile.ui.animal.AnimalIslandBackground
 import dev.fishpi.mobile.ui.components.VisitorVerifyDialog
+import dev.fishpi.mobile.ui.motion.FishPiMotion
 import dev.fishpi.mobile.ui.components.statusSuccessColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -115,8 +115,6 @@ private enum class FishTab(val title: String) {
 private enum class HomePane {
     Home,
     Breezemoon,
-    Notice,
-    Fun,
     Store,
 }
 
@@ -125,8 +123,13 @@ private enum class ChatPane {
     Room,
 }
 
-private val CompactTopBarHeight = 48.dp
-private val CompactBottomNavHeight = 54.dp
+private data class ShellReturn(
+    val tab: FishTab,
+    val homePane: HomePane,
+    val chatPane: ChatPane,
+    val privateDetail: Boolean,
+)
+
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
@@ -179,8 +182,10 @@ internal fun MainShell(
     var appInForeground by remember { mutableStateOf(true) }
     var lastBackPressedAt by remember { mutableStateOf(0L) }
     var articleJumpId by remember { mutableStateOf<String?>(null) }
+    var articleJumpSummary by remember { mutableStateOf<ArticleSummary?>(null) }
     var articleJumpRequest by remember { mutableStateOf(0) }
-    var articleReturnTab by remember { mutableStateOf<FishTab?>(null) }
+    var articleReturn by remember { mutableStateOf<ShellReturn?>(null) }
+    var chatRoomReturn by remember { mutableStateOf<ShellReturn?>(null) }
     var profileUsername by remember { mutableStateOf<String?>(null) }
     var profileOverlayUsername by remember { mutableStateOf<String?>(null) }
     var privatePeerJump by remember { mutableStateOf<String?>(null) }
@@ -205,6 +210,16 @@ internal fun MainShell(
     fun saveChatFilters(next: ChatFilterConfig) {
         chatFilters = next
         store.saveChatFilters(next)
+    }
+
+    fun currentReturn(): ShellReturn =
+        ShellReturn(tab = tab, homePane = homePane, chatPane = chatPane, privateDetail = privateChatDetailActive)
+
+    fun restoreReturn(target: ShellReturn) {
+        tab = target.tab
+        homePane = target.homePane
+        chatPane = target.chatPane
+        privateChatDetailActive = target.privateDetail
     }
 
     fun selectTab(next: FishTab) {
@@ -233,16 +248,27 @@ internal fun MainShell(
         }
     }
 
-    fun openArticleTabByJump(articleId: String, returnTo: FishTab? = null) {
+    fun openArticleTabByJump(
+        articleId: String,
+        returnTo: ShellReturn? = null,
+        summary: ArticleSummary? = null,
+    ) {
         focusManager.clearFocus(force = true)
         keyboardController?.hide()
         articleJumpId = articleId
+        articleJumpSummary = summary
         articleJumpRequest += 1
-        articleReturnTab = returnTo
+        articleReturn = returnTo
         tab = FishTab.Article
         homePane = HomePane.Home
         chatPane = ChatPane.Home
         privateChatDetailActive = false
+    }
+
+    fun openNotice() {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+        noticeOpen = true
     }
 
     fun refreshNoticeUnread(force: Boolean = false) {
@@ -283,9 +309,11 @@ internal fun MainShell(
     fun openChatRoomDetail() {
         focusManager.clearFocus(force = true)
         keyboardController?.hide()
+        chatRoomReturn = if (tab == FishTab.Chat && chatPane == ChatPane.Room) chatRoomReturn else currentReturn()
         privateChatDetailActive = false
         tab = FishTab.Chat
         chatPane = ChatPane.Room
+        chatController.clearSynthesizedMessages()
         refreshChatRoomHistory(force = true)
     }
 
@@ -437,11 +465,13 @@ internal fun MainShell(
             return@BackHandler
         }
         if (tab == FishTab.Chat && chatPane == ChatPane.Room) {
-            chatPane = ChatPane.Home
-            return@BackHandler
-        }
-        if (tab == FishTab.Home && homePane == HomePane.Store) {
-            homePane = HomePane.Fun
+            val target = chatRoomReturn
+            chatRoomReturn = null
+            if (target != null) {
+                restoreReturn(target)
+            } else {
+                chatPane = ChatPane.Home
+            }
             return@BackHandler
         }
         if (tab == FishTab.Home && homePane != HomePane.Home) {
@@ -472,11 +502,15 @@ internal fun MainShell(
                 .fillMaxWidth()
                 .then(if (tab == FishTab.Chat || tab == FishTab.Home) Modifier else Modifier.statusBarsPadding()),
         ) {
-            if (chatRoomVisible) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = chatRoomVisible,
+                enter = FishPiMotion.enterPush,
+                exit = FishPiMotion.exitPush,
+                modifier = Modifier.zIndex(3f),
+            ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .zIndex(3f),
+                        .fillMaxSize(),
                 ) {
                     ChatRoute(
                         chatFilters = chatFilters,
@@ -486,7 +520,7 @@ internal fun MainShell(
                         themeLabel = themeOptions.firstOrNull { it.key == themeKey }?.label ?: themeKey,
                         noticeUnread = noticeUnread,
                         onCycleTheme = onCycleTheme,
-                        onOpenNotice = { noticeOpen = true },
+                        onOpenNotice = { openNotice() },
                         onFollowBottomChanged = { chatRoomCanFollowBottom = it },
                         onFollowBottomProbeChanged = { chatRoomFollowBottomProbe = it },
                         onBlockedRequestHandled = { openBlockedRequest = 0 },
@@ -494,7 +528,13 @@ internal fun MainShell(
                             profileOverlayUsername = username
                         },
                         onBack = {
-                            chatPane = ChatPane.Home
+                            val target = chatRoomReturn
+                            chatRoomReturn = null
+                            if (target != null) {
+                                restoreReturn(target)
+                            } else {
+                                chatPane = ChatPane.Home
+                            }
                         },
                     )
                 }
@@ -514,30 +554,15 @@ internal fun MainShell(
                                 noticeUnread = totalMessageUnread,
                                 onOpenChat = { openChatRoomDetail() },
                                 onOpenArticle = { selectTab(FishTab.Article) },
-                                onOpenArticleDetail = { articleId -> openArticleTabByJump(articleId, returnTo = FishTab.Home) },
+                                onOpenArticleDetail = { articleId -> openArticleTabByJump(articleId, returnTo = currentReturn()) },
                                 onOpenBreezemoon = { homePane = HomePane.Breezemoon },
-                                onOpenFun = { homePane = HomePane.Fun },
+                                onOpenStore = { homePane = HomePane.Store },
                                 onOpenProfile = { selectTab(FishTab.Me) },
                             )
                         }
                         HomePane.Breezemoon -> BreezemoonRoute(
                             session = session,
                             active = tab == FishTab.Home && homePane == HomePane.Breezemoon,
-                        )
-                        HomePane.Notice -> NoticeScreen(
-                            session = session,
-                            unread = noticeUnread,
-                            onUnreadChange = { noticeUnread = it },
-                            onDismiss = { homePane = HomePane.Home },
-                            onJumpToChatRoom = {
-                                openChatRoomDetail()
-                            },
-                            onJumpToArticle = { articleId ->
-                                openArticleTabByJump(articleId)
-                            },
-                        )
-                        HomePane.Fun -> FunApiScreen(
-                            onOpenStore = { homePane = HomePane.Store },
                         )
                         HomePane.Store -> ExtensionStoreRoute(
                             apiKey = session.apiKey,
@@ -562,12 +587,14 @@ internal fun MainShell(
                         session = session,
                         active = tab == FishTab.Article,
                         jumpArticleId = articleJumpId,
+                        jumpSummary = articleJumpSummary,
                         jumpRequest = articleJumpRequest,
                         onDetailClosed = {
                             articleJumpId = null
-                            articleReturnTab?.let { returnTab ->
-                                tab = returnTab
-                                articleReturnTab = null
+                            articleJumpSummary = null
+                            articleReturn?.let { target ->
+                                restoreReturn(target)
+                                articleReturn = null
                             }
                         },
                         onOpenUserProfile = { username ->
@@ -651,8 +678,8 @@ internal fun MainShell(
                         onDeleteCustomTheme = onDeleteCustomTheme,
                         chatWallpaperUri = chatWallpaperUri,
                         onChatWallpaperChange = onChatWallpaperChange,
-                        onOpenArticle = { articleId ->
-                            openArticleTabByJump(articleId, returnTo = FishTab.Me)
+                        onOpenArticle = { articleId, summary ->
+                            openArticleTabByJump(articleId, returnTo = currentReturn(), summary = summary)
                         },
                         onCloseProfile = { profileUsername = null },
                         onOpenPrivateChat = { username ->
@@ -664,9 +691,7 @@ internal fun MainShell(
                             privateChatDetailActive = true
                         },
                         noticeUnread = noticeUnread,
-                        onOpenNotice = {
-                            noticeOpen = true
-                        },
+                        onOpenNotice = { openNotice() },
                         onCheckUpdate = { checkForUpdates(manual = true) },
                         onSwitchAccount = onSwitchAccount,
                         onAddAccount = onAddAccount,
@@ -677,11 +702,15 @@ internal fun MainShell(
                     InputBlocker()
                 }
             }
-            if (noticeOpen) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = noticeOpen,
+                enter = FishPiMotion.enterPush,
+                exit = FishPiMotion.exitPush,
+                modifier = Modifier.zIndex(8f),
+            ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .zIndex(8f),
+                        .fillMaxSize(),
                 ) {
                     NoticeScreen(
                         session = session,
@@ -693,8 +722,9 @@ internal fun MainShell(
                             openChatRoomDetail()
                         },
                         onJumpToArticle = { articleId ->
+                            val target = currentReturn()
                             noticeOpen = false
-                            openArticleTabByJump(articleId, returnTo = tab)
+                            openArticleTabByJump(articleId, returnTo = target)
                         },
                     )
                 }
@@ -714,6 +744,15 @@ internal fun MainShell(
             onDismissRequest = { profileOverlayUsername = null },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
+            val overlayEnter = remember {
+                androidx.compose.animation.core.MutableTransitionState(false)
+            }
+            LaunchedEffect(Unit) { overlayEnter.targetState = true }
+            androidx.compose.animation.AnimatedVisibility(
+                visibleState = overlayEnter,
+                enter = FishPiMotion.enterPush,
+                exit = FishPiMotion.exitPush,
+            ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -734,9 +773,10 @@ internal fun MainShell(
                     onDeleteCustomTheme = onDeleteCustomTheme,
                     chatWallpaperUri = chatWallpaperUri,
                     onChatWallpaperChange = onChatWallpaperChange,
-                    onOpenArticle = { articleId ->
+                    onOpenArticle = { articleId, summary ->
+                        val target = currentReturn()
                         profileOverlayUsername = null
-                        openArticleTabByJump(articleId, returnTo = tab)
+                        openArticleTabByJump(articleId, returnTo = target, summary = summary)
                     },
                     onCloseProfile = { profileOverlayUsername = null },
                     closeOnBack = true,
@@ -749,14 +789,13 @@ internal fun MainShell(
                         privateChatDetailActive = true
                     },
                     noticeUnread = noticeUnread,
-                    onOpenNotice = {
-                        noticeOpen = true
-                    },
+                    onOpenNotice = { openNotice() },
                     onCheckUpdate = { checkForUpdates(manual = true) },
                     onSwitchAccount = onSwitchAccount,
                     onAddAccount = onAddAccount,
                     onLogout = onLogout,
                 )
+            }
             }
         }
     }
@@ -820,14 +859,6 @@ internal fun MainShell(
             },
         )
     }
-}
-
-private fun chatConnectionConnected(status: String): Boolean {
-    val text = status.trim()
-    return text.contains("已连接") ||
-        text.contains("连接已恢复") ||
-        text.contains("connected", ignoreCase = true) ||
-        text.contains("reconnected", ignoreCase = true)
 }
 
 @Composable

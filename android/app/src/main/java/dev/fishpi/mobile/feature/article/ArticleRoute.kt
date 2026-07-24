@@ -3,6 +3,9 @@ package dev.fishpi.mobile.feature.article
 import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import dev.fishpi.mobile.ui.motion.FishPiMotion
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -14,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import dev.fishpi.mobile.AppSession
 import dev.fishpi.mobile.FishPiNotifier
+import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.ui.overlay.ImagePreviewOverlay
 import dev.fishpi.mobile.ui.overlay.LinkPreviewOverlay
 import dev.fishpi.mobile.ui.overlay.VideoPlaybackOverlay
@@ -28,6 +32,7 @@ internal fun ArticleRoute(
     session: AppSession,
     active: Boolean,
     jumpArticleId: String? = null,
+    jumpSummary: ArticleSummary? = null,
     jumpRequest: Int = 0,
     onDetailClosed: () -> Unit = {},
     onOpenUserProfile: (String) -> Unit = {},
@@ -38,6 +43,10 @@ internal fun ArticleRoute(
     val state by controller.state.collectAsState()
     val publishState by publishController.state.collectAsState()
     var handledJumpRequest by remember { mutableStateOf(-1) }
+    val pendingArticleJump = active &&
+        !jumpArticleId.isNullOrBlank() &&
+        jumpRequest != handledJumpRequest &&
+        state.selected == null
 
     val commentAttachmentPicker = rememberChatAttachmentPicker(
         onPickedPath = { path -> controller.dispatch(ArticleAction.UploadCommentImage(path)) },
@@ -60,7 +69,12 @@ internal fun ArticleRoute(
         val id = jumpArticleId
         if (active && !id.isNullOrBlank() && jumpRequest != handledJumpRequest) {
             handledJumpRequest = jumpRequest
-            controller.dispatch(ArticleAction.OpenArticleById(id))
+            val summary = jumpSummary
+            if (summary != null && summary.id == id) {
+                controller.dispatch(ArticleAction.OpenArticle(summary))
+            } else {
+                controller.dispatch(ArticleAction.OpenArticleById(id))
+            }
         }
     }
 
@@ -111,16 +125,26 @@ internal fun ArticleRoute(
         }
     }
 
-    if (state.publishOpen) {
-        DefaultArticlePublishUi(
-            state = publishState,
-            dispatch = publishController::dispatch,
-        )
-    } else {
-        DefaultArticleUi(
-            state = state,
-            dispatch = controller::dispatch,
-        )
+    AnimatedContent(
+        targetState = state.publishOpen,
+        transitionSpec = {
+            FishPiMotion.pushTransform(targetState).using(SizeTransform(clip = false))
+        },
+        label = "articlePublish",
+    ) { publishOpen ->
+        if (publishOpen) {
+            DefaultArticlePublishUi(
+                state = publishState,
+                dispatch = publishController::dispatch,
+            )
+        } else {
+            DefaultArticleUi(
+                state = state,
+                dispatch = controller::dispatch,
+                pendingJump = pendingArticleJump,
+                pendingJumpSummary = if (pendingArticleJump && jumpSummary?.id == jumpArticleId) jumpSummary else null,
+            )
+        }
     }
 
     (state.overlay as? ArticleOverlayState.Image)?.let { (url) ->

@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalContext
 import dev.fishpi.mobile.AppSession
 import dev.fishpi.mobile.FishPiThemeOption
 import dev.fishpi.mobile.FishPiNotifier
+import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.SavedAccount
 
@@ -29,7 +30,7 @@ internal fun ProfileRoute(
     onDeleteCustomTheme: (String) -> Boolean,
     chatWallpaperUri: String,
     onChatWallpaperChange: (String) -> Unit,
-    onOpenArticle: (String) -> Unit,
+    onOpenArticle: (String, ArticleSummary?) -> Unit,
     onCloseProfile: () -> Unit = {},
     closeOnBack: Boolean = false,
     onOpenPrivateChat: (String) -> Unit = {},
@@ -80,7 +81,7 @@ internal fun ProfileRoute(
             when (effect) {
                 is ProfileEffect.ShowMessage -> FishPiNotifier.success(effect.message)
                 is ProfileEffect.ShowError -> FishPiNotifier.error(effect.message)
-                is ProfileEffect.OpenArticle -> onOpenArticle(effect.articleId)
+                is ProfileEffect.OpenArticle -> onOpenArticle(effect.articleId, effect.summary)
                 is ProfileEffect.OpenPrivateChat -> onOpenPrivateChat(effect.username)
                 ProfileEffect.OpenNotice -> onOpenNotice()
                 ProfileEffect.CheckUpdate -> onCheckUpdate()

@@ -36,8 +36,10 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.Drafts
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Payments
@@ -97,6 +99,8 @@ import dev.fishpi.mobile.data.ExtensionStoreUploadRequest
 import dev.fishpi.mobile.plugin.PluginManager
 import dev.fishpi.mobile.plugin.PluginSource
 import dev.fishpi.mobile.ui.components.PlainBackButton
+import dev.fishpi.mobile.ui.components.FishPiScreenHeader
+import dev.fishpi.mobile.ui.theme.FishPiType
 import coil3.compose.SubcomposeAsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -152,6 +156,19 @@ internal fun DefaultExtensionStoreUi(
     var uploadOpen by remember { mutableStateOf(false) }
     var uploadSubmitted by remember { mutableStateOf(false) }
     var uploadBaseline by remember { mutableStateOf(state.uploadSuccessCount) }
+    var draftsOpen by remember { mutableStateOf(false) }
+    var editingInitial by remember { mutableStateOf<ExtensionStoreItem?>(null) }
+
+    // 草稿详情加载完成后，带着正文进入编辑（发布）表单
+    LaunchedEffect(state.editingDraft) {
+        val draft = state.editingDraft
+        if (draft != null) {
+            editingInitial = draft
+            draftsOpen = false
+            uploadOpen = true
+            dispatch(ExtensionStoreAction.ClearEditingDraft)
+        }
+    }
 
     fun actionStateFor(item: ExtensionStoreItem, versions: List<ExtensionStoreItem> = emptyList()): StoreItemAction {
         val ownership = item.ownershipIn(state.purchasedItems, versions)
@@ -224,13 +241,20 @@ internal fun DefaultExtensionStoreUi(
 
     if (uploadOpen) {
         BackHandler {
-            if (!state.isUploading) uploadOpen = false
+            if (!state.isUploading) {
+                uploadOpen = false
+                editingInitial = null
+            }
         }
         StoreUploadPage(
-            initialType = state.selectedFilter.type ?: ExtensionStoreClient.TypeAppExtension,
+            initialType = editingInitial?.type ?: state.selectedFilter.type ?: ExtensionStoreClient.TypeAppExtension,
+            initial = editingInitial,
             uploading = state.isUploading,
             onBack = {
-                if (!state.isUploading) uploadOpen = false
+                if (!state.isUploading) {
+                    uploadOpen = false
+                    editingInitial = null
+                }
             },
             onSubmit = {
                 uploadSubmitted = true
@@ -242,8 +266,23 @@ internal fun DefaultExtensionStoreUi(
             if (uploadSubmitted && state.uploadSuccessCount > uploadBaseline) {
                 uploadOpen = false
                 uploadSubmitted = false
+                editingInitial = null
             }
         }
+        return
+    }
+
+    if (draftsOpen) {
+        BackHandler { draftsOpen = false }
+        StoreDraftsPage(
+            drafts = state.drafts,
+            isLoading = state.isLoadingDrafts,
+            error = state.draftsError,
+            openingId = state.openingDraftId,
+            onBack = { draftsOpen = false },
+            onRefresh = { dispatch(ExtensionStoreAction.LoadDrafts) },
+            onOpenDraft = { dispatch(ExtensionStoreAction.OpenDraft(it)) },
+        )
         return
     }
 
@@ -307,7 +346,15 @@ internal fun DefaultExtensionStoreUi(
             authError = state.authError,
             isAuthenticating = state.isAuthenticating,
             canUpload = state.session != null && !state.isUploading,
-            onUpload = { uploadOpen = true },
+            onUpload = {
+                editingInitial = null
+                uploadOpen = true
+            },
+            canOpenDrafts = state.session != null,
+            onOpenDrafts = {
+                draftsOpen = true
+                dispatch(ExtensionStoreAction.LoadDrafts)
+            },
         )
         StoreControls(
             query = state.query,
@@ -370,53 +417,58 @@ private fun StoreTopBar(
     isAuthenticating: Boolean,
     canUpload: Boolean,
     onUpload: () -> Unit,
+    canOpenDrafts: Boolean,
+    onOpenDrafts: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    FishPiScreenHeader(
+        title = "鱼排扩展集市",
+        subtitle = when {
+            isAuthenticating -> "正在连接鱼排扩展集市"
+            authError != null -> authError
+            session != null -> "发现并获取鱼排的最新扩展与主题"
+            else -> "使用当前账号访问鱼排扩展集市"
+        },
+        titleStyle = FishPiType.displayTitle,
+        subtitleColor = if (authError == null) FishPiTheme.weakText else MaterialTheme.colorScheme.error,
+        modifier = Modifier.padding(horizontal = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Rounded.Storefront,
-                contentDescription = "鱼排扩展集市",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text("鱼排扩展集市", color = FishPiTheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-            Text(
-                text = when {
-                    isAuthenticating -> "正在连接鱼排扩展集市"
-                    authError != null -> authError
-                    session != null -> "发现并获取鱼排的最新扩展与主题"
-                    else -> "使用当前账号访问鱼排扩展集市"
-                },
-                color = if (authError == null) FishPiTheme.weakText else MaterialTheme.colorScheme.error,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        TextButton(
-            onClick = onUpload,
-            enabled = canUpload,
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-        ) {
-            Icon(Icons.Rounded.UploadFile, contentDescription = "发布扩展或主题", modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(3.dp))
-            Text("发布", fontSize = 12.sp)
-        }
-    }
+        leading = {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Rounded.Storefront,
+                    contentDescription = "鱼排扩展集市",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        },
+        actions = {
+            TextButton(
+                onClick = onOpenDrafts,
+                enabled = canOpenDrafts,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            ) {
+                Icon(Icons.Rounded.Drafts, contentDescription = "我的草稿", modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(3.dp))
+                Text("草稿", fontSize = 12.sp)
+            }
+            TextButton(
+                onClick = onUpload,
+                enabled = canUpload,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            ) {
+                Icon(Icons.Rounded.UploadFile, contentDescription = "发布扩展或主题", modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(3.dp))
+                Text("发布", fontSize = 12.sp)
+            }
+        },
+    )
 }
 
 @Composable
@@ -535,23 +587,27 @@ private fun StoreUploadPage(
     uploading: Boolean,
     onBack: () -> Unit,
     onSubmit: (ExtensionStoreUploadRequest) -> Unit,
+    initial: ExtensionStoreItem? = null,
 ) {
-    var type by remember(initialType) {
+    val editing = initial != null
+    val editKey = initial?.id
+    var type by remember(editKey, initialType) {
         mutableStateOf(
             initialType.takeIf { it == ExtensionStoreClient.TypeAppTheme }
                 ?: ExtensionStoreClient.TypeAppExtension,
         )
     }
-    var name by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var identifier by remember { mutableStateOf("") }
-    var price by remember { mutableStateOf("0") }
-    var code by remember {
+    var name by remember(editKey) { mutableStateOf(initial?.name.orEmpty()) }
+    var description by remember(editKey) { mutableStateOf(initial?.description.orEmpty()) }
+    var identifier by remember(editKey) { mutableStateOf(initial?.identifier.orEmpty()) }
+    var price by remember(editKey) { mutableStateOf(initial?.price?.trim()?.ifBlank { "0" } ?: "0") }
+    var code by remember(editKey) {
         mutableStateOf(
-            if (type == ExtensionStoreClient.TypeAppTheme) defaultAppThemeCode() else defaultAppExtensionCode(),
+            initial?.code?.takeIf { it.isNotBlank() }
+                ?: if (type == ExtensionStoreClient.TypeAppTheme) defaultAppThemeCode() else defaultAppExtensionCode(),
         )
     }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by remember(editKey) { mutableStateOf<String?>(null) }
 
     fun switchType(nextType: String) {
         if (type == nextType) return
@@ -598,23 +654,13 @@ private fun StoreUploadPage(
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+        FishPiScreenHeader(
+            title = if (editing) "编辑草稿" else "发布 APP 作品",
+            subtitle = if (type == ExtensionStoreClient.TypeAppTheme) "提交 APP 主题配置，审核通过后上架" else "提交 APP 插件脚本，审核通过后上架",
+            titleFontWeight = FontWeight.Bold,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            PlainBackButton(onClick = onBack)
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                Text("发布 APP 作品", color = FishPiTheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text(
-                    if (type == ExtensionStoreClient.TypeAppTheme) "提交 APP 主题配置，审核通过后上架" else "提交 APP 插件脚本，审核通过后上架",
-                    color = FishPiTheme.weakText,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+            leading = { PlainBackButton(onClick = onBack) },
+        )
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StoreUploadTypeChip(
@@ -711,6 +757,125 @@ private fun StoreUploadPage(
                 ),
             ) {
                 Text(if (uploading) "提交中" else "提交审核")
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoreDraftsPage(
+    drafts: List<ExtensionStoreItem>,
+    isLoading: Boolean,
+    error: String?,
+    openingId: Long?,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit,
+    onOpenDraft: (ExtensionStoreItem) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        FishPiScreenHeader(
+            title = "我的草稿",
+            subtitle = "草稿箱中未提交审核的作品",
+            titleFontWeight = FontWeight.Bold,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            leading = { PlainBackButton(onClick = onBack) },
+            actions = {
+                TextButton(
+                    onClick = onRefresh,
+                    enabled = !isLoading,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                ) {
+                    Icon(Icons.Rounded.Refresh, contentDescription = "刷新草稿", modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text("刷新", fontSize = 12.sp)
+                }
+            },
+        )
+        when {
+            isLoading -> StoreStateRow("正在加载我的草稿", busy = true)
+            error != null -> StoreStateRow(error)
+            drafts.isEmpty() -> StoreStateRow("草稿箱里还没有作品，去「发布」页存一个草稿吧")
+            else -> LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(bottom = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(drafts, key = { "${it.type}-${it.id}" }) { draft ->
+                    StoreDraftRow(
+                        item = draft,
+                        opening = openingId == draft.id,
+                        enabled = openingId == null,
+                        onClick = { onOpenDraft(draft) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoreDraftRow(
+    item: ExtensionStoreItem,
+    opening: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val isTheme = item.type == ExtensionStoreClient.TypeAppTheme
+    Surface(
+        shape = RoundedCornerShape(FishPiTheme.radiusBox),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+        border = BorderStroke(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    enabled = enabled,
+                    onClickLabel = "编辑${item.displayName()}",
+                    role = Role.Button,
+                    onClick = onClick,
+                )
+                .padding(horizontal = 12.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            StoreTypeIcon(
+                icon = if (isTheme) Icons.Rounded.Palette else Icons.Rounded.Extension,
+                contentDescription = if (isTheme) "APP 主题" else "APP 插件",
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = item.displayName(),
+                    color = FishPiTheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = item.metaLine(),
+                    color = FishPiTheme.weakText,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (opening) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(
+                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = FishPiTheme.weakText,
+                    modifier = Modifier.size(18.dp),
+                )
             }
         }
     }
@@ -1171,36 +1336,20 @@ private fun StoreDetailPageHeader(
     item: ExtensionStoreItem,
     onBack: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        PlainBackButton(onClick = onBack)
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    FishPiScreenHeader(
+        title = item.displayName(),
+        subtitle = if (item.type == ExtensionStoreClient.TypeAppTheme) "APP 主题" else "APP 插件",
+        titleFontWeight = FontWeight.Bold,
+        leading = { PlainBackButton(onClick = onBack) },
+        actions = {
             Text(
-                text = item.displayName(),
-                color = FishPiTheme.onSurface,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = if (item.type == ExtensionStoreClient.TypeAppTheme) "APP 主题" else "APP 插件",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
+                text = item.priceLabel(),
+                color = MaterialTheme.colorScheme.onSurface,
+                style = FishPiType.secondaryStrong,
                 maxLines = 1,
             )
-        }
-        Text(
-            text = item.priceLabel(),
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-        )
-    }
+        },
+    )
 }
 
 @Composable
@@ -1251,8 +1400,7 @@ private fun StoreDetailHeader(item: ExtensionStoreItem) {
         Text(
             text = "简介",
             color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
+            style = FishPiType.secondaryStrong,
         )
         Text(
             text = item.description.ifBlank { "暂无说明" },
@@ -1305,27 +1453,14 @@ private fun StoreVersionStrip(
     onSelectVersion: (ExtensionStoreItem) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "版本",
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = when {
-                    loading -> "读取中"
-                    versions.isEmpty() -> "暂无版本"
-                    else -> "共 ${versions.size} 个"
-                },
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 11.sp,
-            )
-        }
+        StoreSectionTitle(
+            title = "版本",
+            count = when {
+                loading -> "读取中"
+                versions.isEmpty() -> "暂无版本"
+                else -> "共 ${versions.size} 个"
+            },
+        )
         if (versions.isNotEmpty()) {
             Row(
                 modifier = Modifier
@@ -1409,23 +1544,10 @@ private fun StoreVersionDiffPreview(
         )
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "版本差异",
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = "v${previous.version.ifBlank { "1" }} -> 当前",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 11.sp,
-            )
-        }
+        StoreSectionTitle(
+            title = "版本差异",
+            count = "v${previous.version.ifBlank { "1" }} -> 当前",
+        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1490,27 +1612,14 @@ private fun StoreCommentsSection(
     expanded: Boolean = false,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "评论",
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = when {
-                    loading -> "读取中"
-                    comments.isEmpty() -> "暂无评论"
-                    else -> "${comments.size} 条"
-                },
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 11.sp,
-            )
-        }
+        StoreSectionTitle(
+            title = "评论",
+            count = when {
+                loading -> "读取中"
+                comments.isEmpty() -> "暂无评论"
+                else -> "${comments.size} 条"
+            },
+        )
         when {
             comments.isNotEmpty() -> LazyColumn(
                 modifier = Modifier
@@ -1843,39 +1952,30 @@ private fun StoreThemeSwatch(name: String, color: Color) {
     }
 }
 
-@Composable
-private fun StoreThemeChip(text: String) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-        contentColor = MaterialTheme.colorScheme.primary,
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
 
 @Composable
-private fun StoreDetailRow(label: String, value: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+private fun StoreSectionTitle(
+    title: String,
+    modifier: Modifier = Modifier,
+    count: String? = null,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Text(
-            text = label,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 12.sp,
-            modifier = Modifier.width(42.dp),
-        )
-        Text(
-            text = value,
+            text = title,
             color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 12.sp,
-            modifier = Modifier.weight(1f),
+            style = FishPiType.secondaryStrong,
         )
+        if (count != null) {
+            Text(
+                text = count,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = FishPiType.labelNormal,
+            )
+        }
     }
 }
 

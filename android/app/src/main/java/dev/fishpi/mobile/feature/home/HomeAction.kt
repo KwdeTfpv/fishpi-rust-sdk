@@ -19,7 +19,7 @@ internal sealed interface HomeAction {
     data object OpenArticle : HomeAction
     data class OpenArticleDetail(val articleId: String) : HomeAction
     data object OpenBreezemoon : HomeAction
-    data object OpenFun : HomeAction
+    data object OpenStore : HomeAction
     data object OpenProfile : HomeAction
     data object OpenLivenessHelp : HomeAction
     data object ClearError : HomeAction

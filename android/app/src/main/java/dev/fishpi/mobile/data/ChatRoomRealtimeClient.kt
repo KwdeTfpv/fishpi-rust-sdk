@@ -85,6 +85,7 @@ internal class ChatRoomRealtimeClient : NativeRealtimeClient() {
         private val onStatus: (String) -> Unit,
     ) {
         private val dispatcher = RealtimeEventDispatcher(mainHandler, onStatus)
+        private val customSeq = java.util.concurrent.atomic.AtomicLong(0L)
 
         @Suppress("unused")
         fun onEvent(payload: String) {
@@ -150,7 +151,7 @@ internal class ChatRoomRealtimeClient : NativeRealtimeClient() {
                         val message = event.optString("message")
                         if (message.isNotBlank()) {
                             val systemMessage = ChatRoomMessage(
-                                oId = "custom:${System.currentTimeMillis()}:$message",
+                                oId = "custom:${System.currentTimeMillis()}:${customSeq.incrementAndGet()}",
                                 userName = "",
                                 userNickname = "",
                                 content = message,

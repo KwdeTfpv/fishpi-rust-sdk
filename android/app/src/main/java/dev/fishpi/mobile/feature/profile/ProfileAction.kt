@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.feature.profile
 
 import dev.fishpi.mobile.FishPiThemeOption
+import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.SavedAccount
 
@@ -34,7 +35,7 @@ internal sealed interface ProfileAction {
     data object LoadMoreBreezemoons : ProfileAction
     data object ToggleFollow : ProfileAction
     data class Transfer(val amount: Int, val memo: String, val username: String? = null) : ProfileAction
-    data class OpenArticle(val articleId: String) : ProfileAction
+    data class OpenArticle(val articleId: String, val summary: ArticleSummary? = null) : ProfileAction
     data class OpenPrivateChat(val username: String) : ProfileAction
     data object OpenNotice : ProfileAction
     data object CheckUpdate : ProfileAction

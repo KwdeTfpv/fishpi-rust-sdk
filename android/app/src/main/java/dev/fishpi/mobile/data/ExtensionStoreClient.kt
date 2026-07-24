@@ -146,6 +146,28 @@ class ExtensionStoreClient private constructor(
         }
     }
 
+    fun getMyDrafts(token: String, type: String? = null): List<ExtensionStoreItem> {
+        if (type.isNullOrBlank()) {
+            return (getMyDrafts(token, TypeAppExtension) + getMyDrafts(token, TypeAppTheme))
+                .distinctBy { it.id }
+                .sortedByDescending { it.id }
+        }
+        val params = buildList {
+            add("type=${type.urlEncode()}")
+        }.joinToString("&")
+        val path = "/items/my-drafts?$params"
+        val data = requestJson(
+            method = "GET",
+            path = path,
+            headers = authHeaders(token),
+        ).unwrapData()
+        return when (data) {
+            is JSONArray -> data.mapObjects { it.toExtensionStoreItem() }.onlyAppItems()
+            is JSONObject -> data.optJSONArray("items")?.mapObjects { it.toExtensionStoreItem() }.orEmpty().onlyAppItems()
+            else -> emptyList()
+        }
+    }
+
     fun getItem(id: Long, token: String? = null): ExtensionStoreItem {
         val data = requestJson(
             method = "GET",

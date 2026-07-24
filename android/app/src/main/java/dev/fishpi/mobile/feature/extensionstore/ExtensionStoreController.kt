@@ -53,6 +53,9 @@ internal class ExtensionStoreController(
             }
             is ExtensionStoreAction.Purchase -> purchaseItem(action.item)
             is ExtensionStoreAction.Upload -> uploadItem(action.request)
+            ExtensionStoreAction.LoadDrafts -> loadDrafts()
+            is ExtensionStoreAction.OpenDraft -> openDraft(action.item)
+            ExtensionStoreAction.ClearEditingDraft -> _state.update { it.copy(editingDraft = null) }
         }
     }
 
@@ -182,6 +185,9 @@ internal class ExtensionStoreController(
                     ),
                 )
                 loadStore()
+                if (_state.value.drafts.isNotEmpty() || _state.value.isLoadingDrafts) {
+                    loadDrafts()
+                }
             }.onFailure { throwable ->
                 _state.update { it.copy(isUploading = false) }
                 emitEffect(
@@ -189,6 +195,46 @@ internal class ExtensionStoreController(
                         "${if (request.isDraft) "保存草稿" else "发布"}失败：${throwable.message ?: "未知错误"}",
                     ),
                 )
+            }
+        }
+    }
+
+    private fun loadDrafts() {
+        val token = _state.value.session?.accessToken
+        if (token.isNullOrBlank()) {
+            _state.update { it.copy(draftsError = "请先完成集市鉴权", drafts = emptyList()) }
+            return
+        }
+        scope.launch {
+            _state.update { it.copy(isLoadingDrafts = true, draftsError = null) }
+            runCatching {
+                withContext(Dispatchers.IO) { client.getMyDrafts(token) }
+            }.onSuccess { drafts ->
+                _state.update { it.copy(drafts = drafts, isLoadingDrafts = false) }
+            }.onFailure { throwable ->
+                _state.update {
+                    it.copy(
+                        draftsError = throwable.message ?: "草稿加载失败",
+                        isLoadingDrafts = false,
+                    )
+                }
+            }
+        }
+    }
+
+    private fun openDraft(item: ExtensionStoreItem) {
+        if (_state.value.openingDraftId != null) return
+        val token = _state.value.session?.accessToken
+        scope.launch {
+            _state.update { it.copy(openingDraftId = item.id) }
+            runCatching {
+                // 草稿列表不含正文/标识符，需拉全量详情后再填充编辑表单
+                withContext(Dispatchers.IO) { client.getItem(item.id, token) }
+            }.onSuccess { full ->
+                _state.update { it.copy(openingDraftId = null, editingDraft = full) }
+            }.onFailure { throwable ->
+                _state.update { it.copy(openingDraftId = null) }
+                emitEffect(ExtensionStoreEffect.ShowError("打开草稿失败：${throwable.message ?: "未知错误"}"))
             }
         }
     }

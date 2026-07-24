@@ -1,10 +1,7 @@
 package dev.fishpi.mobile.feature.profile
 
 import dev.fishpi.mobile.ui.components.*
-import dev.fishpi.mobile.ui.animal.AnimalAppTile
 import dev.fishpi.mobile.ui.animal.AnimalIconButton
-import dev.fishpi.mobile.ui.animal.AnimalPanel
-import dev.fishpi.mobile.ui.animal.AnimalStatusPill
 
 import androidx.activity.compose.BackHandler
 import dev.fishpi.mobile.*
@@ -14,9 +11,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
 import android.text.Html
 import android.text.method.LinkMovementMethod
-import android.webkit.MimeTypeMap
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,23 +30,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.TextButton
@@ -60,7 +50,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Article
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -68,23 +57,16 @@ import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.AttachMoney
-import androidx.compose.material.icons.rounded.LocalFireDepartment
-import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PersonAdd
-import androidx.compose.material.icons.rounded.Redeem
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Stars
 import androidx.compose.material.icons.rounded.SwitchAccount
-import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.LaunchedEffect
 import dev.fishpi.mobile.feature.chat.ChatFilterSettingsOverlay
 import dev.fishpi.mobile.ui.components.AppBottomSheet
 import dev.fishpi.mobile.ui.components.AppSheetTitle
@@ -117,7 +99,6 @@ import dev.fishpi.mobile.data.FishPiUser
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.data.SavedAccount
-import dev.fishpi.mobile.data.UserActivityView
 import dev.fishpi.mobile.data.MedalView
 import dev.fishpi.mobile.data.BreezemoonView
 import dev.fishpi.mobile.shared.message.copyToClipboard
@@ -134,14 +115,54 @@ import dev.fishpi.mobile.utils.themeHexFromRgb
 import dev.fishpi.mobile.utils.toThemeColor
 import dev.fishpi.mobile.utils.toThemeRgb
 import androidx.compose.material3.Text
-import java.io.File
-import java.net.URLEncoder
 
 @Composable
 private fun profileAccentColor(): Color = FishPiTheme.accent
 
 @Composable
 private fun profileAccentSoft(): Color = FishPiTheme.accent.copy(alpha = 0.10f)
+
+private fun LazyListScope.profileContentItems(
+    keyPrefix: String,
+    selectedTab: String,
+    articlePage: ProfilePagedState<ArticleSummary>,
+    breezePage: ProfilePagedState<BreezemoonView>,
+    dispatch: (ProfileAction) -> Unit,
+) {
+    if (selectedTab == "article") {
+        items(
+            items = articlePage.items,
+            key = { it.id },
+            contentType = { "article_row" },
+        ) { article ->
+            ProfileArticleRow(article = article, onClick = { dispatch(ProfileAction.OpenArticle(article.id, article)) })
+        }
+        if (articlePage.hasMore) {
+            item(key = "${keyPrefix}articles_more", contentType = "articles_more") {
+                ProfileArticleLoadMore(
+                    isLoading = articlePage.isLoadingMore,
+                    onLoadMore = { dispatch(ProfileAction.LoadMoreArticles) },
+                )
+            }
+        }
+    } else {
+        items(
+            items = breezePage.items,
+            key = { it.id.ifBlank { it.createTime + it.content } },
+            contentType = { "breezemoon_row" },
+        ) { breeze ->
+            ProfileBreezemoonRow(item = breeze)
+        }
+        if (breezePage.hasMore) {
+            item(key = "${keyPrefix}breeze_more", contentType = "breeze_more") {
+                ProfileArticleLoadMore(
+                    isLoading = breezePage.isLoadingMore,
+                    onLoadMore = { dispatch(ProfileAction.LoadMoreBreezemoons) },
+                )
+            }
+        }
+    }
+}
 
 @Composable
 internal fun DefaultProfileUi(
@@ -180,39 +201,13 @@ internal fun DefaultProfileUi(
                         onSelectTab = { dispatch(ProfileAction.SelectContentTab(it)) },
                     )
                 }
-                if (state.selectedContentTab == "article") {
-                    items(
-                        items = articlePage.items,
-                        key = { it.id },
-                        contentType = { "article_row" },
-                    ) { article ->
-                        ProfileArticleRow(article = article, onClick = { dispatch(ProfileAction.OpenArticle(article.id)) })
-                    }
-                    if (articlePage.hasMore) {
-                        item(key = "articles_more", contentType = "articles_more") {
-                            ProfileArticleLoadMore(
-                                isLoading = articlePage.isLoadingMore,
-                                onLoadMore = { dispatch(ProfileAction.LoadMoreArticles) },
-                            )
-                        }
-                    }
-                } else {
-                    items(
-                        items = breezePage.items,
-                        key = { it.id.ifBlank { it.createTime + it.content } },
-                        contentType = { "breezemoon_row" },
-                    ) { breeze ->
-                        ProfileBreezemoonRow(item = breeze)
-                    }
-                    if (breezePage.hasMore) {
-                        item(key = "breeze_more", contentType = "breeze_more") {
-                            ProfileArticleLoadMore(
-                                isLoading = breezePage.isLoadingMore,
-                                onLoadMore = { dispatch(ProfileAction.LoadMoreBreezemoons) },
-                            )
-                        }
-                    }
-                }
+                profileContentItems(
+                    keyPrefix = "",
+                    selectedTab = state.selectedContentTab,
+                    articlePage = articlePage,
+                    breezePage = breezePage,
+                    dispatch = dispatch,
+                )
                 state.error?.let {
                     item(key = "error", contentType = "error") {
                         Text(text = it, color = FishPiErrorRed, modifier = Modifier.padding(horizontal = 4.dp))
@@ -259,39 +254,13 @@ internal fun DefaultProfileUi(
                             onSelectTab = { dispatch(ProfileAction.SelectContentTab(it)) },
                         )
                     }
-                    if (state.selectedContentTab == "article") {
-                        items(
-                            items = articlePage.items,
-                            key = { it.id },
-                            contentType = { "article_row" },
-                        ) { article ->
-                            ProfileArticleRow(article = article, onClick = { dispatch(ProfileAction.OpenArticle(article.id)) })
-                        }
-                        if (articlePage.hasMore) {
-                            item(key = "other_articles_more", contentType = "articles_more") {
-                                ProfileArticleLoadMore(
-                                    isLoading = articlePage.isLoadingMore,
-                                    onLoadMore = { dispatch(ProfileAction.LoadMoreArticles) },
-                                )
-                            }
-                        }
-                    } else {
-                        items(
-                            items = breezePage.items,
-                            key = { it.id.ifBlank { it.createTime + it.content } },
-                            contentType = { "breezemoon_row" },
-                        ) { breeze ->
-                            ProfileBreezemoonRow(item = breeze)
-                        }
-                        if (breezePage.hasMore) {
-                            item(key = "other_breeze_more", contentType = "breeze_more") {
-                                ProfileArticleLoadMore(
-                                    isLoading = breezePage.isLoadingMore,
-                                    onLoadMore = { dispatch(ProfileAction.LoadMoreBreezemoons) },
-                                )
-                            }
-                        }
-                    }
+                    profileContentItems(
+                        keyPrefix = "other_",
+                        selectedTab = state.selectedContentTab,
+                        articlePage = articlePage,
+                        breezePage = breezePage,
+                        dispatch = dispatch,
+                    )
                 }
                 state.error?.let {
                     item(key = "error", contentType = "error") {
@@ -538,20 +507,7 @@ private fun ThemeSettingsSection(
             FishPiNotifier.error("设置聊天背景失败：${err.message ?: "无法读取图片"}")
         }
     }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FishPiTheme.radiusBox + 4.dp))
-            .background(FishPiTheme.surfaceContainer)
-            .padding(vertical = 4.dp),
-    ) {
-        Text(
-            text = "主题",
-            color = FishPiTheme.weakText,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-        )
+    FishPiSettingsSection(title = "主题") {
         options.forEach { option ->
             val isCustom = option.builtinPreset == null && option.rawJson != null
             Row(
@@ -614,33 +570,13 @@ private fun ThemeSettingsSection(
             summary = "调整基础色、品牌色、状态色、圆角、边距和层级",
             onClick = onEditTheme,
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { importLauncher.launch(arrayOf("application/octet-stream", "application/zip", "*/*")) }
-                .padding(horizontal = 14.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(profileAccentSoft()),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Add,
-                    contentDescription = null,
-                    tint = profileAccentColor(),
-                )
-            }
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(text = "导入主题包", color = FishPiTheme.onSurface, fontWeight = FontWeight.SemiBold)
-                Text(text = "选择 .fpt 文件，导入后自动应用", color = FishPiTheme.weakText)
-            }
-            Icon(imageVector = Icons.Rounded.ChevronRight, contentDescription = null, tint = FishPiTheme.weakText.copy(alpha = 0.5f))
-        }
+        FishPiSettingsRow(
+            icon = { Icon(imageVector = Icons.Rounded.Add, contentDescription = null, tint = profileAccentColor()) },
+            title = "导入主题包",
+            summary = "选择 .fpt 文件，导入后自动应用",
+            iconBoxColor = profileAccentSoft(),
+            onClick = { importLauncher.launch(arrayOf("application/octet-stream", "application/zip", "*/*")) },
+        )
         ThemeActionRow(
             title = if (chatWallpaperUri.isBlank()) "选择聊天背景图片" else "更换聊天背景图片",
             summary = if (chatWallpaperUri.isBlank()) "从相册选择图片作为聊天壁纸" else "已设置自定义背景图片",
@@ -937,7 +873,6 @@ private fun ThemeTokenColorField(
     onValueChange: (String) -> Unit,
 ) {
     val label = themeColorTitle(spec.key)
-    val token = themeColorToken(spec)
     var pickerOpen by remember(label) { mutableStateOf(false) }
     var red by remember(label) { mutableStateOf(255f) }
     var green by remember(label) { mutableStateOf(255f) }
@@ -1108,9 +1043,6 @@ private fun ThemeTokenMetricField(
     }
 }
 
-private fun themeColorToken(spec: ThemeTokenColorSpec): String =
-    spec.label.substringBefore(" ")
-
 private fun themeColorVariable(key: ThemeTokenColorKey): String = when (key) {
     ThemeTokenColorKey.Base100 -> "--color-base-100"
     ThemeTokenColorKey.Base200 -> "--color-base-200"
@@ -1212,37 +1144,20 @@ private fun ThemeActionRow(
     danger: Boolean = false,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(if (danger) FishPiErrorRed.copy(alpha = 0.12f) else profileAccentSoft()),
-            contentAlignment = Alignment.Center,
-        ) {
+    FishPiSettingsRow(
+        icon = {
             Icon(
                 imageVector = if (danger) Icons.AutoMirrored.Rounded.Logout else icon,
                 contentDescription = null,
                 tint = if (danger) FishPiErrorRed else profileAccentColor(),
             )
-        }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = title,
-                color = if (danger) FishPiErrorRed else FishPiTheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(text = summary, color = FishPiTheme.weakText)
-        }
-        Icon(imageVector = Icons.Rounded.ChevronRight, contentDescription = null, tint = FishPiTheme.onSurface.copy(alpha = 0.42f))
-    }
+        },
+        title = title,
+        summary = summary,
+        onClick = onClick,
+        danger = danger,
+        iconBoxColor = if (danger) FishPiErrorRed.copy(alpha = 0.12f) else profileAccentSoft(),
+    )
 }
 
 @Composable
@@ -1252,21 +1167,12 @@ private fun AccountSwitchCard(
     onSwitchAccount: (SavedAccount) -> Unit,
     onAddAccount: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FishPiTheme.radiusBox + 4.dp))
-            .background(FishPiTheme.surfaceContainer)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+    FishPiSettingsSection(
+        title = "账号",
+        titlePadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(
-            text = "账号",
-            color = FishPiTheme.weakText,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-        )
         if (accounts.isEmpty()) {
             Text(text = "当前还没有保存其他账号", color = FishPiTheme.weakText)
         } else {
@@ -1301,80 +1207,26 @@ private fun ProfileActionSection(
     onOpenFilters: () -> Unit,
     onLogout: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FishPiTheme.radiusBox + 4.dp))
-            .background(FishPiTheme.surfaceContainer)
-            .padding(vertical = 4.dp),
-    ) {
-        Text(
-            text = "设置与管理",
-            color = FishPiTheme.weakText,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-        )
-        ProfileActionRow(
+    FishPiSettingsSection(title = "设置与管理") {
+        FishPiSettingsRow(
             icon = { Icon(imageVector = Icons.Rounded.Block, contentDescription = null, tint = profileAccentColor()) },
             title = "聊天室过滤",
             summary = "${chatFilters.profileRuleCount()} 条规则",
             onClick = onOpenFilters,
         )
-        ProfileActionRow(
+        FishPiSettingsRow(
             icon = { Icon(imageVector = Icons.Rounded.SwitchAccount, contentDescription = null, tint = profileAccentColor()) },
             title = "账号",
             summary = if (savedAccounts.isEmpty()) "添加或切换账号" else "${savedAccounts.size} 个已保存账号",
-            onClick = {},
             enabled = false,
         )
-        ProfileActionRow(
+        FishPiSettingsRow(
             icon = { Icon(imageVector = Icons.AutoMirrored.Rounded.Logout, contentDescription = null, tint = FishPiErrorRed) },
             title = "退出登录",
             summary = "清除本机保存的 API Key",
             onClick = onLogout,
             danger = true,
         )
-    }
-}
-
-@Composable
-private fun ProfileActionRow(
-    icon: @Composable () -> Unit,
-    title: String,
-    summary: String,
-    onClick: () -> Unit,
-    enabled: Boolean = true,
-    danger: Boolean = false,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .background(if (danger) FishPiErrorRed.copy(alpha = 0.12f) else FishPiTheme.surface),
-            contentAlignment = Alignment.Center,
-        ) {
-            icon()
-        }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(
-                text = title,
-                color = if (danger) FishPiErrorRed else FishPiTheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(text = summary, color = FishPiTheme.weakText)
-        }
-        if (enabled) {
-            Icon(imageVector = Icons.Rounded.ChevronRight, contentDescription = null, tint = FishPiTheme.weakText.copy(alpha = 0.5f))
-        }
     }
 }
 
@@ -1872,8 +1724,6 @@ private fun ProfileMetaChip(text: String) {
     )
 }
 
-private fun formatProfileNumber(value: Long): String = value.toString()
-
 @Composable
 private fun ProfileStatsStrip(user: FishPiUser) {
     Row(
@@ -1882,13 +1732,13 @@ private fun ProfileStatsStrip(user: FishPiUser) {
             .padding(vertical = FishPiTheme.spacingItem),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ProfileStatColumn(value = formatProfileNumber(user.points), label = "积分", modifier = Modifier.weight(1f))
+        ProfileStatColumn(value = user.points.toString(), label = "积分", modifier = Modifier.weight(1f))
         ProfileStatDivider()
-        ProfileStatColumn(value = formatProfileNumber(user.following), label = "关注", modifier = Modifier.weight(1f))
+        ProfileStatColumn(value = user.following.toString(), label = "关注", modifier = Modifier.weight(1f))
         ProfileStatDivider()
-        ProfileStatColumn(value = formatProfileNumber(user.follower), label = "粉丝", modifier = Modifier.weight(1f))
+        ProfileStatColumn(value = user.follower.toString(), label = "粉丝", modifier = Modifier.weight(1f))
         ProfileStatDivider()
-        ProfileStatColumn(value = formatProfileNumber(user.onlineMinutes), label = "总在线/分钟", modifier = Modifier.weight(1f))
+        ProfileStatColumn(value = user.onlineMinutes.toString(), label = "总在线/分钟", modifier = Modifier.weight(1f))
     }
 }
 
@@ -1994,14 +1844,6 @@ private fun ProfileBadgeWall(
             }
         }
     }
-}
-
-private fun parseColor(raw: String, fallback: Color): Color {
-    val hex = raw.trim().removePrefix("#")
-    if (hex.isEmpty()) return fallback
-    return runCatching {
-        Color(android.graphics.Color.parseColor("#$hex"))
-    }.getOrDefault(fallback)
 }
 
 @Composable

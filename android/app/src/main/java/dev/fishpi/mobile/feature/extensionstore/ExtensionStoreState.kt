@@ -17,4 +17,9 @@ internal data class ExtensionStoreState(
     val purchasingId: Long? = null,
     val isUploading: Boolean = false,
     val uploadSuccessCount: Int = 0,
+    val drafts: List<ExtensionStoreItem> = emptyList(),
+    val isLoadingDrafts: Boolean = false,
+    val draftsError: String? = null,
+    val openingDraftId: Long? = null,
+    val editingDraft: ExtensionStoreItem? = null,
 )

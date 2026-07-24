@@ -75,7 +75,7 @@ internal class ProfileController(
             }
             ProfileAction.ToggleFollow -> toggleUserFollow()
             is ProfileAction.Transfer -> transfer(action.amount, action.memo, action.username)
-            is ProfileAction.OpenArticle -> emit(ProfileEffect.OpenArticle(action.articleId))
+            is ProfileAction.OpenArticle -> emit(ProfileEffect.OpenArticle(action.articleId, action.summary))
             is ProfileAction.OpenPrivateChat -> emit(ProfileEffect.OpenPrivateChat(action.username))
             ProfileAction.OpenNotice -> emit(ProfileEffect.OpenNotice)
             ProfileAction.CheckUpdate -> emit(ProfileEffect.CheckUpdate)
