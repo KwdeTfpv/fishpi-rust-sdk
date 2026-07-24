@@ -87,6 +87,7 @@ internal fun JSONObject.toArticleDraftView(): ArticleDraftView {
         columnTitle = optString("columnTitle"),
         chapterNo = optString("chapterNo"),
         updatedTime = optLong("updatedTime"),
+        createdTime = optLong("createdTime"),
     )
 }
 

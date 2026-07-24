@@ -869,6 +869,12 @@ private fun ArticleSettingRow(label: String, checked: Boolean, onChange: (Boolea
     }
 }
 
+private fun formatDraftTimestamp(millis: Long): String? {
+    if (millis <= 0L) return null
+    return java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+        .format(java.util.Date(millis))
+}
+
 @Composable
 private fun ArticleDraftDialog(
     drafts: List<ArticleDraftView>,
@@ -917,6 +923,13 @@ private fun ArticleDraftDialog(
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                            formatDraftTimestamp(draft.createdTime)?.let { created ->
+                                Text(
+                                    text = "创建于 $created",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
                             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
                         }
                     }

@@ -212,6 +212,24 @@ pub struct ArticleDraftSummary {
     pub chapter_no: String,
     #[serde(rename = "articleDraftUpdatedTime", default)]
     pub updated_time: u64,
+    #[serde(rename = "articleDraftCreatedTime", default)]
+    pub created_time: u64,
+    #[serde(rename = "articleDraftUserId", default)]
+    pub user_id: String,
+    #[serde(rename = "articleDraftRewardPoint", default)]
+    pub reward_point: u32,
+    #[serde(rename = "articleDraftQnAOfferPoint", default)]
+    pub qna_offer_point: u32,
+    #[serde(rename = "articleDraftShowInList", default)]
+    pub show_in_list: u32,
+    #[serde(rename = "articleDraftStatement", default)]
+    pub statement: u32,
+    #[serde(rename = "articleDraftCommentable", default)]
+    pub commentable: bool,
+    #[serde(rename = "articleDraftAnonymous", default)]
+    pub anonymous: bool,
+    #[serde(rename = "articleDraftNotifyFollowers", default)]
+    pub notify_followers: bool,
 }
 
 impl ArticleDraftSummary {
@@ -244,7 +262,7 @@ pub struct ArticleDraftDetail {
     #[serde(rename = "articleDraftRewardContent", default)]
     pub reward_content: String,
     #[serde(rename = "articleDraftRewardPoint", default)]
-    pub reward_point: String,
+    pub reward_point: u32,
     #[serde(rename = "articleDraftQnAOfferPoint", default)]
     pub qna_offer_point: u32,
     #[serde(rename = "articleDraftCommentable", default)]
@@ -259,6 +277,12 @@ pub struct ArticleDraftDetail {
     pub statement: u32,
     #[serde(rename = "articleDraftUpdatedTime", default)]
     pub updated_time: u64,
+    #[serde(rename = "articleDraftCreatedTime", default)]
+    pub created_time: u64,
+    #[serde(rename = "articleDraftSummary", default)]
+    pub summary: String,
+    #[serde(rename = "articleDraftUserId", default)]
+    pub user_id: String,
 }
 
 impl ArticleDraftDetail {

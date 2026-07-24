@@ -352,6 +352,7 @@ data class ArticleDraftView(
     val columnTitle: String,
     val chapterNo: String,
     val updatedTime: Long,
+    val createdTime: Long = 0L,
 )
 
 data class ArticleDraftDetailView(

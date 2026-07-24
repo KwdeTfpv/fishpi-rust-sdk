@@ -648,6 +648,7 @@ pub(crate) fn article_draft_summary_to_json(item: ArticleDraftSummary) -> Value 
         "columnTitle": item.column_title,
         "chapterNo": item.chapter_no,
         "updatedTime": item.updated_time,
+        "createdTime": item.created_time,
     })
 }
 
