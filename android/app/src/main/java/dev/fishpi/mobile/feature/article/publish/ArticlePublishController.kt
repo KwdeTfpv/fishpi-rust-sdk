@@ -2,6 +2,7 @@ package dev.fishpi.mobile.feature.article.publish
 
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import dev.fishpi.mobile.BuildConfig
 import dev.fishpi.mobile.core.ui.UiController
 import dev.fishpi.mobile.data.ArticleDraftPayload
 import dev.fishpi.mobile.data.FishPiApiClient
@@ -217,7 +218,8 @@ internal class ArticlePublishController(
     }
 
     private fun publish(isGoodArticle: Boolean) {
-        val next = _state.value.pendingPublishPayload ?: return
+        val pending = _state.value.pendingPublishPayload ?: return
+        val next = pending.copy(content = appendClientSignature(pending.content))
         _state.update { it.copy(pendingPublishPayload = null, submitting = true, error = null) }
         scope.launch {
             runCatching {
@@ -263,6 +265,19 @@ internal class ArticlePublishController(
     private fun emitEffect(effect: ArticlePublishEffect) {
         _effects.tryEmit(effect)
     }
+}
+
+private fun clientReleaseUrl(): String =
+    "https://github.com/${BuildConfig.UPDATE_REPO_OWNER}/${BuildConfig.UPDATE_REPO_NAME}/releases/latest"
+
+private val ClientSignatureRegex =
+    Regex("""(?m)^\s*>\s*来自\s*\[Rust 安卓客户端[^\]]*]\([^)]*releases/latest\)\s*$""")
+
+internal fun appendClientSignature(content: String): String {
+    val version = BuildConfig.VERSION_NAME.ifBlank { "未知版本" }
+    val signature = "> 来自 [Rust 安卓客户端 V$version](${clientReleaseUrl()})"
+    val stripped = content.replace(ClientSignatureRegex, "").trimEnd()
+    return if (stripped.isBlank()) signature else "$stripped\n\n$signature"
 }
 
 internal fun normalizedArticleTags(raw: String): String =
