@@ -220,8 +220,13 @@ class FishPiApiClient private constructor() {
         }
     }
 
-    fun searchAtUsers(query: String): List<String> {
-        return dataArray(FishPiNative.searchAtUsers(query)).toStringList()
+    fun searchAtUsers(query: String): List<AtUserCandidate> {
+        return dataArray(FishPiNative.searchAtUsers(query)).mapObjects { obj ->
+            AtUserCandidate(
+                userName = obj.optString("userName"),
+                avatarUrl = obj.optString("userAvatarURL"),
+            )
+        }.filter { it.userName.isNotBlank() }
     }
 
     fun getNoticeUnreadCount(apiKey: String, forceRefresh: Boolean = false): NoticeUnreadCount {

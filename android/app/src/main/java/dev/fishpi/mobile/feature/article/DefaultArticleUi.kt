@@ -17,6 +17,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.zIndex
 import dev.fishpi.mobile.ui.motion.FishPiMotion
+import dev.fishpi.mobile.ui.overlay.LocalImageViewer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -195,6 +196,7 @@ internal fun DefaultArticleUi(
     pendingJumpSummary: ArticleSummary? = null,
 ) {
     val listState = rememberLazyListState()
+    val imageViewer = LocalImageViewer.current
 
     LaunchedEffect(listState, state.articles.size, state.hasMore, state.isLoadingMore) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
@@ -289,7 +291,7 @@ internal fun DefaultArticleUi(
             onWatch = { dispatch(ArticleAction.Watch) },
             onLoadMoreComments = { dispatch(ArticleAction.LoadMoreComments) },
             onSendComment = { dispatch(ArticleAction.SendComment) },
-            onImageClick = { dispatch(ArticleAction.ShowImagePreview(it)) },
+            onImageClick = { images, index -> imageViewer.open(images, index) },
             onLinkClick = { dispatch(ArticleAction.ShowLinkPreview(it)) },
             onVideoClick = { dispatch(ArticleAction.ShowVideoPreview(it)) },
             onOpenUserProfile = { dispatch(ArticleAction.OpenUserProfile(it)) },
@@ -711,7 +713,7 @@ internal fun DefaultArticlePublishUi(
                             lineSpacingMultiplier = 1.25f,
                             imageUrls = emptyList(),
                             linkUrls = emptyList(),
-                            onImageClick = {},
+                            onImageClick = { _, _ -> },
                             onLinkClick = {},
                             onVideoClick = {},
                         )
@@ -1124,7 +1126,7 @@ private fun ArticleDetailPage(
     onWatch: () -> Unit,
     onLoadMoreComments: () -> Unit,
     onSendComment: () -> Unit,
-    onImageClick: (String) -> Unit,
+    onImageClick: (images: List<String>, index: Int) -> Unit,
     onLinkClick: (String) -> Unit,
     onVideoClick: (String) -> Unit,
     onOpenUserProfile: (String) -> Unit,
@@ -1413,12 +1415,12 @@ private fun ArticleReaderHeader(
     articleHeat: Long?,
     isActionRunning: Boolean,
     onWatch: () -> Unit,
-    onImageClick: (String) -> Unit,
+    onImageClick: (images: List<String>, index: Int) -> Unit,
     onOpenUserProfile: (String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         articleHeroImage(summary, detail)?.let { image ->
-            ArticleHeroImage(url = image, onClick = { onImageClick(image) })
+            ArticleHeroImage(url = image, onClick = { onImageClick(listOf(image), 0) })
         }
         Column(
             modifier = Modifier.padding(horizontal = 18.dp),
@@ -1614,7 +1616,7 @@ private fun ArticleRewardCard(
     isActionRunning: Boolean,
     isRewarding: Boolean,
     rewardConfirmOpen: Boolean,
-    onImageClick: (String) -> Unit,
+    onImageClick: (images: List<String>, index: Int) -> Unit,
     onLinkClick: (String) -> Unit,
     onVideoClick: (String) -> Unit,
     onRequestReward: () -> Unit,
@@ -1733,7 +1735,7 @@ private fun ArticleReaderBody(
     heroImage: String?,
     renderCache: ChatMarkdownRenderCache,
     renderScope: kotlinx.coroutines.CoroutineScope,
-    onImageClick: (String) -> Unit,
+    onImageClick: (images: List<String>, index: Int) -> Unit,
     onLinkClick: (String) -> Unit,
     onVideoClick: (String) -> Unit,
 ) {
@@ -2235,7 +2237,7 @@ private fun ArticleCommentRow(
     replyTo: ArticleReplyPreview?,
     renderCache: ChatMarkdownRenderCache,
     renderScope: kotlinx.coroutines.CoroutineScope,
-    onImageClick: (String) -> Unit,
+    onImageClick: (images: List<String>, index: Int) -> Unit,
     onLinkClick: (String) -> Unit,
     onVideoClick: (String) -> Unit,
     onOpenUserProfile: (String) -> Unit,
@@ -2448,7 +2450,7 @@ private fun ArticleMarkdownContent(
     imageUrls: List<String>,
     linkUrls: List<String>,
     modifier: Modifier = Modifier,
-    onImageClick: (String) -> Unit,
+    onImageClick: (images: List<String>, index: Int) -> Unit,
     onLinkClick: (String) -> Unit,
     onVideoClick: (String) -> Unit,
 ) {
@@ -2469,7 +2471,11 @@ private fun ArticleMarkdownContent(
                 )
                 is ArticleContentToken.Image -> ArticleInlineImage(
                     url = token.url,
-                    onClick = { onImageClick(token.url) },
+                    onClick = {
+                        val siblings = imageUrls.ifEmpty { listOf(token.url) }
+                        val hit = siblings.indexOf(token.url).takeIf { it >= 0 } ?: 0
+                        onImageClick(siblings, hit)
+                    },
                 )
                 is ArticleContentToken.Video -> ArticleVideoCard(
                     url = token.url,

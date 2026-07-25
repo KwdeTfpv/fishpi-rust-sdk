@@ -18,7 +18,6 @@ import androidx.compose.ui.platform.LocalContext
 import dev.fishpi.mobile.AppSession
 import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.data.ArticleSummary
-import dev.fishpi.mobile.ui.overlay.ImagePreviewOverlay
 import dev.fishpi.mobile.ui.overlay.LinkPreviewOverlay
 import dev.fishpi.mobile.ui.overlay.VideoPlaybackOverlay
 import dev.fishpi.mobile.feature.article.model.ArticleOverlayState
@@ -147,9 +146,6 @@ internal fun ArticleRoute(
         }
     }
 
-    (state.overlay as? ArticleOverlayState.Image)?.let { (url) ->
-        ImagePreviewOverlay(imageUrl = url, onDismiss = { controller.dispatch(ArticleAction.DismissOverlay) })
-    }
     (state.overlay as? ArticleOverlayState.Link)?.let { (url) ->
         LinkPreviewOverlay(url = url, apiKey = session.apiKey, onDismiss = { controller.dispatch(ArticleAction.DismissOverlay) })
     }

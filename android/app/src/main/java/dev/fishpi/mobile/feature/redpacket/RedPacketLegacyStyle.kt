@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,6 +39,7 @@ import androidx.compose.material.icons.rounded.InsertEmoticon
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.LocalAtm
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -63,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.vector.ImageVector
 import coil3.compose.SubcomposeAsyncImage
+import dev.fishpi.mobile.data.ChatOnlineUser
 import dev.fishpi.mobile.data.RedPacketGot
 import dev.fishpi.mobile.data.RedPacketPreview
 import dev.fishpi.mobile.FishPiErrorRed
@@ -248,6 +252,7 @@ internal fun RedPacketGestureDialog(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun RedPacketSendDialog(
     type: String,
@@ -255,6 +260,7 @@ internal fun RedPacketSendDialog(
     count: String,
     message: String,
     receivers: String,
+    onlineUsers: List<ChatOnlineUser>,
     gesture: Int,
     balance: Long?,
     isSending: Boolean,
@@ -269,7 +275,9 @@ internal fun RedPacketSendDialog(
 ) {
     var typeSheetOpen by remember { mutableStateOf(false) }
     var gestureSheetOpen by remember { mutableStateOf(false) }
+    var receiverSheetOpen by remember { mutableStateOf(false) }
     val colors = redPacketPageColors()
+    val selectedReceivers = remember(receivers) { parseRedPacketReceivers(receivers) }
     val selectedType = redPacketTypeOptions.firstOrNull { it.key == type } ?: redPacketTypeOptions.first()
     val selectedGesture = RedPacketGesture.all.firstOrNull { it.value == gesture } ?: RedPacketGesture.all.first()
     val moneyValue = money.toLongOrNull() ?: 0L
@@ -314,6 +322,14 @@ internal fun RedPacketSendDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 item {
+                    RedPacketPickerRow(
+                        label = "红包类型",
+                        value = selectedType.label,
+                        enabled = !isSending,
+                        onClick = { typeSheetOpen = true },
+                    )
+                }
+                item {
                     RedPacketFormField(
                         label = "积分",
                         value = money,
@@ -345,23 +361,27 @@ internal fun RedPacketSendDialog(
                         },
                     )
                 }
-                item {
-                    RedPacketPickerRow(
-                        label = "红包类型",
-                        value = selectedType.label,
-                        enabled = !isSending,
-                        onClick = { typeSheetOpen = true },
-                    )
-                }
                 if (type == "specify") {
                     item {
-                        RedPacketFormField(
+                        RedPacketPickerRow(
                             label = "接收者",
-                            value = receivers,
-                            placeholder = "多个用户名用空格或逗号分隔",
+                            value = if (selectedReceivers.isEmpty()) "选择在线用户" else "已选 ${selectedReceivers.size} 人",
                             enabled = !isSending,
-                            onValueChange = onReceiversChange,
+                            onClick = { receiverSheetOpen = true },
                         )
+                    }
+                    if (selectedReceivers.isNotEmpty()) {
+                        item {
+                            RedPacketReceiverChips(
+                                receivers = selectedReceivers,
+                                enabled = !isSending,
+                                onRemove = { name ->
+                                    onReceiversChange(
+                                        formatRedPacketReceivers(selectedReceivers - name),
+                                    )
+                                },
+                            )
+                        }
                     }
                 }
                 if (type == "rockPaperScissors") {
@@ -463,6 +483,74 @@ internal fun RedPacketSendDialog(
                     onGestureChange(it)
                 },
             )
+        }
+        if (receiverSheetOpen) {
+            RedPacketReceiverSheet(
+                onlineUsers = onlineUsers,
+                selected = selectedReceivers,
+                enabled = !isSending,
+                onDismiss = { receiverSheetOpen = false },
+                onToggle = { name ->
+                    onReceiversChange(
+                        formatRedPacketReceivers(toggleRedPacketReceiver(selectedReceivers, name)),
+                    )
+                },
+            )
+        }
+    }
+}
+
+private fun parseRedPacketReceivers(raw: String): List<String> {
+    val seen = LinkedHashMap<String, String>()
+    raw.split(',', '，', ' ', '\t', '\n')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .forEach { name -> seen.putIfAbsent(name.lowercase(), name) }
+    return seen.values.toList()
+}
+
+private fun formatRedPacketReceivers(names: List<String>): String = names.joinToString(" ")
+
+private fun toggleRedPacketReceiver(current: List<String>, name: String): List<String> {
+    val existing = current.firstOrNull { it.equals(name, ignoreCase = true) }
+    return if (existing != null) current - existing else current + name
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RedPacketReceiverChips(
+    receivers: List<String>,
+    enabled: Boolean,
+    onRemove: (String) -> Unit,
+) {
+    val colors = redPacketPageColors()
+    FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(colors.surface)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        receivers.forEach { name ->
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(colors.accentSoft)
+                    .clickable(enabled = enabled) { onRemove(name) }
+                    .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(text = name, color = RedPacketTop, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "移除$name",
+                    tint = RedPacketTop,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
         }
     }
 }
@@ -704,6 +792,128 @@ private fun RedPacketGestureSheet(
                     }
                     Text(text = item.label, color = colors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RedPacketReceiverSheet(
+    onlineUsers: List<ChatOnlineUser>,
+    selected: List<String>,
+    enabled: Boolean,
+    onDismiss: () -> Unit,
+    onToggle: (String) -> Unit,
+) {
+    val colors = redPacketPageColors()
+    var query by remember { mutableStateOf("") }
+    val selectedKeys = remember(selected) { selected.map { it.lowercase() }.toSet() }
+    val filtered = remember(onlineUsers, query) {
+        val q = query.trim()
+        if (q.isEmpty()) onlineUsers
+        else onlineUsers.filter { it.userName.contains(q, ignoreCase = true) }
+    }
+    RedPacketBottomSheet(title = "选择接收者（已选 ${selected.size}）", onDismiss = onDismiss) {
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(colors.mutedSurface)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(Icons.Rounded.Search, contentDescription = null, tint = colors.secondaryText, modifier = Modifier.size(18.dp))
+            BasicTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                textStyle = TextStyle(color = colors.text, fontSize = 15.sp),
+                modifier = Modifier.weight(1f),
+                decorationBox = { inner ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (query.isBlank()) {
+                            Text(text = "搜索在线用户", color = colors.secondaryText, fontSize = 15.sp)
+                        }
+                        inner()
+                    }
+                },
+            )
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        if (filtered.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (onlineUsers.isEmpty()) "暂无在线用户" else "没有匹配的用户",
+                    color = colors.secondaryText,
+                    fontSize = 14.sp,
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp),
+            ) {
+                items(filtered, key = { it.userName }) { user ->
+                    RedPacketReceiverPickRow(
+                        user = user,
+                        selected = selectedKeys.contains(user.userName.lowercase()),
+                        enabled = enabled,
+                        onClick = { onToggle(user.userName) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RedPacketReceiverPickRow(
+    user: ChatOnlineUser,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = redPacketPageColors()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        RedPacketReceiverAvatar(avatar = user.avatarUrl, name = user.userName, sizeDp = 40)
+        Text(
+            text = user.userName,
+            color = colors.text,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(if (selected) RedPacketTop else Color.Transparent)
+                .border(
+                    width = if (selected) 0.dp else 1.5.dp,
+                    color = if (selected) Color.Transparent else colors.divider,
+                    shape = CircleShape,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (selected) {
+                Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
             }
         }
     }

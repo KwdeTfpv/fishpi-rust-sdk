@@ -121,7 +121,7 @@ import dev.fishpi.mobile.ui.components.consumeTaps
 import dev.fishpi.mobile.ui.components.fishPiChatWallpaper
 import dev.fishpi.mobile.ui.components.silentTap
 import dev.fishpi.mobile.ui.media.rememberChatAttachmentPicker
-import dev.fishpi.mobile.ui.overlay.ImagePreviewOverlay
+import dev.fishpi.mobile.ui.overlay.LocalImageViewer
 import dev.fishpi.mobile.ui.overlay.LinkPreviewOverlay
 import dev.fishpi.mobile.ui.overlay.VideoPlaybackOverlay
 import dev.fishpi.mobile.data.ChatRoomMessage
@@ -133,6 +133,7 @@ import dev.fishpi.mobile.data.FishPiUser
 import dev.fishpi.mobile.data.MedalView
 import dev.fishpi.mobile.data.RedPacketOpenResult
 import dev.fishpi.mobile.data.UploadedChatFile
+import dev.fishpi.mobile.feature.chat.model.ChatMentionCandidateUiModel
 import dev.fishpi.mobile.feature.chat.barrage.ChatBarrageComposerState
 import dev.fishpi.mobile.feature.chat.barrage.ChatBarrageUiModel
 import dev.fishpi.mobile.feature.chat.barrage.ui.ChatBarrageComposerDialog
@@ -239,7 +240,6 @@ internal interface DefaultChatUiBridge {
     val error: String?
     val unreadNewMessages: Int
     val redPacketJumpTargetId: String?
-    val previewImageUrl: String?
     val previewLinkUrl: String?
     val actionMessage: ChatRoomMessage?
     val quote: ChatQuote?
@@ -265,7 +265,7 @@ internal interface DefaultChatUiBridge {
     val redPacketCountError: String?
     val redPacketReceiversError: String?
     val isUploadingAttachment: Boolean
-    val atCandidates: List<String>
+    val atCandidates: List<ChatMentionCandidateUiModel>
     val gestureRedPacket: ChatRoomMessage?
     val redPacketResult: RedPacketOpenResult?
     val redPacketResultSource: ChatRoomMessage?
@@ -288,7 +288,6 @@ internal interface DefaultChatUiBridge {
     fun showBlockedMessages()
     fun clearKeepPositionAfterPrependCount()
     fun onNearBottomChanged(nearBottom: Boolean)
-    fun showImagePreview(url: String)
     fun showLinkPreview(url: String)
     fun replaceDraft(value: String, requestFocus: Boolean = false, resetInput: Boolean = false)
     fun setQuote(quote: ChatQuote?)
@@ -298,7 +297,6 @@ internal interface DefaultChatUiBridge {
     fun openPluginManager()
     fun emitPluginToolbarAction(entry: PluginToolbarEntry, actionId: String)
     fun emitPluginMenuAction(action: PluginMenuAction, message: ChatRoomMessage)
-    fun dismissImagePreview()
     fun dismissLinkPreview()
     fun dismissMessageActions()
     fun dismissBlockedMessages()
@@ -349,7 +347,7 @@ private fun DefaultChatUiContent(
 
     val unreadNewMessages = bridge.unreadNewMessages
     val redPacketJumpTargetId = bridge.redPacketJumpTargetId
-    val previewImageUrl = bridge.previewImageUrl
+    val imageViewer = LocalImageViewer.current
     val previewLinkUrl = bridge.previewLinkUrl
     var previewVideoUrl by remember { mutableStateOf<String?>(null) }
     var onlineUsersOpen by remember { mutableStateOf(false) }
@@ -836,7 +834,7 @@ private fun DefaultChatUiContent(
                                 }
                             }
                         },
-                        onImageClick = { bridge.showImagePreview(it) },
+                        onImageClick = { images, index -> imageViewer.open(images, index) },
                         onLinkClick = { bridge.showLinkPreview(it) },
                         onLongPress = { anchor -> actionAnchor = anchor },
                         onAvatarClick = { openUserProfile(it) },
@@ -1084,10 +1082,6 @@ private fun DefaultChatUiContent(
                 },
             )
         }
-        previewImageUrl?.let { imageUrl ->
-            ImagePreviewOverlay(imageUrl = imageUrl, onDismiss = { bridge.dismissImagePreview() })
-        }
-
         previewLinkUrl?.let { linkUrl ->
             LinkPreviewOverlay(url = linkUrl, apiKey = session.apiKey, onDismiss = { bridge.dismissLinkPreview() })
         }
@@ -1216,6 +1210,7 @@ private fun DefaultChatUiContent(
                     countError = redPacketCountError,
                     receiversError = redPacketReceiversError,
                 ),
+                onlineUsers = chatOnlineUsers,
                 dispatch = { action ->
                     when (action) {
                         RedPacketAction.SendClicked -> dispatch(ChatAction.SendRedPacket)
@@ -1290,9 +1285,9 @@ private fun DefaultChatUiContent(
             BlockedMessagesOverlay(
                 messages = blockedMessages,
                 selfUsername = session.user.userName,
-                onImageClick = {
+                onImageClick = { images, index ->
                     bridge.dismissBlockedMessages()
-                    bridge.showImagePreview(it)
+                    imageViewer.open(images, index)
                 },
                 onLinkClick = {
                     bridge.dismissBlockedMessages()
@@ -1324,10 +1319,6 @@ private fun DefaultChatUiContent(
             )
             }
         }
-    }
-
-    BackHandler(enabled = active && previewImageUrl != null) {
-        bridge.dismissImagePreview()
     }
 
     BackHandler(enabled = active && previewLinkUrl != null) {
@@ -1974,7 +1965,7 @@ private fun FilterRuleEditor(
 private fun BlockedMessagesOverlay(
     messages: List<ChatRoomMessage>,
     selfUsername: String,
-    onImageClick: (String) -> Unit,
+    onImageClick: (images: List<String>, index: Int) -> Unit,
     onLinkClick: (String) -> Unit,
     onAvatarClick: (String) -> Unit,
     onAvatarLongPress: (String) -> Unit,
@@ -2063,7 +2054,7 @@ private fun BlockedMessageRow(
     message: ChatRoomMessage,
     previous: ChatRoomMessage?,
     isMine: Boolean,
-    onImageClick: (String) -> Unit,
+    onImageClick: (images: List<String>, index: Int) -> Unit,
     onLinkClick: (String) -> Unit,
     onAvatarClick: (String) -> Unit,
     onAvatarLongPress: (String) -> Unit,
@@ -2152,7 +2143,7 @@ private fun BlockedMessageRow(
                                 )
                             }
                         }
-                        imageUrls.forEach { url ->
+                        imageUrls.forEachIndexed { index, url ->
                             SubcomposeAsyncImage(
                                 model = url,
                                 contentDescription = null,
@@ -2161,7 +2152,7 @@ private fun BlockedMessageRow(
                                     .fillMaxWidth()
                                     .height(150.dp)
                                     .clip(RoundedCornerShape(FishPiTheme.radiusField))
-                                    .clickable { onImageClick(url) },
+                                    .clickable { onImageClick(imageUrls, index) },
                             )
                         }
                         hints.previewLinks.take(3).forEach { url ->

@@ -67,8 +67,6 @@ internal class PrivateChatController(
             is PrivateChatAction.RevokeMessage -> revokeMessage(action.message)
             is PrivateChatAction.ShowMessageActions -> updateConversation { it.copy(actionMessage = action.message) }
             PrivateChatAction.DismissMessageActions -> updateConversation { it.copy(actionMessage = null) }
-            is PrivateChatAction.ShowImagePreview -> updateConversation { it.copy(previewImageUrl = action.url) }
-            PrivateChatAction.DismissImagePreview -> updateConversation { it.copy(previewImageUrl = null) }
             is PrivateChatAction.ShowLinkPreview -> updateConversation { it.copy(previewLinkUrl = action.url) }
             PrivateChatAction.DismissLinkPreview -> updateConversation { it.copy(previewLinkUrl = null) }
             PrivateChatAction.KeepPositionConsumed -> updateConversation { it.copy(keepPositionAfterPrependCount = 0) }

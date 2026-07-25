@@ -59,7 +59,7 @@ import dev.fishpi.mobile.ui.components.ChatInputBar
 import dev.fishpi.mobile.shared.message.ChatListItem
 import dev.fishpi.mobile.shared.message.ChatQuote
 import dev.fishpi.mobile.ui.components.PlainBackButton
-import dev.fishpi.mobile.ui.overlay.ImagePreviewOverlay
+import dev.fishpi.mobile.ui.overlay.LocalImageViewer
 import dev.fishpi.mobile.ui.overlay.LinkPreviewOverlay
 import dev.fishpi.mobile.ui.components.LoadingScreen
 import dev.fishpi.mobile.ui.components.FloatingNoticePill
@@ -91,6 +91,7 @@ internal fun DefaultPrivateChatUi(
     val environment = LocalPrivateChatUiEnvironment.current
     val conversation = state.conversation
     val context = LocalContext.current
+    val imageViewer = LocalImageViewer.current
     val attachmentPicker = rememberChatAttachmentPicker(
         onPickedPath = { dispatch(PrivateChatAction.UploadAttachment(it)) },
         onError = { dispatch(PrivateChatAction.ShowError(it)) },
@@ -184,7 +185,7 @@ internal fun DefaultPrivateChatUi(
             toolActions = privateToolActions,
             onOpenTools = { dispatch(PrivateChatAction.OpenTools) },
             onDismissToolPanel = { dispatch(PrivateChatAction.CloseTools) },
-            onImageClick = { dispatch(PrivateChatAction.ShowImagePreview(it)) },
+            onImageClick = { images, index -> imageViewer.open(images, index) },
             onLinkClick = { dispatch(PrivateChatAction.ShowLinkPreview(it)) },
             onMessageLongPress = { dispatch(PrivateChatAction.ShowMessageActions(it)) },
             onSend = { dispatch(PrivateChatAction.SendText) },
@@ -215,12 +216,6 @@ internal fun DefaultPrivateChatUi(
         )
     }
 
-    conversation.previewImageUrl?.let { url ->
-        ImagePreviewOverlay(
-            imageUrl = url,
-            onDismiss = { dispatch(PrivateChatAction.DismissImagePreview) },
-        )
-    }
     conversation.previewLinkUrl?.let { url ->
         LinkPreviewOverlay(
             url = url,
@@ -232,15 +227,12 @@ internal fun DefaultPrivateChatUi(
     BackHandler(enabled = environment.active && conversation.actionMessage != null) {
         dispatch(PrivateChatAction.DismissMessageActions)
     }
-    BackHandler(enabled = environment.active && conversation.previewImageUrl != null) {
-        dispatch(PrivateChatAction.DismissImagePreview)
-    }
     BackHandler(enabled = environment.active && conversation.previewLinkUrl != null) {
         dispatch(PrivateChatAction.DismissLinkPreview)
     }
     BackHandler(
         enabled = environment.active && conversation.selectedPeer != null &&
-            conversation.actionMessage == null && conversation.previewImageUrl == null && conversation.previewLinkUrl == null,
+            conversation.actionMessage == null && conversation.previewLinkUrl == null,
     ) {
         dispatch(PrivateChatAction.CloseConversation)
     }
@@ -451,7 +443,7 @@ private fun PrivateConversation(
     toolActions: List<ChatToolAction>,
     onOpenTools: () -> Unit,
     onDismissToolPanel: () -> Unit,
-    onImageClick: (String) -> Unit,
+    onImageClick: (images: List<String>, index: Int) -> Unit,
     onLinkClick: (String) -> Unit,
     onMessageLongPress: (ChatRoomMessage) -> Unit,
     onSend: () -> Unit,

@@ -2,9 +2,12 @@ package dev.fishpi.mobile.feature.redpacket
 
 import androidx.compose.runtime.Composable
 
+import dev.fishpi.mobile.data.ChatOnlineUser
+
 @Composable
 internal fun DefaultRedPacketSendUi(
     form: RedPacketFormState,
+    onlineUsers: List<ChatOnlineUser>,
     dispatch: (RedPacketAction) -> Unit,
 ) {
     RedPacketSendDialog(
@@ -13,6 +16,7 @@ internal fun DefaultRedPacketSendUi(
         count = form.count,
         message = form.message,
         receivers = form.receivers,
+        onlineUsers = onlineUsers,
         gesture = form.gesture,
         balance = form.balance,
         isSending = form.isSending,

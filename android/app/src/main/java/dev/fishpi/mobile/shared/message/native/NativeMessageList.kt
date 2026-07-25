@@ -48,7 +48,7 @@ internal fun NativeMessageList(
     onNearBottomChanged: (Boolean) -> Unit,
     onNearTopChanged: (Boolean) -> Unit = {},
     onVisibleRangeChanged: (firstVisible: Int, lastVisible: Int, itemCount: Int) -> Unit = { _, _, _ -> },
-    onImageClick: (String) -> Unit,
+    onImageClick: (images: List<String>, index: Int) -> Unit,
     onLinkClick: (String) -> Unit,
     onLongPress: (MessageActionAnchor) -> Unit,
     onAvatarClick: (String) -> Unit,

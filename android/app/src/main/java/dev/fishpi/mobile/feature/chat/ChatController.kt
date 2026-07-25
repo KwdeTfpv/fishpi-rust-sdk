@@ -5,6 +5,7 @@ import dev.fishpi.mobile.shared.message.ChatQuote
 import dev.fishpi.mobile.shared.message.repeatableDraftContent
 import dev.fishpi.mobile.core.ui.UiController
 import dev.fishpi.mobile.core.ui.UiLoadState
+import dev.fishpi.mobile.data.AtUserCandidate
 import dev.fishpi.mobile.data.ChatReactionUpdate
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.ChatRoomRealtimeClient
@@ -1403,10 +1404,11 @@ internal class ChatController(
                     },
                     mentionAnchor = legacy.atAnchor,
                     mentionQuery = legacy.atQuery,
-                    mentionCandidates = legacy.atCandidates.map { username ->
+                    mentionCandidates = legacy.atCandidates.map { candidate ->
                         ChatMentionCandidateUiModel(
-                            username = username,
-                            displayName = username,
+                            username = candidate.userName,
+                            displayName = candidate.userName,
+                            avatarUrl = candidate.avatarUrl,
                         )
                     },
                     selectedEmojiGroupId = legacy.selectedEmojiGroupId,
@@ -1464,7 +1466,7 @@ internal data class ChatLegacyComposerState(
     val emojiPackError: String? = null,
     val atAnchor: Int? = null,
     val atQuery: String? = null,
-    val atCandidates: List<String> = emptyList(),
+    val atCandidates: List<AtUserCandidate> = emptyList(),
     val error: String? = null,
 )
 

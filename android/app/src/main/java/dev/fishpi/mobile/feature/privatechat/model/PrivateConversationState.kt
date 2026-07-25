@@ -30,7 +30,6 @@ internal data class PrivateConversationState(
     val isLoadingEmojiPack: Boolean = false,
     val emojiPackError: String? = null,
     val actionMessage: ChatRoomMessage? = null,
-    val previewImageUrl: String? = null,
     val previewLinkUrl: String? = null,
 )
 

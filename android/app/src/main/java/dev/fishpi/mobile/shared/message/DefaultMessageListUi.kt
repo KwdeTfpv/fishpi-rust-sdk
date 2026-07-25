@@ -26,7 +26,7 @@ internal fun DefaultMessageListUi(
         onLoadMore = { dispatch(MessageAction.LoadMoreRequested) },
         onNearBottomChanged = { dispatch(MessageAction.NearBottomChanged(it)) },
         onNearTopChanged = { dispatch(MessageAction.NearTopChanged(it)) },
-        onImageClick = { dispatch(MessageAction.ImageClicked(it)) },
+        onImageClick = { images, index -> dispatch(MessageAction.ImageClicked(images, index)) },
         onLinkClick = { dispatch(MessageAction.LinkClicked(it)) },
         onLongPress = { dispatch(MessageAction.MessageLongPressed(it)) },
         onAvatarClick = { dispatch(MessageAction.AvatarClicked(it)) },

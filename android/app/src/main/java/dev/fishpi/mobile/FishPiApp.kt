@@ -16,6 +16,7 @@ import dev.fishpi.mobile.auth.isVisitorVerificationRequired
 import dev.fishpi.mobile.data.FishPiApiClient
 import dev.fishpi.mobile.data.SavedAccount
 import dev.fishpi.mobile.data.SessionStore
+import dev.fishpi.mobile.ui.overlay.ImageViewerHost
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -229,6 +230,7 @@ fun FishPiApp() {
                 },
             )
             else -> CompositionLocalProvider(LocalAppSession provides session!!) {
+                ImageViewerHost {
                 MainShell(
                     session = session!!,
                     savedAccounts = savedAccounts,
@@ -258,6 +260,7 @@ fun FishPiApp() {
                         session = null
                     },
                 )
+                }
             }
         }
         }

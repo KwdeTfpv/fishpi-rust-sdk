@@ -28,8 +28,6 @@ internal sealed interface PrivateChatAction {
     data class RevokeMessage(val message: ChatRoomMessage) : PrivateChatAction
     data class ShowMessageActions(val message: ChatRoomMessage) : PrivateChatAction
     data object DismissMessageActions : PrivateChatAction
-    data class ShowImagePreview(val url: String) : PrivateChatAction
-    data object DismissImagePreview : PrivateChatAction
     data class ShowLinkPreview(val url: String) : PrivateChatAction
     data object DismissLinkPreview : PrivateChatAction
     data object KeepPositionConsumed : PrivateChatAction

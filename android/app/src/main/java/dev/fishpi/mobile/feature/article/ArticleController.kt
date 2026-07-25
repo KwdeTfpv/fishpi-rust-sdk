@@ -77,7 +77,6 @@ internal class ArticleController(
             ArticleAction.RequestRewardArticle -> _state.update { it.copy(rewardConfirmOpen = true) }
             ArticleAction.ConfirmRewardArticle -> rewardArticle()
             ArticleAction.DismissRewardConfirm -> _state.update { it.copy(rewardConfirmOpen = false) }
-            is ArticleAction.ShowImagePreview -> _state.update { it.copy(overlay = ArticleOverlayState.Image(action.url)) }
             is ArticleAction.ShowLinkPreview -> _state.update { it.copy(overlay = ArticleOverlayState.Link(action.url)) }
             is ArticleAction.ShowVideoPreview -> _state.update { it.copy(overlay = ArticleOverlayState.Video(action.url)) }
             ArticleAction.DismissOverlay -> _state.update { it.copy(overlay = ArticleOverlayState.None) }

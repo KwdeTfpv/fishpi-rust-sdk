@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.ui.components
 
+import dev.fishpi.mobile.feature.chat.model.ChatMentionCandidateUiModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -65,7 +66,7 @@ internal fun ChatInputBar(
     inputResetKey: Int,
     isUploadingAttachment: Boolean,
     pendingAttachments: List<UploadedChatFile>,
-    atCandidates: List<String>,
+    atCandidates: List<ChatMentionCandidateUiModel>,
     sendOnEnter: Boolean,
     emojiPanelOpen: Boolean,
     emojiGroups: List<EmojiGroupView>,
@@ -230,22 +231,10 @@ internal fun ChatInputBar(
                 }
             }
         }
-        if (atCandidates.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem), verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem)) {
-                atCandidates.forEach { username ->
-                    Text(
-                        text = "@$username",
-                        color = FishPiTheme.accent,
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
-                            .background(FishPiTheme.surfaceContainer)
-                            .clickable { onPickAtUser(username) }
-                            .padding(horizontal = FishPiTheme.spacingControl + 1.dp, vertical = 7.dp),
-                    )
-                }
-            }
-        }
+        MentionCandidatePopup(
+            candidates = atCandidates,
+            onPick = { candidate -> onPickAtUser(candidate.username) },
+        )
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(composerRadius()),

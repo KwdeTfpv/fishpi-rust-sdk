@@ -1,5 +1,11 @@
 package dev.fishpi.mobile.data
 
+/** @ 提及候选人：用户名 + 头像，供输入框候选弹窗使用。 */
+data class AtUserCandidate(
+    val userName: String,
+    val avatarUrl: String = "",
+)
+
 data class FishPiUser(
     val userId: String = "",
     val userName: String,

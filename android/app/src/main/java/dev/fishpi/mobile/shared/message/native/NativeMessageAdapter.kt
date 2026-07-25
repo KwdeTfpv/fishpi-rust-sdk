@@ -68,7 +68,7 @@ internal class NativeMessageAdapter(
     var imageLoader: ImageLoader,
     var selfUsername: String,
     var showAvatars: Boolean,
-    private val onImageClick: (String) -> Unit,
+    private val onImageClick: (images: List<String>, index: Int) -> Unit,
     private val onLinkClick: (String) -> Unit,
     private val onLongPress: (MessageActionAnchor) -> Unit,
     private val onAvatarClick: (String) -> Unit,
@@ -487,7 +487,7 @@ internal class NativeMessageViewHolder(
     private val themeProvider: () -> NativeMessageTheme,
     private val markdownRendererProvider: () -> MarkwonChatRenderer,
     private val imageLoaderProvider: () -> ImageLoader,
-    private val onImageClick: (String) -> Unit,
+    private val onImageClick: (images: List<String>, index: Int) -> Unit,
     private val onLinkClick: (String) -> Unit,
     private val onLongPress: (MessageActionAnchor) -> Unit,
     private val onAvatarClick: (String) -> Unit,
@@ -1079,7 +1079,9 @@ internal class NativeMessageViewHolder(
             }
             setOnClickListener {
                 dismissSourcePopup()
-                onImageClick(url)
+                val siblings = message.allRenderableImageUrls()
+                val index = siblings.indexOf(url).takeIf { it >= 0 } ?: 0
+                onImageClick(siblings.ifEmpty { listOf(url) }, index)
             }
             val placeholder = TextView(context).apply {
                 text = if (url.substringBefore('?').lowercase().endsWith(".gif")) "GIF" else "图片"

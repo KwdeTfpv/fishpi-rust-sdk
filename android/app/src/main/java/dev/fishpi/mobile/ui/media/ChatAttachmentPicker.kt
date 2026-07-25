@@ -3,8 +3,8 @@ package dev.fishpi.mobile.ui.media
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -14,8 +14,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import dev.fishpi.mobile.utils.copyUriToCacheFile
 import dev.fishpi.mobile.utils.createCacheFile
 import dev.fishpi.mobile.utils.CHAT_UPLOAD_MAX_BYTES
@@ -45,28 +43,11 @@ internal fun rememberChatAttachmentPicker(
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var cameraFile by remember { mutableStateOf<File?>(null) }
-    var galleryOpen by remember { mutableStateOf(false) }
-    var pendingGalleryOpen by remember { mutableStateOf(false) }
     var pendingCameraOpen by remember { mutableStateOf(false) }
 
-    fun galleryPermissions(): Array<String> {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VIDEO,
-            )
-        } else {
-            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
-    }
-
-    fun hasGalleryPermission(): Boolean {
-        return galleryPermissions().all { permission ->
-            ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    fun processPickedGalleryUri(uri: Uri, isVideo: Boolean, mimeType: String) {
+    fun processPickedGalleryUri(uri: Uri) {
+        val mimeType = context.contentResolver.getType(uri).orEmpty()
+        val isVideo = mimeType.startsWith("video/")
         val defaultExtension = galleryDefaultExtension(isVideo, mimeType)
         scope.launch {
             runCatching {
@@ -123,24 +104,17 @@ internal fun rememberChatAttachmentPicker(
         }
     }
 
-    val galleryPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions(),
-    ) { grants ->
-        val granted = grants.values.any { it }
-        if (granted) {
-            galleryOpen = true
-        } else {
-            onError("需要相册权限才能读取图片和视频")
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            processPickedGalleryUri(uri)
         }
-        pendingGalleryOpen = false
     }
     val openGalleryPicker = {
-        if (hasGalleryPermission()) {
-            galleryOpen = true
-        } else if (!pendingGalleryOpen) {
-            pendingGalleryOpen = true
-            galleryPermissionLauncher.launch(galleryPermissions())
-        }
+        galleryLauncher.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
+        )
     }
 
     val cameraLauncher = rememberLauncherForActivityResult(
@@ -185,21 +159,6 @@ internal fun rememberChatAttachmentPicker(
             onError("需要相机权限才能拍照")
         }
         pendingCameraOpen = false
-    }
-
-    if (galleryOpen) {
-        Dialog(
-            onDismissRequest = { galleryOpen = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            MediaStoreGalleryPicker(
-                onPick = { uri ->
-                    galleryOpen = false
-                    processPickedGalleryUri(uri.uri, uri.isVideo, uri.mimeType)
-                },
-                onDismiss = { galleryOpen = false },
-            )
-        }
     }
 
     return remember(context) {

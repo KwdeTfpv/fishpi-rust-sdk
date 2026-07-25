@@ -3,7 +3,7 @@ package dev.fishpi.mobile.shared.message
 import dev.fishpi.mobile.data.ChatRoomMessage
 
 internal sealed interface MessageAction {
-    data class ImageClicked(val url: String) : MessageAction
+    data class ImageClicked(val images: List<String>, val index: Int) : MessageAction
     data class LinkClicked(val url: String) : MessageAction
     data class VideoFullscreenClicked(val url: String) : MessageAction
     data class AvatarClicked(val username: String) : MessageAction

@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.UploadedChatFile
+import dev.fishpi.mobile.feature.chat.model.ChatMentionCandidateUiModel
 import dev.fishpi.mobile.shared.message.ChatQuote
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.plugin.PluginMenuAction
@@ -38,7 +39,6 @@ internal fun ChatRoute(
     val legacyMessages by chatController.legacyMessages.collectAsState()
     val legacyComposerState by chatController.legacyComposerState.collectAsState()
     val legacyInteractionState by chatController.legacyInteractionState.collectAsState()
-    var previewImageUrl by remember { mutableStateOf<String?>(null) }
     var previewLinkUrl by remember { mutableStateOf<String?>(null) }
     var actionMessage by remember { mutableStateOf<ChatRoomMessage?>(null) }
     var blockedMessagesOpen by remember { mutableStateOf(false) }
@@ -80,7 +80,6 @@ internal fun ChatRoute(
                 override val error get() = routeError ?: controllerState.error ?: legacyComposerState.error
                 override val unreadNewMessages get() = controllerState.unreadNewMessages
                 override val redPacketJumpTargetId get() = controllerState.redPacketJumpTargetId
-                override val previewImageUrl get() = previewImageUrl
                 override val previewLinkUrl get() = previewLinkUrl
                 override val actionMessage get() = actionMessage
                 override val quote get() = legacyComposerState.quote
@@ -106,7 +105,13 @@ internal fun ChatRoute(
                 override val redPacketCountError get() = legacyInteractionState.redPacketCountError
                 override val redPacketReceiversError get() = legacyInteractionState.redPacketReceiversError
                 override val isUploadingAttachment get() = legacyComposerState.isUploadingAttachment
-                override val atCandidates get() = legacyComposerState.atCandidates
+                override val atCandidates get() = legacyComposerState.atCandidates.map { candidate ->
+                    ChatMentionCandidateUiModel(
+                        username = candidate.userName,
+                        displayName = candidate.userName,
+                        avatarUrl = candidate.avatarUrl,
+                    )
+                }
                 override val gestureRedPacket get() = legacyInteractionState.gestureRedPacket
                 override val redPacketResult get() = legacyInteractionState.redPacketResult
                 override val redPacketResultSource get() = legacyInteractionState.redPacketResultSource
@@ -142,9 +147,6 @@ internal fun ChatRoute(
                 override fun onNearBottomChanged(nearBottom: Boolean) {
                     chatController.dispatch(ChatAction.FollowBottomChanged(nearBottom))
                 }
-                override fun showImagePreview(url: String) {
-                    previewImageUrl = url
-                }
                 override fun showLinkPreview(url: String) {
                     previewLinkUrl = url
                 }
@@ -158,9 +160,6 @@ internal fun ChatRoute(
                 }
                 override fun emitPluginToolbarAction(entry: PluginToolbarEntry, actionId: String) = chatController.emitPluginToolbarAction(entry, actionId)
                 override fun emitPluginMenuAction(action: PluginMenuAction, message: ChatRoomMessage) = chatController.emitPluginMenuAction(action, message)
-                override fun dismissImagePreview() {
-                    previewImageUrl = null
-                }
                 override fun dismissLinkPreview() {
                     previewLinkUrl = null
                 }

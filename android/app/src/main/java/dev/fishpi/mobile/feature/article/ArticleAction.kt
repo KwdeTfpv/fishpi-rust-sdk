@@ -39,7 +39,6 @@ internal sealed interface ArticleAction {
     data object RequestRewardArticle : ArticleAction
     data object ConfirmRewardArticle : ArticleAction
     data object DismissRewardConfirm : ArticleAction
-    data class ShowImagePreview(val url: String) : ArticleAction
     data class ShowLinkPreview(val url: String) : ArticleAction
     data class ShowVideoPreview(val url: String) : ArticleAction
     data object DismissOverlay : ArticleAction
