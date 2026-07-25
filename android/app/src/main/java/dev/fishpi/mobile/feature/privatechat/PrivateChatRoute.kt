@@ -23,6 +23,7 @@ internal fun PrivateChatRoute(
     onDetailActiveChange: (Boolean) -> Unit = {},
     onUnreadChange: (Long) -> Unit = {},
     onNoticeHandled: () -> Unit = {},
+    onJumpHandled: () -> Unit = {},
     listHeader: @Composable (ColumnScope.() -> Unit)? = null,
 ) {
     val controller = remember(session.apiKey, session.user.userName) {
@@ -41,6 +42,7 @@ internal fun PrivateChatRoute(
         val peer = jumpPeer?.trim().orEmpty()
         if (active && peer.isNotBlank()) {
             controller.dispatch(PrivateChatAction.OpenPeer(peer))
+            onJumpHandled()
         }
     }
 

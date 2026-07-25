@@ -620,6 +620,7 @@ internal fun MainShell(
                         active = tab == FishTab.Chat && chatPane == ChatPane.Home,
                         jumpPeer = privatePeerJump,
                         jumpRequest = privatePeerJumpRequest,
+                        onJumpHandled = { privatePeerJump = null },
                         onDetailActiveChange = { privateChatDetailActive = it },
                         onUnreadChange = { privateUnread = it },
                         listHeader = {
