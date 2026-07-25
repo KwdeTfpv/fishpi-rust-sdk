@@ -99,6 +99,7 @@ import dev.fishpi.mobile.ui.components.VisitorVerifyDialog
 import dev.fishpi.mobile.ui.motion.FishPiMotion
 import dev.fishpi.mobile.ui.components.statusSuccessColor
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.Lifecycle
@@ -122,6 +123,8 @@ private enum class ChatPane {
     Home,
     Room,
 }
+
+private const val ChatRealtimeGraceMillis = 20_000L
 
 private data class ShellReturn(
     val tab: FishTab,
@@ -204,7 +207,19 @@ internal fun MainShell(
     val imeTargetBottom = WindowInsets.imeAnimationTarget.getBottom(density)
     val bottomNavSuppressed = imeBottom > 0 || imeTargetBottom > 0
     val chatRoomVisible = tab == FishTab.Chat && chatPane == ChatPane.Room
-    val chatTabRealtimeEnabled = tab == FishTab.Chat && appInForeground
+
+    val onChatTab = tab == FishTab.Chat
+    var chatTabRealtimeEnabled by remember { mutableStateOf(onChatTab && appInForeground) }
+    LaunchedEffect(onChatTab, appInForeground) {
+        when {
+            onChatTab && appInForeground -> chatTabRealtimeEnabled = true // 进入/宽限期内返回:立即(复用)连接
+            !appInForeground -> chatTabRealtimeEnabled = false            // 退到后台:立即断开
+            else -> {                                                     // 仍在前台但离开了聊天 tab:宽限后再断
+                delay(ChatRealtimeGraceMillis)
+                chatTabRealtimeEnabled = false
+            }
+        }
+    }
     val totalMessageUnread = noticeUnread + privateUnread
 
     fun saveChatFilters(next: ChatFilterConfig) {
