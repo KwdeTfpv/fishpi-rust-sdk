@@ -1487,7 +1487,8 @@ internal class NativeMessageViewHolder(
             key.contains("barrager") || key.contains("弹幕") || key.contains("danmu") -> R.drawable.ic_client_danmu
             else -> R.drawable.ic_client_other
         }
-        return ContextCompat.getDrawable(view.context, res)
+
+        return runCatching { ContextCompat.getDrawable(view.context, res) }.getOrNull()
     }
 
     private fun showSourcePopup(anchor: View, sourceText: String) {
