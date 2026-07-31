@@ -8,6 +8,7 @@ import dev.fishpi.mobile.shared.message.ChatMessageRenderHints
 import dev.fishpi.mobile.shared.message.RepeatStackInfo
 import dev.fishpi.mobile.shared.message.allRenderableImageUrls
 import dev.fishpi.mobile.shared.message.messageTimeSeparator
+import dev.fishpi.mobile.shared.message.renderSource
 import dev.fishpi.mobile.shared.message.toRenderHints
 import dev.fishpi.mobile.utils.isDirectVideoUrl
 
@@ -117,7 +118,7 @@ internal class ChatRenderModelReducer {
         val blockedIdx = model.blockedMessages.indexOfFirst { it.oId == oId }
         if (blockedIdx >= 0) {
             if (!filters.blocksChatMessage(updated)) {
-                return recompute(messages, filters
+                return recompute(messages, filters)
             }
             val newBlocked = model.blockedMessages.toMutableList().also { it[blockedIdx] = updated }
             model = model.copy(blockedMessages = newBlocked)
@@ -258,7 +259,7 @@ internal fun ChatRoomMessage.renderHintCacheKey(): String {
         userAvatarURL,
         client,
         time,
-        contentHtml.hashCode().toString(),
+        renderSource.hashCode().toString(),
         linkUrls.hashCode().toString(),
         imageUrls.hashCode().toString(),
         reactionSummary.hashCode().toString(),
