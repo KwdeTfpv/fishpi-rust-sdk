@@ -7,6 +7,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -39,7 +41,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -101,12 +106,19 @@ internal object FishPiNotifier {
 internal fun FishPiNotificationHost() {
     var notice by remember { mutableStateOf<FishPiNotice?>(null) }
     var visible by remember { mutableStateOf(false) }
+    var dismissedId by remember { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(Unit) {
         FishPiNotifier.notices.collect { next ->
             notice = next
             visible = true
-            delay(next.durationMs)
+            dismissedId = null
+            var waited = 0L
+            val step = 80L
+            while (waited < next.durationMs && dismissedId != next.id) {
+                delay(step)
+                waited += step
+            }
             if (notice?.id == next.id) {
                 visible = false
                 delay(260L)
@@ -119,6 +131,10 @@ internal fun FishPiNotificationHost() {
 
     val current = notice
     if (current != null) {
+        val dismiss: () -> Unit = {
+            dismissedId = current.id
+            visible = false
+        }
         Dialog(
             onDismissRequest = {},
             properties = DialogProperties(
@@ -136,8 +152,7 @@ internal fun FishPiNotificationHost() {
                     clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
                     addFlags(
                         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                     )
                 }
             }
@@ -150,7 +165,7 @@ internal fun FishPiNotificationHost() {
                     enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
                     exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
                 ) {
-                    FishPiNotificationPill(current)
+                    FishPiNotificationPill(current, onDismiss = dismiss)
                 }
             }
         }
@@ -158,10 +173,14 @@ internal fun FishPiNotificationHost() {
 }
 
 @Composable
-private fun FishPiNotificationPill(notice: FishPiNotice) {
+private fun FishPiNotificationPill(
+    notice: FishPiNotice,
+    onDismiss: () -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
     val dark = FishPiTheme.background.luminance() < 0.5f
     val accent = notice.type.noticeColor()
+    val clipboard = LocalClipboardManager.current
     val container = if (dark) {
         FishPiTheme.surfaceElevated
     } else {
@@ -179,6 +198,30 @@ private fun FishPiNotificationPill(notice: FishPiNotice) {
                 color = FishPiTheme.outline.copy(alpha = if (dark) 0.42f else 0.18f),
                 shape = RoundedCornerShape(999.dp),
             )
+            .pointerInput(notice.id) {
+                detectTapGestures(
+                    onLongPress = {
+                        clipboard.setText(AnnotatedString(notice.message))
+                        onDismiss()
+                        FishPiNotifier.success("已复制通知内容")
+                    },
+                )
+            }
+            .pointerInput(notice.id) {
+                var dragUp = 0f
+                detectVerticalDragGestures(
+                    onDragEnd = { dragUp = 0f },
+                    onDragCancel = { dragUp = 0f },
+                    onVerticalDrag = { change, delta ->
+                        change.consume()
+                        if (delta < 0f) dragUp += -delta
+                        if (dragUp > 40f) {
+                            dragUp = 0f
+                            onDismiss()
+                        }
+                    },
+                )
+            }
             .padding(horizontal = 11.dp, vertical = 8.dp)
             .sizeIn(minHeight = 38.dp, maxWidth = 328.dp, maxHeight = 220.dp),
         verticalAlignment = Alignment.Top,
