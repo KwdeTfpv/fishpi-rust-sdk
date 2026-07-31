@@ -28,7 +28,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.imeAnimationTarget
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
@@ -157,7 +162,7 @@ import dev.fishpi.mobile.plugin.PluginToolbarEntry
 import dev.fishpi.mobile.plugin.PluginMenuAction
 import dev.fishpi.mobile.utils.appendDraftBlock
 import dev.fishpi.mobile.utils.appendMentionDraft
-import dev.fishpi.mobile.utils.isDirectVideoUrl
+import dev.fishpi.mobile.utils.toPlainMessageText
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -168,6 +173,7 @@ private const val ChatPluginFloatXKey = "x"
 private const val ChatPluginFloatYKey = "y"
 private const val ChatPluginFloatHiddenKey = "hidden"
 private const val ChatPluginFloatUnset = Int.MIN_VALUE
+private val TopicReferenceDraftRegex = Regex("""\*`#\s*.+?\s*#`\*""")
 
 @Composable
 internal fun DefaultChatUi(
@@ -227,6 +233,7 @@ private val LocalDefaultChatUiEnvironment = staticCompositionLocalOf<DefaultChat
 internal interface DefaultChatUiBridge {
     val input: String
     val messages: List<ChatRoomMessage>
+    val renderModel: dev.fishpi.mobile.feature.chat.render.ChatRenderModel
     val isLoading: Boolean
     val isLoadingMore: Boolean
     val hasMoreHistory: Boolean
@@ -303,6 +310,12 @@ internal interface DefaultChatUiBridge {
     fun showMessageActions(message: ChatRoomMessage)
 }
 
+private class ChatBoxBounds {
+    var offset: IntOffset = IntOffset.Zero
+    var size: IntSize = IntSize.Zero
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DefaultChatUiContent(
     chatFilters: ChatFilterConfig,
@@ -404,13 +417,9 @@ private fun DefaultChatUiContent(
     var actionAnchor by remember { mutableStateOf<MessageActionAnchor?>(null) }
     var pluginToolbarDismissRequest by remember { mutableStateOf(0) }
     val scrollToBottomRequest = bridge.scrollToBottomRequest
-    var chatBoxOffsetInWindow by remember { mutableStateOf(IntOffset.Zero) }
-    var chatBoxSize by remember { mutableStateOf(IntSize.Zero) }
+    val chatBoxBounds = remember { ChatBoxBounds() }
     val keepPositionAfterPrependCount = bridge.keepPositionAfterPrependCount
     val preloadedImageUrls = remember { LinkedHashSet<String>() }
-    val avatarRequestCache = remember { LinkedHashMap<String, ImageRequest>() }
-    val renderHintCache = remember { LinkedHashMap<String, ChatMessageRenderHints>() }
-    val listItemCache = remember { LinkedHashMap<String, ChatListItem>() }
 
     LaunchedEffect(Unit) {
         bridge.setPluginScene("chatRoom")
@@ -427,89 +436,11 @@ private fun DefaultChatUiContent(
         }
     }
 
-    val chatMessageBuckets = remember(messages, chatFilters) {
-        val blocked = ArrayList<ChatRoomMessage>()
-        val visible = ArrayList<ChatRoomMessage>()
-        messages.forEach { message ->
-            if (chatFilters.blocksChatMessage(message)) {
-                blocked.add(message)
-            } else {
-                visible.add(message)
-            }
-        }
-        ChatMessageBuckets(
-            blocked = blocked,
-            visible = visible,
-        )
-    }
-    val blockedMessages = chatMessageBuckets.blocked
-    val visibleMessages = chatMessageBuckets.visible
-    val avatarModels = remember(visibleMessages) {
-        visibleMessages
-            .asSequence()
-            .map { it.userAvatarURL }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .associateWith { url ->
-                avatarRequestCache.getOrPut(url) {
-                    ImageRequest.Builder(context)
-                        .data(url)
-                        .size(Size(72, 72))
-                        .build()
-                }
-            }
-            .also {
-                avatarRequestCache.retainRecentAvatarRequests(visibleMessages)
-            }
-    }
-    val visibleMessageList = remember(visibleMessages, avatarModels) {
-        val groups = buildStackedItems(visibleMessages)
-        var msgIndex = 0
-        val itemEndMessageIndexes = ArrayList<Int>(groups.size)
-        val items = groups.map { group ->
-            val message = group.messages.first()
-            val previousMsg = if (msgIndex > 0) visibleMessages[msgIndex - 1] else null
-            msgIndex += group.messages.size
-            itemEndMessageIndexes.add(msgIndex - 1)
-
-            val hintKey = message.renderHintCacheKey()
-            val previousKey = previousMsg?.renderHintCacheKey().orEmpty()
-            val itemKey = "$previousKey->$hintKey-${group.messages.size}"
-
-            val repeatStack = if (group.messages.size > 1) {
-                val participants = group.messages
-                    .asSequence()
-                    .map { it.userName.trim() to it.userAvatarURL }
-                    .filter { (username, _) -> username.isNotBlank() }
-                    .toList()
-                RepeatStackInfo(
-                    count = group.messages.size,
-                    participantUsernames = participants.map { it.first },
-                    participantAvatars = participants.map { it.second },
-                )
-            } else null
-
-            listItemCache.getOrPut(itemKey) {
-                ChatListItem(
-                    message = message,
-                    separator = if (repeatStack != null) null
-                                else messageTimeSeparator(previousMsg, message),
-                    renderHints = renderHintCache.getOrPut(hintKey) {
-                        message.toRenderHints(avatarModel = avatarModels[message.userAvatarURL])
-                    },
-                    repeatStack = repeatStack,
-                )
-            }
-        }
-        renderHintCache.retainRecentRenderHints(visibleMessages)
-        listItemCache.retainRecentListItems(visibleMessages)
-        VisibleMessageList(
-            items = items,
-            itemEndMessageIndexes = itemEndMessageIndexes,
-        )
-    }
-    val visibleMessageItems = visibleMessageList.items
-    val visibleItemEndMessageIndexes = visibleMessageList.itemEndMessageIndexes
+    val renderModel = bridge.renderModel
+    val blockedMessages = renderModel.blockedMessages
+    val visibleMessages = renderModel.visibleMessages
+    val visibleMessageItems = renderModel.visibleItems
+    val visibleItemEndMessageIndexes = renderModel.itemEndMessageIndexes
     val pluginToolbarGroups = remember(bridge.pluginToolbarEntries) {
         bridge.pluginToolbarEntries
             .groupBy { it.pluginId }
@@ -762,8 +693,8 @@ private fun DefaultChatUiContent(
                     .fillMaxWidth()
                     .onGloballyPositioned { coordinates ->
                         val position = coordinates.positionInWindow()
-                        chatBoxOffsetInWindow = IntOffset(position.x.toInt(), position.y.toInt())
-                        chatBoxSize = coordinates.size
+                        chatBoxBounds.offset = IntOffset(position.x.toInt(), position.y.toInt())
+                        chatBoxBounds.size = coordinates.size
                     },
                 verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
@@ -1022,8 +953,7 @@ private fun DefaultChatUiContent(
                     top = 2.dp,
                     bottom = 8.dp,
                 )
-                .imePadding()
-                .navigationBarsPadding(),
+                .windowInsetsPadding(WindowInsets.imeAnimationTarget.union(WindowInsets.navigationBars)),
         )
     }
 
@@ -1101,8 +1031,8 @@ private fun DefaultChatUiContent(
             }
             MessageActionBubbleMenu(
             anchor = anchor,
-            rootOffsetInWindow = chatBoxOffsetInWindow,
-            rootSize = chatBoxSize,
+            rootOffsetInWindow = chatBoxBounds.offset,
+            rootSize = chatBoxBounds.size,
             canRevoke = anchor.message.canBeRevokedBy(session),
             onDismiss = { actionAnchor = null },
             onCopyContent = { context.copyToClipboard("消息内容", anchor.message.copyableText()) },
@@ -1366,77 +1296,6 @@ private fun DefaultChatUiContent(
     }
 }
 
-private data class ChatMessageBuckets(
-    val blocked: List<ChatRoomMessage>,
-    val visible: List<ChatRoomMessage>,
-)
-
-private data class VisibleMessageList(
-    val items: List<ChatListItem>,
-    val itemEndMessageIndexes: List<Int>,
-)
-
-private fun ChatRoomMessage.renderHintCacheKey(): String {
-    val redPacketKey = redPacket?.let { packet ->
-        listOf(
-            packet.type,
-            packet.money.toString(),
-            packet.count.toString(),
-            packet.got.toString(),
-            packet.finished.toString(),
-            packet.openable.toString(),
-            packet.needGesture.toString(),
-            packet.message,
-        ).joinToString(":")
-    }.orEmpty()
-    return listOf(
-        stableMessageIdentity(),
-        type,
-        revoked.toString(),
-        userAvatarURL,
-        client,
-        time,
-        contentHtml.hashCode().toString(),
-        linkUrls.hashCode().toString(),
-        imageUrls.hashCode().toString(),
-        reactionSummary.hashCode().toString(),
-        currentUserReaction,
-        redPacketKey,
-    ).joinToString("|")
-}
-
-private fun LinkedHashMap<String, ChatMessageRenderHints>.retainRecentRenderHints(
-    visibleMessages: List<ChatRoomMessage>,
-) {
-    val activeKeys = visibleMessages.takeLast(180).mapTo(HashSet()) { it.renderHintCacheKey() }
-    entries.removeIf { (key, _) -> key !in activeKeys }
-}
-
-private fun LinkedHashMap<String, ChatListItem>.retainRecentListItems(
-    visibleMessages: List<ChatRoomMessage>,
-) {
-    val recentMessages = visibleMessages.takeLast(180)
-    val firstRecentIndex = visibleMessages.size - recentMessages.size
-    val activeKeys = recentMessages.mapIndexedTo(HashSet()) { index, message ->
-        val previousKey = when {
-            index > 0 -> recentMessages[index - 1].renderHintCacheKey()
-            firstRecentIndex > 0 -> visibleMessages[firstRecentIndex - 1].renderHintCacheKey()
-            else -> ""
-        }
-        "$previousKey->${message.renderHintCacheKey()}"
-    }
-    entries.removeIf { (key, _) -> key !in activeKeys }
-}
-
-private fun LinkedHashMap<String, ImageRequest>.retainRecentAvatarRequests(
-    visibleMessages: List<ChatRoomMessage>,
-) {
-    val activeUrls = visibleMessages
-        .takeLast(220)
-        .mapNotNullTo(HashSet()) { message -> message.userAvatarURL.takeIf { it.isNotBlank() } }
-    entries.removeIf { (url, _) -> url !in activeUrls }
-}
-
 private data class ChatPreloadImage(
     val url: String,
     val width: Int,
@@ -1468,46 +1327,6 @@ private fun String.isAnimatedListImageUrl(): Boolean {
     return path.endsWith(".gif") || contains("image/gif", ignoreCase = true)
 }
 
-private fun ChatRoomMessage.stableMessageIdentity(): String =
-    oId.ifBlank { "$time:${displayName}:$content" }
-
-private fun shouldStack(message: ChatRoomMessage): Boolean {
-    return message.type != "system" && message.type != "redPacket" && message.redPacket == null
-}
-
-private fun ChatRoomMessage.repeatStackKey(): String {
-    val mediaUrls = (allRenderableImageUrls() + linkUrls.filter { it.isDirectVideoUrl() })
-        .distinct()
-        .joinToString("\u001F")
-    return listOf(content, mediaUrls).joinToString("\u001E")
-}
-
-private data class StackGroup(val messages: List<ChatRoomMessage>)
-
-private fun buildStackedItems(messages: List<ChatRoomMessage>): List<StackGroup> {
-    val groups = mutableListOf<StackGroup>()
-    var i = 0
-    while (i < messages.size) {
-        val current = messages[i]
-        if (!shouldStack(current)) {
-            groups.add(StackGroup(listOf(current)))
-            i++
-            continue
-        }
-        val currentKey = current.repeatStackKey()
-        var j = i + 1
-        while (j < messages.size &&
-            shouldStack(messages[j]) &&
-            messages[j].repeatStackKey() == currentKey
-        ) {
-            j++
-        }
-        groups.add(StackGroup(messages.subList(i, j)))
-        i = j
-    }
-    return groups
-}
-
 internal fun ChatFilterConfig.blocksChatMessage(message: ChatRoomMessage): Boolean =
     runCatching { blocksChatMessageInternal(message) }.getOrDefault(false)
 
@@ -1523,7 +1342,8 @@ private fun ChatFilterConfig.blocksChatMessageInternal(message: ChatRoomMessage)
         }
     }
 
-    val content = message.content.lowercase()
+    val plainText = message.renderSource.toPlainMessageText()
+    val content = plainText.lowercase()
     blockedKeywords.forEach { item ->
         val keyword = item.trim().lowercase()
         if (keyword.isNotBlank() && content.contains(keyword)) {
@@ -1538,7 +1358,7 @@ private fun ChatFilterConfig.blocksChatMessageInternal(message: ChatRoomMessage)
         }
     }
 
-    if (matchesBlockedRegex(message.content)) {
+    if (matchesBlockedRegex(plainText)) {
         return true
     }
 
@@ -1573,7 +1393,7 @@ private fun appendTopicReferenceDraft(current: String, topic: String): String {
 
 private fun normalizeTopicReferenceDraft(input: String): String {
     val text = input.trim()
-    val match = Regex("""\*`#\s*.+?\s*#`\*""").find(text) ?: return input
+    val match = TopicReferenceDraftRegex.find(text) ?: return input
     val reference = match.value
     val before = text.substring(0, match.range.first).trim()
     val after = text.substring(match.range.last + 1).trim()

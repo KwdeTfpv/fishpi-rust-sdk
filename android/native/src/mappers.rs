@@ -50,7 +50,7 @@ pub(crate) fn chat_message_to_json(msg: ChatRoomMsg, _self_username: &str) -> Va
             .map(ToString::to_string)
             .unwrap_or_else(|| "【红包消息】".to_string())
     } else if content_md.is_empty() {
-        strip_html_tags(&content_html)
+        content_html.clone()
     } else {
         content_md.clone()
     };
@@ -61,7 +61,6 @@ pub(crate) fn chat_message_to_json(msg: ChatRoomMsg, _self_username: &str) -> Va
         "userAvatarURL": msg.user_avatar_url,
         "content": content,
         "md": content_md,
-        "contentHtml": if is_redpacket { String::new() } else { content_html },
         "time": msg.time,
         "client": msg.client,
         "type": msg.r#type.as_str(),
@@ -90,7 +89,6 @@ pub(crate) fn music_message_to_json(msg: MusicMsg) -> Value {
         "userAvatarURL": msg.base.user_avatar_url,
         "content": raw_music_text.clone(),
         "md": raw_music_text,
-        "contentHtml": String::new(),
         "time": msg.base.time,
         "client": msg.base.client,
         "type": msg.base.r#type.as_str(),
@@ -158,7 +156,7 @@ pub(crate) fn private_message_to_json(msg: ChatData, _self_username: &str) -> Va
     let content_html = msg.content.clone();
     let content_md = msg.markdown.trim().to_string();
     let content = if content_md.is_empty() {
-        strip_html_tags(&content_html)
+        content_html.clone()
     } else {
         content_md.clone()
     };
@@ -171,7 +169,6 @@ pub(crate) fn private_message_to_json(msg: ChatData, _self_username: &str) -> Va
         "userAvatarURL": msg.sender_avatar,
         "content": content,
         "md": content_md,
-        "contentHtml": content_html,
         "imageUrls": image_urls,
         "linkUrls": link_urls,
         "time": msg.time,

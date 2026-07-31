@@ -3,10 +3,13 @@ package dev.fishpi.mobile.shared.message
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.utils.HtmlAnchorHrefRegex
 import dev.fishpi.mobile.utils.HtmlImageSrcRegex
-import dev.fishpi.mobile.utils.HtmlTagRegex
 import dev.fishpi.mobile.utils.MarkdownImageRegex
 import dev.fishpi.mobile.utils.MarkdownVideoRegex
-import dev.fishpi.mobile.utils.decodeBasicHtmlEntities
+import dev.fishpi.mobile.utils.MarkdownMediaToken
+import dev.fishpi.mobile.utils.MarkdownMediaType
+import dev.fishpi.mobile.utils.cleanImageSplitTextSegment
+import dev.fishpi.mobile.utils.extractImageTokens
+import dev.fishpi.mobile.utils.toPlainMessageText
 import dev.fishpi.mobile.utils.extractMarkdownAndPlainUrls
 import dev.fishpi.mobile.utils.isDirectImageUrl
 import dev.fishpi.mobile.utils.isDirectVideoUrl
@@ -22,21 +25,69 @@ internal data class ChatMessageRenderHints(
     val markdownContent: String = "",
     val plainFallback: String = "",
     val avatarModel: Any? = null,
+    val imageTokens: List<MarkdownMediaToken> = emptyList(),
+    val isMediaOnly: Boolean = false,
 )
 
 internal fun ChatRoomMessage.toRenderHints(avatarModel: Any? = null): ChatMessageRenderHints {
-    val markdownContent = md.ifBlank { contentHtml.ifBlank { content } }.trim()
+    val markdownContent = renderSource.trim()
     val inlineVideoLinks = markdownContent.markdownVideoUrls()
     val videoLinks = previewVideoUrls().filterNot(inlineVideoLinks::contains)
+    val plainFallback = markdownContent.toPlainMessageText()
+    val imageTokens = markdownContent.extractImageTokens()
     return ChatMessageRenderHints(
         previewLinks = previewLinkUrls(markdownContent).filterNot(videoLinks::contains),
         videoLinks = videoLinks,
         clientLabel = client.cleanClientType(),
         timeLabel = time.toMessageTimeLabelOrNull().orEmpty(),
         markdownContent = markdownContent,
-        plainFallback = content.ifBlank { markdownContent.toPlainFallback() },
+        plainFallback = plainFallback,
         avatarModel = avatarModel,
+        imageTokens = imageTokens,
+        isMediaOnly = computeIsMediaOnly(
+            revoked = revoked,
+            hasRedPacket = redPacket != null,
+            markdownContent = markdownContent,
+            plainFallback = plainFallback,
+            hasVideoLinks = videoLinks.isNotEmpty(),
+            imageTokens = imageTokens,
+        ),
     )
+}
+
+private fun computeIsMediaOnly(
+    revoked: Boolean,
+    hasRedPacket: Boolean,
+    markdownContent: String,
+    plainFallback: String,
+    hasVideoLinks: Boolean,
+    imageTokens: List<MarkdownMediaToken>,
+): Boolean {
+    if (revoked || hasRedPacket) return false
+    val markdown = markdownContent.trim()
+    val text = plainFallback.trim()
+    val hasRenderableMedia = imageTokens.any {
+        it.type == MarkdownMediaType.Image || it.type == MarkdownMediaType.Video
+    } || hasVideoLinks
+    if (!hasRenderableMedia) return false
+    val stripped = buildString {
+        var cursor = 0
+        imageTokens.forEach { token ->
+            if (token.start > cursor) {
+                append(markdown.substring(cursor, token.start.coerceAtMost(markdown.length)))
+            }
+            cursor = token.end.coerceAtMost(markdown.length)
+        }
+        if (cursor < markdown.length) {
+            append(markdown.substring(cursor))
+        }
+    }.cleanImageSplitTextSegment().trim()
+    val hasBodyText = if (markdown.isNotBlank()) {
+        stripped.isNotBlank()
+    } else {
+        text.isNotBlank()
+    }
+    return !hasBodyText
 }
 
 private val HtmlBlockQuoteRegex = Regex("<blockquote\\b[^>]*>(.*?)</blockquote>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
@@ -98,8 +149,8 @@ private fun String.extractLinkUrls(): List<String> {
 
 private fun ChatRoomMessage.previewVideoUrls(): List<String> {
     val fromLinks = linkUrls.filter { it.isDirectVideoUrl() }
-    val fromMarkdownVideoLinks = md.ifBlank { contentHtml.ifBlank { content } }.markdownVideoUrls()
-    val fromContent = VideoUrlRegex.findAll(md.ifBlank { contentHtml.ifBlank { content } })
+    val fromMarkdownVideoLinks = renderSource.markdownVideoUrls()
+    val fromContent = VideoUrlRegex.findAll(renderSource)
         .map { it.value.trimUrlPunctuation() }
         .map(String::normalizeWebUrl)
         .filter { it.isDirectVideoUrl() }
@@ -151,20 +202,13 @@ private fun String.cleanClientType(): String {
         .replace('_', ' ')
 }
 
-private fun String.toPlainFallback(): String {
-    return replace(MarkdownImageRegex) { match -> match.groupValues.getOrNull(1).orEmpty() }
-        .replace(HtmlTagRegex, "")
-        .decodeBasicHtmlEntities()
-        .trim()
-}
-
 internal fun ChatRoomMessage.allRenderableImageUrls(): List<String> {
-    val markdownOrText = md.ifBlank { contentHtml.ifBlank { content } }
+    val markdownOrText = renderSource
     val fromArray = imageUrls.asSequence()
     val fromMarkdown = MarkdownImageRegex.findAll(markdownOrText)
         .map { it.groupValues.getOrNull(1).orEmpty() }
     val fromHtml = if (md.isBlank()) {
-        HtmlImageSrcRegex.findAll(contentHtml).map { it.groupValues.getOrNull(2).orEmpty() }
+        HtmlImageSrcRegex.findAll(content).map { it.groupValues.getOrNull(2).orEmpty() }
     } else {
         emptySequence()
     }

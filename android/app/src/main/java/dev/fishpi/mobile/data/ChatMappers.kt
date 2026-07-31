@@ -11,7 +11,6 @@ internal fun JSONObject.toChatRoomMessage(): ChatRoomMessage {
         userAvatarURL = optString("userAvatarURL"),
         content = optString("content"),
         md = optString("md"),
-        contentHtml = optString("contentHtml"),
         imageUrls = optJSONArray("imageUrls").toStringList(),
         linkUrls = optJSONArray("linkUrls").toStringList(),
         time = optString("time"),

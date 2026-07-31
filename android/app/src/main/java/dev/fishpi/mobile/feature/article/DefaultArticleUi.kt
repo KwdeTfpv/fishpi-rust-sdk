@@ -142,6 +142,8 @@ import dev.fishpi.mobile.feature.article.publish.ArticlePublishEditorTarget
 import dev.fishpi.mobile.feature.article.publish.ArticlePublishState
 import dev.fishpi.mobile.feature.article.publish.ArticleRecommendedTags
 import dev.fishpi.mobile.utils.HtmlAnchorHrefRegex
+import dev.fishpi.mobile.utils.HtmlTagRegex
+import dev.fishpi.mobile.utils.WhitespaceRegex
 import dev.fishpi.mobile.utils.MarkdownLinkRegex
 import dev.fishpi.mobile.utils.MarkdownImageRegex
 import dev.fishpi.mobile.utils.PlainUrlRegex
@@ -2220,12 +2222,12 @@ private fun ArticleCommentView.toArticleReplyPreview(): ArticleReplyPreview =
         label = displayLabel(),
         avatar = avatar,
         preview = content
-            .replace(Regex("<[^>]+>"), "")
+            .replace(HtmlTagRegex, "")
             .replace("&nbsp;", " ")
             .replace("&amp;", "&")
             .replace("&lt;", "<")
             .replace("&gt;", ">")
-            .replace(Regex("\\s+"), " ")
+            .replace(WhitespaceRegex, " ")
             .trim()
             .ifBlank { "图片或富文本评论" },
     )
@@ -2457,7 +2459,11 @@ private fun ArticleMarkdownContent(
     val tokens = remember(source, imageUrls, linkUrls) {
         source.articleContentTokens(linkUrls = linkUrls, imageUrls = imageUrls)
     }
+    val galleryImages = remember(tokens) {
+        tokens.mapNotNull { (it as? ArticleContentToken.Image)?.url }
+    }
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        var galleryIndex = -1
         tokens.forEachIndexed { index, token ->
             when (token) {
                 is ArticleContentToken.Text -> ArticleMarkdownText(
@@ -2469,14 +2475,17 @@ private fun ArticleMarkdownContent(
                     lineSpacingMultiplier = lineSpacingMultiplier,
                     onLinkClick = onLinkClick,
                 )
-                is ArticleContentToken.Image -> ArticleInlineImage(
-                    url = token.url,
-                    onClick = {
-                        val siblings = imageUrls.ifEmpty { listOf(token.url) }
-                        val hit = siblings.indexOf(token.url).takeIf { it >= 0 } ?: 0
-                        onImageClick(siblings, hit)
-                    },
-                )
+                is ArticleContentToken.Image -> {
+                    galleryIndex += 1
+                    val hit = galleryIndex
+                    ArticleInlineImage(
+                        url = token.url,
+                        onClick = {
+                            val siblings = galleryImages.ifEmpty { listOf(token.url) }
+                            onImageClick(siblings, hit.coerceIn(0, siblings.lastIndex))
+                        },
+                    )
+                }
                 is ArticleContentToken.Video -> ArticleVideoCard(
                     url = token.url,
                     label = token.label,

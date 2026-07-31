@@ -30,7 +30,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -98,7 +97,6 @@ internal class MarkwonRendererCore(
         key: String,
         markdown: String,
         fallback: String,
-        showSourceWhileRendering: Boolean = true,
         configureTextView: (TextView) -> Unit,
     ): Job? {
         val source = markdown.ifBlank { fallback }
@@ -115,14 +113,7 @@ internal class MarkwonRendererCore(
             return null
         }
 
-        if (!showSourceWhileRendering && source.length <= InlineRenderMaxChars) {
-            val rendered = renderBlocking(source)
-            cache.put(renderKey, rendered, source.length)
-            textView.text = rendered
-            return null
-        }
-
-        textView.text = if (showSourceWhileRendering) fallback.ifBlank { source.take(300) } else ""
+        textView.text = fallback.ifBlank { source.take(300) }
         return scope.launch {
             val rendered = render(source)
             cache.put(renderKey, rendered, source.length)
@@ -142,14 +133,6 @@ internal class MarkwonRendererCore(
     private suspend fun render(source: String): Spanned {
         return markwonLock.withLock {
             renderMarkdown(source)
-        }
-    }
-
-    private fun renderBlocking(source: String): Spanned {
-        return runBlocking {
-            markwonLock.withLock {
-                renderMarkdown(source)
-            }
         }
     }
 
@@ -259,10 +242,6 @@ internal class MarkwonRendererCore(
 
     private fun cacheKey(key: String, source: String): String =
         "$cachePrefix|$key|${source.hashCode()}|$styleHash"
-
-    private companion object {
-        const val InlineRenderMaxChars = 1200
-    }
 }
 
 private interface QuoteNeutralSpan

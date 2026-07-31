@@ -2,6 +2,7 @@ package dev.fishpi.mobile.feature.chat
 
 import android.content.Context
 import dev.fishpi.mobile.shared.message.ChatQuote
+import dev.fishpi.mobile.shared.message.renderSource
 import dev.fishpi.mobile.shared.message.repeatableDraftContent
 import dev.fishpi.mobile.core.ui.UiController
 import dev.fishpi.mobile.core.ui.UiLoadState
@@ -16,7 +17,9 @@ import dev.fishpi.mobile.data.RedPacketOpenResult
 import dev.fishpi.mobile.data.RedPacketStatusUpdate
 import dev.fishpi.mobile.data.SessionStore
 import dev.fishpi.mobile.data.UploadedChatFile
-import dev.fishpi.mobile.feature.chat.mapper.toChatMessageUiModels
+import dev.fishpi.mobile.data.ChatFilterConfig
+import dev.fishpi.mobile.feature.chat.render.ChatRenderModel
+import dev.fishpi.mobile.feature.chat.render.ChatRenderModelReducer
 import dev.fishpi.mobile.feature.chat.barrage.ChatBarrageUiModel
 import dev.fishpi.mobile.feature.chat.model.ChatComposerState
 import dev.fishpi.mobile.feature.chat.model.ChatConnectionState
@@ -73,6 +76,29 @@ internal class ChatController(
     private val _effects = MutableSharedFlow<ChatEffect>(extraBufferCapacity = 16)
     val effects: SharedFlow<ChatEffect> = _effects.asSharedFlow()
     val legacyMessages: StateFlow<List<ChatRoomMessage>> = rawMessages.asStateFlow()
+
+    private val renderReducer = ChatRenderModelReducer()
+    private var currentFilters = ChatFilterConfig()
+    private val _renderModel = MutableStateFlow(ChatRenderModel())
+    val renderModel: StateFlow<ChatRenderModel> = _renderModel.asStateFlow()
+
+    fun setChatFilters(filters: ChatFilterConfig) {
+        if (filters == currentFilters) return
+        currentFilters = filters
+        refreshRenderModel()
+    }
+
+    private fun refreshRenderModel() {
+        _renderModel.value = renderReducer.recompute(rawMessages.value, currentFilters)
+    }
+
+    private fun appendRenderModel(appended: ChatRoomMessage) {
+        _renderModel.value = renderReducer.onAppended(rawMessages.value, appended, currentFilters)
+    }
+
+    private fun replaceRenderModel(oId: String) {
+        _renderModel.value = renderReducer.onReplaced(rawMessages.value, oId, currentFilters)
+    }
 
     private val _legacyComposerState = MutableStateFlow(ChatLegacyComposerState())
     val legacyComposerState: StateFlow<ChatLegacyComposerState> = _legacyComposerState.asStateFlow()
@@ -361,7 +387,7 @@ internal class ChatController(
         val next = current.filterNot { it.isLocallySynthesized }
         if (next.size == current.size) return
         rawMessages.value = next
-        _state.update { it.copy(messages = next.toChatMessageUiModels(currentUsername)) }
+        refreshRenderModel()
     }
 
     fun refreshHistory(
@@ -410,9 +436,9 @@ internal class ChatController(
                 }
                 val merged = if (locallySynthesized.isEmpty()) historyWithEcho else historyWithEcho + locallySynthesized
                 rawMessages.value = merged
+                refreshRenderModel()
                 _state.update {
                     it.copy(
-                        messages = merged.toChatMessageUiModels(currentUsername),
                         isLoading = false,
                         loadState = UiLoadState.Idle,
                         nextHistoryPage = 2,
@@ -476,6 +502,7 @@ internal class ChatController(
                 val uniqueOlder = older.filterNot { it.historyStableKey() in existingKeys }
                 val nextMessages = if (uniqueOlder.isNotEmpty()) uniqueOlder + previous else previous
                 rawMessages.value = nextMessages
+                refreshRenderModel()
                 val duplicateStreak = if (older.isEmpty() || uniqueOlder.isEmpty()) {
                     snapshot.duplicateHistoryPageStreak + 1
                 } else {
@@ -483,7 +510,6 @@ internal class ChatController(
                 }
                 _state.update {
                     it.copy(
-                        messages = nextMessages.toChatMessageUiModels(currentUsername),
                         isLoadingMore = false,
                         historyLoadState = UiLoadState.Idle,
                         nextHistoryPage = page + 1,
@@ -545,7 +571,7 @@ internal class ChatController(
                 this[optimisticIndex] = incoming.copy(echoKey = echoKey)
             }
             rawMessages.value = replaced
-            _state.update { it.copy(messages = replaced.toChatMessageUiModels(currentUsername)) }
+            refreshRenderModel()
             return
         }
 
@@ -560,9 +586,9 @@ internal class ChatController(
             nextMessages
         }
         rawMessages.value = retainedMessages
+        appendRenderModel(incoming)
         _state.update {
             it.copy(
-                messages = retainedMessages.toChatMessageUiModels(currentUsername),
                 unreadNewMessages = when {
                     blocked -> it.unreadNewMessages
                     keepFollowing -> it.unreadNewMessages
@@ -578,62 +604,53 @@ internal class ChatController(
     }
 
     private fun ChatRoomMessage.matchesOptimistic(incoming: ChatRoomMessage): Boolean {
-        val mineText = md.ifBlank { content }.trim()
-        val theirText = incoming.md.ifBlank { incoming.content }.trim()
+        val mineText = renderSource.trim()
+        val theirText = incoming.renderSource.trim()
         return mineText.isNotEmpty() && mineText == theirText
     }
 
+    private inline fun updateMessageByOId(
+        oId: String,
+        transform: (ChatRoomMessage) -> ChatRoomMessage,
+    ): ChatRoomMessage? {
+        if (oId.isBlank()) return null
+        val current = rawMessages.value
+        val index = current.indexOfFirst { it.oId == oId }
+        if (index < 0) return null
+        val updated = transform(current[index])
+        rawMessages.value = current.toMutableList().also { it[index] = updated }
+        replaceRenderModel(oId)
+        return updated
+    }
+
     private fun onRevoke(messageId: String) {
-        if (messageId.isBlank()) return
-        val nextMessages = rawMessages.value.map { message ->
-            if (message.oId == messageId) {
-                message.copy(revoked = true)
-            } else {
-                message
-            }
-        }
-        rawMessages.value = nextMessages
-        _state.update { it.copy(messages = nextMessages.toChatMessageUiModels(currentUsername)) }
+        updateMessageByOId(messageId) { it.copy(revoked = true) }
     }
 
     private fun onReaction(update: ChatReactionUpdate) {
-        if (update.messageId.isBlank()) return
-        val nextMessages = rawMessages.value.map { message ->
-            if (message.oId == update.messageId) {
-                message.copy(
-                    reactionSummary = update.summary,
-                    currentUserReaction = update.summary.firstOrNull { it.selected }?.value.orEmpty(),
-                )
-            } else {
-                message
-            }
+        updateMessageByOId(update.messageId) { message ->
+            message.copy(
+                reactionSummary = update.summary,
+                currentUserReaction = update.summary.firstOrNull { it.selected }?.value.orEmpty(),
+            )
         }
-        rawMessages.value = nextMessages
-        _state.update { it.copy(messages = nextMessages.toChatMessageUiModels(currentUsername)) }
     }
 
     private fun onRedPacketStatus(update: RedPacketStatusUpdate) {
-        val nextMessages = rawMessages.value.map { message ->
-            if (message.oId == update.messageId && message.redPacket != null) {
-                val finished = update.count > 0 && update.got >= update.count
-                message.copy(
-                    redPacket = message.redPacket.copy(
-                        got = update.got,
-                        count = update.count,
-                        finished = finished,
-                        openable = message.redPacket.openable && !finished,
-                    ),
-                )
-            } else {
-                message
-            }
-        }
-        rawMessages.value = nextMessages
-        val jumpTargetId = if (nextMessages.any { message ->
-                message.oId == update.messageId &&
-                    message.redPacket?.openable == true &&
-                    !message.redPacket.finished
-            }
+        val updated = updateMessageByOId(update.messageId) { message ->
+            val redPacket = message.redPacket ?: return@updateMessageByOId message
+            val finished = update.count > 0 && update.got >= update.count
+            message.copy(
+                redPacket = redPacket.copy(
+                    got = update.got,
+                    count = update.count,
+                    finished = finished,
+                    openable = redPacket.openable && !finished,
+                ),
+            )
+        } ?: return
+        val jumpTargetId = if (
+            updated.redPacket?.openable == true && updated.redPacket.finished.not()
         ) {
             update.messageId
         } else {
@@ -641,7 +658,6 @@ internal class ChatController(
         }
         _state.update {
             it.copy(
-                messages = nextMessages.toChatMessageUiModels(currentUsername),
                 redPacketJumpTargetId = jumpTargetId,
             )
         }
@@ -830,9 +846,9 @@ internal class ChatController(
         )
         val next = rawMessages.value + optimistic
         rawMessages.value = next
+        appendRenderModel(optimistic)
         _state.update {
             it.copy(
-                messages = next.toChatMessageUiModels(currentUsername),
                 scrollToBottomRequest = it.scrollToBottomRequest + 1,
             )
         }
@@ -840,10 +856,11 @@ internal class ChatController(
     }
 
     private fun removeOptimisticMessage(optimisticId: String) {
-        val next = rawMessages.value.filterNot { it.oId == optimisticId }
-        if (next.size == rawMessages.value.size) return
-        rawMessages.value = next
-        _state.update { it.copy(messages = next.toChatMessageUiModels(currentUsername)) }
+        val current = rawMessages.value
+        val index = current.indexOfFirst { it.oId == optimisticId }
+        if (index < 0) return
+        rawMessages.value = current.toMutableList().also { it.removeAt(index) }
+        refreshRenderModel()
     }
 
     private fun openBarragerComposer() {

@@ -54,7 +54,6 @@ data class ChatRoomMessage(
     val userAvatarURL: String = "",
     val content: String,
     val md: String = "",
-    val contentHtml: String = "",
     val imageUrls: List<String> = emptyList(),
     val linkUrls: List<String> = emptyList(),
     val time: String,
@@ -94,7 +93,7 @@ data class ChatRoomMessage(
         put("userAvatarURL", userAvatarURL)
         put("content", content)
         put("md", md)
-        put("contentHtml", contentHtml)
+        put("contentHtml", content)
         put("imageUrls", org.json.JSONArray(imageUrls))
         put("linkUrls", org.json.JSONArray(linkUrls))
         put("time", time)

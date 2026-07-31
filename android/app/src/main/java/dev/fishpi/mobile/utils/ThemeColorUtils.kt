@@ -219,8 +219,10 @@ internal data class EditableThemeTokens(
     }
 }
 
+private val ThemeHexRegex = Regex("^#[0-9a-fA-F]{6}$")
+
 internal fun String.isValidThemeHex(): Boolean =
-    trim().matches(Regex("^#[0-9a-fA-F]{6}$"))
+    trim().matches(ThemeHexRegex)
 
 internal fun String.toThemeColor(): Color =
     Color(android.graphics.Color.parseColor(trim()))

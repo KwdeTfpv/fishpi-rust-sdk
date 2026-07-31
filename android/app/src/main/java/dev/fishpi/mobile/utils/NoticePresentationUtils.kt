@@ -61,6 +61,7 @@ private object NoticeDataType {
 
 private val ArticleLinkRegex =
     Regex("""<a[^>]*href="[^"]*/article/[^"]*"[^>]*>([^<]+)</a>""")
+private val MultiSpaceRegex = Regex("\\s{2,}")
 
 internal fun NoticeItemView.noticeDisplayTitle(): String {
     val articleTitle = extractArticleTitle()
@@ -75,7 +76,7 @@ internal fun NoticeItemView.noticeSummaryText(): String {
     return if (articleTitle != null) {
         stripped
             .replace(articleTitle, "")
-            .replace(Regex("\\s{2,}"), " ")
+            .replace(MultiSpaceRegex, " ")
             .trim()
     } else {
         stripped
@@ -240,5 +241,5 @@ private fun NoticeItemView.extractArticleTitle(): String? {
 private fun String.htmlToPlainText(): String =
     Html.fromHtml(this, Html.FROM_HTML_MODE_LEGACY)
         .toString()
-        .replace(Regex("\\s+"), " ")
+        .replace(WhitespaceRegex, " ")
         .trim()

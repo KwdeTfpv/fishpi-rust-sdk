@@ -62,14 +62,6 @@ fun FishPiApp() {
             applyThemeKey(custom.key)
             custom.label
         }
-    fun saveThemeOnly(rawJson: String): Result<String> =
-        runCatching {
-            val custom = parseCustomFishPiTheme(rawJson)
-            val nextThemes = (importedThemes.filterNot { it.key == custom.key } + custom)
-            importedThemes = nextThemes
-            store.saveImportedThemeJsons(nextThemes.map { it.rawJson })
-            custom.label
-        }
     fun storeThemeSaveState(identifier: String, itemId: Long, rawJson: String): StoreThemeSaveState =
         runCatching {
             val storeRaw = buildStoreThemeJson(rawJson, identifier, itemId)

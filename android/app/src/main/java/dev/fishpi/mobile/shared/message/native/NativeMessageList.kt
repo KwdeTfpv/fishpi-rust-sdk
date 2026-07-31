@@ -144,6 +144,24 @@ internal fun NativeMessageList(
                         )
                     }
                 })
+                val settleEdgeState = Runnable {
+                    controller.suppressEdgeDispatch = false
+                    dispatchEdgeState(
+                        this,
+                        chatAdapter,
+                        controller,
+                        currentOnNearTopChanged.value,
+                        currentOnNearBottomChanged.value,
+                        currentOnVisibleRangeChanged.value,
+                    )
+                }
+                addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+                    if (bottom - top != oldBottom - oldTop) {
+                        controller.suppressEdgeDispatch = true
+                        removeCallbacks(settleEdgeState)
+                        postDelayed(settleEdgeState, EDGE_SETTLE_DELAY_MS)
+                    }
+                }
             }
         },
         update = { view ->
@@ -204,6 +222,7 @@ internal fun NativeMessageList(
         onDispose {
             controller.recyclerView = null
             controller.adapter = null
+            controller.suppressEdgeDispatch = false
         }
     }
 
@@ -214,6 +233,10 @@ internal fun NativeMessageList(
         }
     }
 }
+
+private const val BG_TAG_TRANSPARENT = "bg:transparent"
+private const val BG_TAG_GRADIENT = "bg:gradient:"
+private const val EDGE_SETTLE_DELAY_MS = 50L
 
 private fun Int.dp(context: android.content.Context): Int =
     (this * context.resources.displayMetrics.density).toInt()
@@ -226,6 +249,7 @@ private fun dispatchEdgeState(
     onNearBottomChanged: (Boolean) -> Unit,
     onVisibleRangeChanged: (firstVisible: Int, lastVisible: Int, itemCount: Int) -> Unit,
 ) {
+    if (controller.suppressEdgeDispatch) return
     val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
     val first = lm.findFirstVisibleItemPosition()
     val last = lm.findLastVisibleItemPosition()
@@ -252,13 +276,16 @@ private fun RecyclerView.applyMessageListBackground(
     drawBackground: Boolean,
 ) {
     if (!drawBackground) {
-        tag = null
+        if (tag == BG_TAG_TRANSPARENT) return
+        tag = BG_TAG_TRANSPARENT
         background = ColorDrawable(android.graphics.Color.TRANSPARENT)
         return
     }
     val uri = theme.wallpaperImageUri
     if (uri.isNullOrBlank()) {
-        tag = null
+        val gradientTag = BG_TAG_GRADIENT + theme.wallpaperColors.joinToString(",")
+        if (tag == gradientTag && background != null) return
+        tag = gradientTag
         background = theme.wallpaperDrawable()
         return
     }

@@ -34,6 +34,7 @@ internal fun ArticleRoute(
     jumpSummary: ArticleSummary? = null,
     jumpRequest: Int = 0,
     onDetailClosed: () -> Unit = {},
+    onDetailActiveChange: (Boolean) -> Unit = {},
     onOpenUserProfile: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -108,6 +109,10 @@ internal fun ArticleRoute(
         if (state.publishOpen) {
             publishController.dispatch(ArticlePublishAction.Initialize)
         }
+    }
+
+    LaunchedEffect(state.selected?.id, state.publishOpen) {
+        onDetailActiveChange(state.selected != null || state.publishOpen)
     }
 
     DisposableEffect(active, state.selected?.id, state.publishOpen) {

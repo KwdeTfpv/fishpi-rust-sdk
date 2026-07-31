@@ -7,10 +7,14 @@ import android.content.Context
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.utils.toChatTimeLabel
 import dev.fishpi.mobile.utils.toEpochMillisOrNull
+import dev.fishpi.mobile.utils.toPlainMessageText
 import dev.fishpi.mobile.utils.toSystemLocalDate
 
+internal val ChatRoomMessage.renderSource: String
+    get() = md.ifBlank { content }
+
 internal fun ChatRoomMessage.copyableText(): String {
-    val text = content.trim()
+    val text = md.ifBlank { content.toPlainMessageText() }.trim()
     val mdText = md.trim()
     val quoteText = quote?.text?.trim().orEmpty()
     val quoteImages = quote?.imageUrls
@@ -112,7 +116,6 @@ internal fun messageTimeSeparator(previous: ChatRoomMessage?, current: ChatRoomM
 private fun ChatRoomMessage.asRevoked(): ChatRoomMessage =
     copy(
         content = "[该消息已撤回]",
-        contentHtml = "",
         imageUrls = emptyList(),
         linkUrls = emptyList(),
         revoked = true,

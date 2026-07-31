@@ -75,7 +75,7 @@ private data class QuoteParts(
 )
 
 private fun ChatRoomMessage.toQuoteParts(): QuoteParts {
-    val source = md.ifBlank { contentHtml.ifBlank { content } }
+    val source = renderSource
     val images = allQuoteImageUrls()
 
     val body = source
@@ -90,7 +90,7 @@ private fun ChatRoomMessage.toQuoteParts(): QuoteParts {
 private fun ChatRoomMessage.allQuoteImageUrls(): List<String> {
     return buildList {
         addAll(imageUrls)
-        listOf(md, contentHtml, content).forEach { source ->
+        listOf(md, content).forEach { source ->
             MarkdownImageRegex.findAll(source).forEach { match ->
                 add(match.groupValues.getOrNull(1).orEmpty())
             }
@@ -99,7 +99,7 @@ private fun ChatRoomMessage.allQuoteImageUrls(): List<String> {
             }
         }
     }
-        .map(String::cleanQuoteUrl)
+        .map(String::cleanMarkdownUrl)
         .filter(String::isNotBlank)
         .distinct()
 }
@@ -122,9 +122,6 @@ private fun String.toQuotePlainText(): String {
         .joinToString("\n")
         .trim()
 }
-
-private fun String.cleanQuoteUrl(): String =
-    cleanMarkdownUrl()
 
 private val SimpleParagraphBoundaryRegex = Regex("</p\\s*>\\s*<p\\b[^>]*>", RegexOption.IGNORE_CASE)
 private val ParagraphTagRegex = Regex("</?p\\b[^>]*>", RegexOption.IGNORE_CASE)

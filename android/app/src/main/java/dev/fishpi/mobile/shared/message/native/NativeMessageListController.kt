@@ -9,11 +9,13 @@ internal class NativeMessageListController {
     internal var adapter: NativeMessageAdapter? = null
     private var pendingScrollToBottom = false
     private var scrollRetryCount = 0
+    private val maxScrollToBottomRetries = 8
     private var lastNearTop: Boolean? = null
     private var lastNearBottom: Boolean? = null
     private var lastVisibleRange: VisibleRange? = null
     private var pendingPrependAnchor: PrependAnchor? = null
     private var restoredPrependAnchor = false
+    internal var suppressEdgeDispatch = false
 
     internal val hasPendingScrollToBottom: Boolean
         get() = pendingScrollToBottom
@@ -108,14 +110,17 @@ internal class NativeMessageListController {
         view.post {
             val latestCount = adapter?.itemCount ?: view.adapter?.itemCount ?: 0
             if (latestCount > 0) {
-                view.scrollToPosition(latestCount - 1)
+                val layout = view.layoutManager as? LinearLayoutManager
+                if (layout != null) {
+                    layout.scrollToPositionWithOffset(latestCount - 1, 0)
+                } else {
+                    view.scrollToPosition(latestCount - 1)
+                }
                 view.postOnAnimation {
                     val settledCount = adapter?.itemCount ?: view.adapter?.itemCount ?: 0
                     if (settledCount > 0) {
-                        view.scrollToPosition(settledCount - 1)
-                        val layout = view.layoutManager as? LinearLayoutManager
-                        val last = layout?.findLastVisibleItemPosition() ?: -1
-                        if (last >= settledCount - 2 || scrollRetryCount >= 2) {
+                        val atBottom = !view.canScrollVertically(1)
+                        if (atBottom || scrollRetryCount >= maxScrollToBottomRetries) {
                             pendingScrollToBottom = false
                             scrollRetryCount = 0
                         } else {

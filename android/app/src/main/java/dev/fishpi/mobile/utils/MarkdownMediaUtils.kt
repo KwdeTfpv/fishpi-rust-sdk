@@ -24,6 +24,7 @@ internal val HtmlAnchorHrefRegex = Regex(
 )
 internal val PlainUrlRegex = Regex("""https?://[^\s<>()\[\]{}\"']+""", RegexOption.IGNORE_CASE)
 internal val HtmlTagRegex = Regex("<[^>]+>")
+internal val WhitespaceRegex = Regex("\\s+")
 
 private val OrphanHtmlWrapperRegex = Regex(
     "^(?:</?p\\b[^>]*>|<br\\s*/?>|&nbsp;|\\s)+$",
@@ -109,6 +110,12 @@ internal fun String.extractImageTokens(): List<MarkdownMediaToken> {
             acc
         }
 }
+
+internal fun String.toPlainMessageText(): String =
+    replace(MarkdownImageRegex) { match -> match.groupValues.getOrNull(1).orEmpty() }
+        .replace(HtmlTagRegex, "")
+        .decodeBasicHtmlEntities()
+        .trim()
 
 private fun String.markdownImageTokenType(): MarkdownMediaType =
     if (toFishPiGeneratedBadgeOrNull() != null) {

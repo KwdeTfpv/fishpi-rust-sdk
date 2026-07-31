@@ -55,8 +55,8 @@ import dev.fishpi.mobile.feature.redpacket.toRedPacketUiModel
 import dev.fishpi.mobile.utils.adaptiveImageBoxSize
 import dev.fishpi.mobile.utils.cleanImageSplitTextSegment
 import dev.fishpi.mobile.utils.decodeBasicHtmlEntities
-import dev.fishpi.mobile.utils.extractImageTokens
 import dev.fishpi.mobile.utils.HtmlTagRegex
+import dev.fishpi.mobile.utils.WhitespaceRegex
 import dev.fishpi.mobile.utils.MarkdownMediaType
 import dev.fishpi.mobile.utils.toFishPiGeneratedBadgeOrNull
 import kotlinx.coroutines.Job
@@ -222,6 +222,7 @@ private val HtmlAnchorTextRegex = Regex(
     setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
 )
 private val MarkdownVisibleTextRegex = Regex("!?\\[([^]]*)]\\(([^)]*)\\)")
+private val ClientNameNonAlnumRegex = Regex("[^a-z0-9]")
 
 private data class NativeMusicCard(
     val coverUrl: String,
@@ -742,33 +743,7 @@ internal class NativeMessageViewHolder(
         }
     }
 
-    private fun ChatListItem.isMediaOnlyMessage(): Boolean {
-        if (message.revoked || message.redPacket != null) return false
-        val markdown = renderHints.markdownContent.trim()
-        val text = renderHints.plainFallback.trim()
-        val hasVideo = renderHints.videoLinks.isNotEmpty()
-        val tokens = markdown.extractImageTokens()
-        val hasRenderableMedia = tokens.any { it.type == MarkdownMediaType.Image || it.type == MarkdownMediaType.Video } || hasVideo
-        if (!hasRenderableMedia) return false
-        val stripped = buildString {
-            var cursor = 0
-            tokens.forEach { token ->
-                if (token.start > cursor) {
-                    append(markdown.substring(cursor, token.start.coerceAtMost(markdown.length)))
-                }
-                cursor = token.end.coerceAtMost(markdown.length)
-            }
-            if (cursor < markdown.length) {
-                append(markdown.substring(cursor))
-            }
-        }.cleanImageSplitTextSegment().trim()
-        val hasBodyText = if (markdown.isNotBlank()) {
-            stripped.isNotBlank()
-        } else {
-            text.isNotBlank()
-        }
-        return !hasBodyText
-    }
+    private fun ChatListItem.isMediaOnlyMessage(): Boolean = renderHints.isMediaOnly
 
     private fun messageMetaLine(item: ChatListItem, isMine: Boolean): LinearLayout? {
         val time = item.renderHints.timeLabel.trim()
@@ -833,7 +808,7 @@ internal class NativeMessageViewHolder(
 
         val content = item.renderHints.markdownContent.trim()
         if (content.isBlank()) return
-        val tokens = content.extractImageTokens().take(4)
+        val tokens = item.renderHints.imageTokens.take(4)
         if (tokens.isEmpty()) {
             addMarkdownText(message, item, content, anchorView, isMine)
             return
@@ -1458,7 +1433,7 @@ internal class NativeMessageViewHolder(
         val clientName = key
             .substringBefore('/')
             .substringBefore(' ')
-            .replace(Regex("[^a-z0-9]"), "")
+            .replace(ClientNameNonAlnumRegex, "")
             .trim()
         @DrawableRes val res = when {
             clientName == "web" -> R.drawable.ic_client_fish
@@ -1531,7 +1506,7 @@ internal class NativeMessageViewHolder(
             .removePrefix("Client:")
             .replace('_', ' ')
             .replace('/', ' ')
-            .replace(Regex("\\s+"), " ")
+            .replace(WhitespaceRegex, " ")
             .trim()
         return source.ifBlank { "未知来源" }
     }
@@ -1559,7 +1534,7 @@ internal class NativeMessageViewHolder(
         return withoutMarkdownLinks
             .replace(HtmlTagRegex, "")
             .decodeBasicHtmlEntities()
-            .replace(Regex("\\s+"), " ")
+            .replace(WhitespaceRegex, " ")
             .trim()
     }
 

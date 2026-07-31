@@ -37,6 +37,10 @@ internal fun ChatRoute(
 ) {
     val controllerState by chatController.state.collectAsState()
     val legacyMessages by chatController.legacyMessages.collectAsState()
+    val chatRenderModel by chatController.renderModel.collectAsState()
+    LaunchedEffect(chatController, chatFilters) {
+        chatController.setChatFilters(chatFilters)
+    }
     val legacyComposerState by chatController.legacyComposerState.collectAsState()
     val legacyInteractionState by chatController.legacyInteractionState.collectAsState()
     var previewLinkUrl by remember { mutableStateOf<String?>(null) }
@@ -67,6 +71,7 @@ internal fun ChatRoute(
             bridge = object : DefaultChatUiBridge {
                 override val input get() = legacyComposerState.input
                 override val messages get() = legacyMessages
+                override val renderModel get() = chatRenderModel
                 override val isLoading get() = controllerState.isLoading
                 override val isLoadingMore get() = controllerState.isLoadingMore
                 override val hasMoreHistory get() = controllerState.hasMoreHistory

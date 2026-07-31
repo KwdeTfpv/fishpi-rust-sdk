@@ -53,7 +53,6 @@ internal class MarkwonChatRenderer(
             key = messageKey,
             markdown = displayMarkdown,
             fallback = fallback,
-            showSourceWhileRendering = false,
         ) { view ->
             view.setTextColor(theme.bubbleText)
             view.textSize = 15f

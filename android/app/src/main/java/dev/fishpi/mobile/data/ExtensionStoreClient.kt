@@ -409,13 +409,6 @@ private fun JSONObject.optNullableLong(name: String): Long? =
 private fun List<ExtensionStoreItem>.onlyAppItems(): List<ExtensionStoreItem> =
     filter { it.type == ExtensionStoreClient.TypeAppExtension || it.type == ExtensionStoreClient.TypeAppTheme }
 
-private fun JSONArray.mapObjects(mapper: (JSONObject) -> ExtensionStoreItem): List<ExtensionStoreItem> =
-    buildList {
-        for (index in 0 until length()) {
-            optJSONObject(index)?.let { add(mapper(it)) }
-        }
-    }
-
 private fun JSONArray.mapComments(): List<ExtensionStoreComment> =
     buildList {
         for (index in 0 until length()) {

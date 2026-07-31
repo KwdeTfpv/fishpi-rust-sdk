@@ -189,9 +189,11 @@ private fun parseBarrageColor(raw: String): Color =
         ?: runCatching { Color(android.graphics.Color.parseColor(raw.ifBlank { "#FFFFFF" })) }
             .getOrDefault(Color.White)
 
+private val RgbaColorRegex =
+    Regex("""rgba\((\d+),\s*(\d+),\s*(\d+),\s*([0-9.]+)\)""", RegexOption.IGNORE_CASE)
+
 private fun parseRgbaColor(raw: String): Color? {
-    val match = Regex("""rgba\((\d+),\s*(\d+),\s*(\d+),\s*([0-9.]+)\)""", RegexOption.IGNORE_CASE)
-        .matchEntire(raw.trim())
+    val match = RgbaColorRegex.matchEntire(raw.trim())
         ?: return null
     val r = match.groupValues[1].toIntOrNull()?.coerceIn(0, 255) ?: return null
     val g = match.groupValues[2].toIntOrNull()?.coerceIn(0, 255) ?: return null

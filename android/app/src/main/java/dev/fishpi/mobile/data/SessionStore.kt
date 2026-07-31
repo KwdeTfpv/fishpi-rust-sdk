@@ -318,7 +318,7 @@ class SessionStore(context: Context) {
                     .put("attempted_at", attemptedAt)
                     .toString(),
             )
-            .commit()
+            .apply()
     }
 
     fun saveHomeActivityAttempt(apiKey: String, activity: UserActivityView? = null) {
@@ -342,7 +342,7 @@ class SessionStore(context: Context) {
                     .put("attempted_at", System.currentTimeMillis())
                     .toString(),
             )
-            .commit()
+            .apply()
     }
 
     private companion object {

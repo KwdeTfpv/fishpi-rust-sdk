@@ -95,7 +95,7 @@ MainShell 只负责 shell、tab、全局导航、全局弹层和 feature route �
 
 ## Native Message Renderer
 
-- 契约：`shared/message/MessageUiModel.kt`、`MessageAction.kt`、`MessageRenderState.kt`
+- 契约：`shared/message/MessageAction.kt`、`MessageRenderState.kt`
 - 默认入口：`shared/message/DefaultMessageListUi.kt`
 - Native list：`shared/message/native/NativeMessageList.kt`
 - Native adapter：`shared/message/native/NativeMessageAdapter.kt`
