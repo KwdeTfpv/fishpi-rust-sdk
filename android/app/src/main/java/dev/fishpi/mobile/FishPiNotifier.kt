@@ -10,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -38,10 +39,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
+import android.view.WindowManager
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import coil3.compose.SubcomposeAsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -71,17 +77,24 @@ internal object FishPiNotifier {
     fun show(
         message: String?,
         type: FishPiNoticeType = FishPiNoticeType.Info,
-        durationMs: Long = 2_200L,
+        durationMs: Long? = null,
         avatarUrl: String = "",
     ) {
         val text = message?.trim().orEmpty()
         if (text.isBlank()) return
-        _notices.tryEmit(FishPiNotice(text, type, durationMs, avatarUrl.trim()))
+        val duration = durationMs ?: readingDurationMs(text, type)
+        _notices.tryEmit(FishPiNotice(text, type, duration, avatarUrl.trim()))
     }
 
     fun success(message: String?) = show(message, FishPiNoticeType.Success)
 
-    fun error(message: String?) = show(message, FishPiNoticeType.Error, durationMs = 4_500L)
+    fun error(message: String?) = show(message, FishPiNoticeType.Error)
+
+    private fun readingDurationMs(text: String, type: FishPiNoticeType): Long {
+        val floor = if (type == FishPiNoticeType.Error) 4_500L else 2_200L
+        val estimated = 1_400L + text.length * 90L
+        return estimated.coerceIn(floor, 9_000L)
+    }
 }
 
 @Composable
@@ -106,13 +119,39 @@ internal fun FishPiNotificationHost() {
 
     val current = notice
     if (current != null) {
-        Popup(alignment = Alignment.TopCenter) {
-            AnimatedVisibility(
-                visible = visible,
-                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+        Dialog(
+            onDismissRequest = {},
+            properties = DialogProperties(
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false,
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+                securePolicy = SecureFlagPolicy.Inherit,
+            ),
+        ) {
+            val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+            LaunchedEffect(dialogWindow) {
+                dialogWindow?.apply {
+                    setDimAmount(0f)
+                    clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                    addFlags(
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter,
             ) {
-                FishPiNotificationPill(current)
+                AnimatedVisibility(
+                    visible = visible,
+                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                ) {
+                    FishPiNotificationPill(current)
+                }
             }
         }
     }
@@ -141,8 +180,8 @@ private fun FishPiNotificationPill(notice: FishPiNotice) {
                 shape = RoundedCornerShape(999.dp),
             )
             .padding(horizontal = 11.dp, vertical = 8.dp)
-            .sizeIn(minHeight = 38.dp, maxWidth = 328.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .sizeIn(minHeight = 38.dp, maxWidth = 328.dp, maxHeight = 220.dp),
+        verticalAlignment = Alignment.Top,
     ) {
         Box(
             modifier = Modifier
@@ -175,7 +214,7 @@ private fun FishPiNotificationPill(notice: FishPiNotice) {
             color = if (dark) Color.White.copy(alpha = 0.94f) else colors.onSurface,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 2,
+            maxLines = 8,
             overflow = TextOverflow.Ellipsis,
         )
     }
