@@ -38,10 +38,13 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imeAnimationTarget
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -67,6 +70,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -84,7 +88,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.viewinterop.AndroidView
-import coil3.compose.SubcomposeAsyncImage
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import dev.fishpi.mobile.data.BreezemoonView
 import dev.fishpi.mobile.feature.chat.ChatUserProfileOverlay
 import dev.fishpi.mobile.ui.components.ChatToolAction
@@ -93,6 +98,7 @@ import dev.fishpi.mobile.ui.animal.AnimalStatusPill
 import dev.fishpi.mobile.utils.toFishPiMemberNameOrNull
 import kotlinx.coroutines.flow.distinctUntilChanged
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DefaultBreezemoonUi(
     state: BreezemoonState,
@@ -171,8 +177,7 @@ internal fun DefaultBreezemoonUi(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .imePadding()
-                .navigationBarsPadding(),
+                .windowInsetsPadding(WindowInsets.imeAnimationTarget.union(WindowInsets.navigationBars)),
         ) {
             ControlSurface(
                 modifier = Modifier
@@ -353,8 +358,7 @@ internal fun DefaultBreezemoonUi(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .imePadding()
-                    .navigationBarsPadding()
+                    .windowInsetsPadding(WindowInsets.imeAnimationTarget.union(WindowInsets.navigationBars))
                     .silentTap { dispatch(BreezemoonAction.CloseEmoji) },
                 contentAlignment = Alignment.BottomCenter,
             ) {
@@ -421,10 +425,11 @@ private fun BreezemoonCard(
         verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SubcomposeAsyncImage(
+            AsyncImage(
                 model = item.avatar,
                 imageLoader = rememberFishPiImageLoader(),
                 contentDescription = "${item.authorName}头像",
+                contentScale = ContentScale.Crop,
                 modifier = Modifier.size(32.dp).clip(RoundedCornerShape(FishPiTheme.radiusField)),
             )
             Spacer(Modifier.width(10.dp))
@@ -465,6 +470,16 @@ private fun BreezemoonHtmlContent(
     onOpenUser: (String) -> Unit,
 ) {
     val color = MaterialTheme.colorScheme.onSurface
+    val accentArgb = accent.toArgb()
+    val currentOpenUser by rememberUpdatedState(onOpenUser)
+    val text = remember(html, accentArgb) {
+        val spanned = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY)
+        var s = 0
+        var e = spanned.length
+        while (s < e && spanned[s].isWhitespace()) s++
+        while (e > s && spanned[e - 1].isWhitespace()) e--
+        spanned.subSequence(s, e).withBreezemoonMemberLinks(accentArgb) { currentOpenUser(it) }
+    }
     AndroidView(
         modifier = Modifier.fillMaxWidth(),
         factory = { context ->
@@ -480,12 +495,7 @@ private fun BreezemoonHtmlContent(
         },
         update = { view ->
             view.setTextColor(color.toArgb())
-            val spanned = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY)
-            var s = 0
-            var e = spanned.length
-            while (s < e && spanned[s].isWhitespace()) s++
-            while (e > s && spanned[e - 1].isWhitespace()) e--
-            view.text = spanned.subSequence(s, e).withBreezemoonMemberLinks(accent.toArgb(), onOpenUser)
+            view.text = text
         },
     )
 }
