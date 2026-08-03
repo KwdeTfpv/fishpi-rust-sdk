@@ -12,7 +12,6 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -43,16 +42,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import android.view.WindowManager
-import androidx.compose.ui.window.DialogWindowProvider
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.SecureFlagPolicy
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import coil3.compose.SubcomposeAsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -135,38 +130,20 @@ internal fun FishPiNotificationHost() {
             dismissedId = current.id
             visible = false
         }
-        Dialog(
-            onDismissRequest = {},
-            properties = DialogProperties(
+        Popup(
+            alignment = Alignment.TopCenter,
+            properties = PopupProperties(
+                focusable = false,
                 dismissOnBackPress = false,
                 dismissOnClickOutside = false,
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
-                securePolicy = SecureFlagPolicy.Inherit,
             ),
         ) {
-            val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
-            LaunchedEffect(dialogWindow) {
-                dialogWindow?.apply {
-                    setDimAmount(0f)
-                    clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-                    addFlags(
-                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                    )
-                }
-            }
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.TopCenter,
+            AnimatedVisibility(
+                visible = visible,
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
             ) {
-                AnimatedVisibility(
-                    visible = visible,
-                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                    exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-                ) {
-                    FishPiNotificationPill(current, onDismiss = dismiss)
-                }
+                FishPiNotificationPill(current, onDismiss = dismiss)
             }
         }
     }
@@ -223,7 +200,7 @@ private fun FishPiNotificationPill(
                 )
             }
             .padding(horizontal = 11.dp, vertical = 8.dp)
-            .sizeIn(minHeight = 38.dp, maxWidth = 328.dp, maxHeight = 220.dp),
+            .sizeIn(maxWidth = 328.dp, maxHeight = 220.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Box(

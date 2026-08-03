@@ -41,6 +41,7 @@ import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Drafts
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Payments
@@ -98,6 +99,7 @@ import dev.fishpi.mobile.data.ExtensionStoreComment
 import dev.fishpi.mobile.data.ExtensionStoreItem
 import dev.fishpi.mobile.data.ExtensionStoreSession
 import dev.fishpi.mobile.data.ExtensionStoreUploadRequest
+import dev.fishpi.mobile.plugin.PluginListSheet
 import dev.fishpi.mobile.plugin.PluginManager
 import dev.fishpi.mobile.plugin.PluginSource
 import dev.fishpi.mobile.ui.components.PlainBackButton
@@ -159,6 +161,7 @@ internal fun DefaultExtensionStoreUi(
     var uploadSubmitted by remember { mutableStateOf(false) }
     var uploadBaseline by remember { mutableStateOf(state.uploadSuccessCount) }
     var draftsOpen by remember { mutableStateOf(false) }
+    var manageOpen by remember { mutableStateOf(false) }
     var editingInitial by remember { mutableStateOf<ExtensionStoreItem?>(null) }
 
     LaunchedEffect(state.editingDraft) {
@@ -288,6 +291,12 @@ internal fun DefaultExtensionStoreUi(
         return
     }
 
+    if (manageOpen) {
+        BackHandler { manageOpen = false }
+        PluginListSheet(onDismiss = { manageOpen = false })
+        return
+    }
+
     val activeDetailItem = detailItem
     if (activeDetailItem != null) {
         val item = activeDetailItem
@@ -357,6 +366,7 @@ internal fun DefaultExtensionStoreUi(
                 draftsOpen = true
                 dispatch(ExtensionStoreAction.LoadDrafts)
             },
+            onManage = { manageOpen = true },
         )
         StoreControls(
             query = state.query,
@@ -421,6 +431,7 @@ private fun StoreTopBar(
     onUpload: () -> Unit,
     canOpenDrafts: Boolean,
     onOpenDrafts: () -> Unit,
+    onManage: () -> Unit,
 ) {
     FishPiScreenHeader(
         title = "鱼排扩展集市",
@@ -451,6 +462,14 @@ private fun StoreTopBar(
             }
         },
         actions = {
+            TextButton(
+                onClick = onManage,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            ) {
+                Icon(Icons.Rounded.Tune, contentDescription = "管理已安装插件", modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(3.dp))
+                Text("管理", fontSize = 12.sp)
+            }
             TextButton(
                 onClick = onOpenDrafts,
                 enabled = canOpenDrafts,
