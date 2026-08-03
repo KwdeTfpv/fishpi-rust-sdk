@@ -50,8 +50,15 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -198,6 +205,7 @@ private fun PluginUiNodeView(
             fontWeight = if (node.style == "title") FontWeight.SemiBold else FontWeight.Normal,
         )
         is PluginUiNode.Markdown -> PluginMarkdown(node.text, node.id)
+        is PluginUiNode.Stream -> PluginStream(node)
         is PluginUiNode.Image -> PluginImage(node)
         is PluginUiNode.Divider -> HorizontalDivider(color = DividerDefaults.color.copy(alpha = 0.7f))
         is PluginUiNode.Space -> Spacer(modifier = Modifier.height(node.height.dp))
@@ -228,6 +236,34 @@ private fun PluginUiNodeView(
             enabled = node.enabled,
             selected = true,
             modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun PluginStream(node: PluginUiNode.Stream) {
+    val cell = remember(node.streamId) { PluginUiController.get().streamCell(node.streamId) }
+    val text = cell.text
+    val done = cell.done
+    if (node.markdown) {
+        val projected = remember(text, done) {
+            StreamingMarkdownProjection.project(text, isComplete = done)
+        }
+        if (projected.isBlank()) {
+            Text(
+                text = "正在生成…",
+                color = FishPiTheme.onSurface.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        } else {
+            PluginMarkdown(projected, node.id)
+        }
+    } else {
+        Text(
+            text = if (done) text else "$text▌",
+            color = FishPiTheme.onSurface,
+            style = if (node.style == "title") MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
+            fontWeight = if (node.style == "title") FontWeight.SemiBold else FontWeight.Normal,
         )
     }
 }
@@ -348,12 +384,25 @@ private fun PluginImage(node: PluginUiNode.Image) {
 
 @Composable private fun PluginInput(node: PluginUiNode.Input, state: PluginUiState, dispatch: (PluginUiAction) -> Unit) {
     val value = (state.form.values[node.name] as? PluginFormValue.Text)?.value ?: node.value
+    var revealed by remember { mutableStateOf(false) }
     OutlinedTextField(
         value = value,
         onValueChange = { dispatch(PluginUiAction.ChangeText(node.name, it)) },
         label = { Text(node.label) },
         placeholder = { Text(node.placeholder) },
         minLines = if (node.multiline) 4 else 1,
+        singleLine = node.secure,
+        visualTransformation = if (node.secure && !revealed) PasswordVisualTransformation() else VisualTransformation.None,
+        trailingIcon = if (node.secure) {
+            {
+                IconButton(onClick = { revealed = !revealed }) {
+                    Icon(
+                        imageVector = if (revealed) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                        contentDescription = if (revealed) "隐藏" else "显示",
+                    )
+                }
+            }
+        } else null,
         modifier = Modifier.fillMaxWidth(),
     )
 }

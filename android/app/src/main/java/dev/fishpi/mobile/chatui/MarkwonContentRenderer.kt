@@ -61,4 +61,6 @@ internal class MarkwonContentRenderer(
     fun clear(textView: TextView) {
         core.clear(textView)
     }
+
+    suspend fun renderToSpanned(markdown: String): android.text.Spanned = core.renderToSpanned(markdown)
 }

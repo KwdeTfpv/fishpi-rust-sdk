@@ -26,6 +26,13 @@ sealed interface PluginUiNode {
     ) : PluginUiNode
 
     data class Markdown(override val id: String, val text: String) : PluginUiNode
+
+    data class Stream(
+        override val id: String,
+        val streamId: String,
+        val markdown: Boolean = true,
+        val style: String = "body",
+    ) : PluginUiNode
     data class Image(override val id: String, val url: String, val caption: String = "") : PluginUiNode
     data class Divider(override val id: String) : PluginUiNode
     data class Space(override val id: String, val height: Int = 12) : PluginUiNode
@@ -63,6 +70,7 @@ sealed interface PluginUiNode {
         val value: String = "",
         val placeholder: String = "",
         val multiline: Boolean = false,
+        val secure: Boolean = false,
     ) : PluginUiNode
 
     data class Number(

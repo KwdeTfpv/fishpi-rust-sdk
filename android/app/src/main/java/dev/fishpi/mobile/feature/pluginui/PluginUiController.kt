@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.pluginui
 
+import androidx.compose.runtime.mutableStateMapOf
 import dev.fishpi.mobile.core.ui.UiController
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,13 +20,17 @@ class PluginUiController private constructor() : UiController<PluginUiState, Plu
 
     private var actionHandler: ((pluginId: String, actionId: String, values: JSONObject) -> Unit)? = null
 
+    private val streamCells = mutableStateMapOf<String, PluginStreamCell>()
+
     override fun dispatch(action: PluginUiAction) {
         runCatching {
             when (action) {
-                is PluginUiAction.Open -> open(action.pluginId, action.payload)
-                is PluginUiAction.Update -> update(action.pluginId, action.payload)
+                is PluginUiAction.Open -> openInternal(action.pluginId, action.payload)
+                is PluginUiAction.Update -> updateInternal(action.pluginId, action.payload)
                 is PluginUiAction.Close -> closeInternal(action.pluginId)
                 is PluginUiAction.Clear -> clearInternal(action.pluginId)
+                is PluginUiAction.StreamPush -> streamPushInternal(action.pluginId, action.streamId, action.delta, action.replace)
+                is PluginUiAction.StreamEnd -> streamEndInternal(action.pluginId, action.streamId, action.finalText)
                 is PluginUiAction.TriggerAction -> trigger(action.actionId, action.nodeId)
                 is PluginUiAction.ChangeText -> changeForm(action.name, PluginFormValue.Text(action.value))
                 is PluginUiAction.ChangeNumber -> changeForm(action.name, PluginFormValue.Number(action.value))
@@ -64,8 +69,35 @@ class PluginUiController private constructor() : UiController<PluginUiState, Plu
         return JSONObject().put("ok", true)
     }
 
-    private fun open(pluginId: String, payload: JSONObject, direct: Boolean = true) {
+    fun streamPush(pluginId: String, payload: JSONObject): JSONObject {
+        dispatch(
+            PluginUiAction.StreamPush(
+                pluginId = pluginId,
+                streamId = payload.optString("streamId"),
+                delta = payload.optString("delta"),
+                replace = payload.optBoolean("replace", false),
+            ),
+        )
+        return JSONObject().put("ok", true)
+    }
+
+    fun streamEnd(pluginId: String, payload: JSONObject): JSONObject {
+        dispatch(
+            PluginUiAction.StreamEnd(
+                pluginId = pluginId,
+                streamId = payload.optString("streamId"),
+                finalText = payload.optString("finalText").takeIf { payload.has("finalText") },
+            ),
+        )
+        return JSONObject().put("ok", true)
+    }
+
+    fun streamCell(streamId: String): PluginStreamCell =
+        streamCells.getOrPut(streamId) { PluginStreamCell() }
+
+    private fun openInternal(pluginId: String, payload: JSONObject, direct: Boolean = true) {
         val next = PluginUiMapper.document(pluginId, payload).copy(open = true)
+        ensureStreamCells(next)
         _state.update { state ->
             val current = state.current
             val stack = if (next.container == PluginUiContainerType.Page && current?.open == true) {
@@ -77,10 +109,30 @@ class PluginUiController private constructor() : UiController<PluginUiState, Plu
         }
     }
 
-    private fun update(pluginId: String, payload: JSONObject, direct: Boolean = true) {
+    private fun ensureStreamCells(document: PluginUiDocument) {
+        document.nodes.forEachNode { node ->
+            if (node is PluginUiNode.Stream) streamCells.getOrPut(node.streamId) { PluginStreamCell() }
+        }
+    }
+
+    private fun streamPushInternal(pluginId: String, streamId: String, delta: String, replace: Boolean) {
+        if (streamId.isBlank()) return
+        val current = _state.value.current
+        if (current == null || current.pluginId != pluginId) return
+        val cell = streamCells.getOrPut(streamId) { PluginStreamCell() }
+        if (replace) cell.set(delta) else cell.append(delta)
+    }
+
+    private fun streamEndInternal(pluginId: String, streamId: String, finalText: String?) {
+        if (streamId.isBlank()) return
+        val cell = streamCells.getOrPut(streamId) { PluginStreamCell() }
+        cell.finish(finalText)
+    }
+
+    private fun updateInternal(pluginId: String, payload: JSONObject, direct: Boolean = true) {
         val current = _state.value.current
         if (current == null || current.pluginId != pluginId) {
-            open(pluginId, payload, direct = direct)
+            openInternal(pluginId, payload, direct = direct)
             return
         }
         val partialNodes = payload.optJSONArray("nodes") ?: payload.optJSONArray("children")
@@ -96,6 +148,7 @@ class PluginUiController private constructor() : UiController<PluginUiState, Plu
         _state.update { state ->
             val current = state.current
             if (pluginId != null && current?.pluginId != pluginId) return@update state
+            current?.let { dropStreamCells(it) }
             val previous = state.backStack.lastOrNull()
             state.copy(
                 current = previous,
@@ -109,7 +162,14 @@ class PluginUiController private constructor() : UiController<PluginUiState, Plu
         _state.update { state ->
             val current = state.current
             if (current?.pluginId != pluginId) return@update state
+            dropStreamCells(current)
             state.copy(current = current.copy(nodes = emptyList(), error = null), form = PluginFormState())
+        }
+    }
+
+    private fun dropStreamCells(document: PluginUiDocument) {
+        document.nodes.forEachNode { node ->
+            if (node is PluginUiNode.Stream) streamCells.remove(node.streamId)
         }
     }
 

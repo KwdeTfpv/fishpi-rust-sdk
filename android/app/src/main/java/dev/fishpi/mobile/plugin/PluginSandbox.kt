@@ -137,6 +137,49 @@ fishpi.chat={
     setClientType:function(client,version){return fishpi.call('chat.setClientType',{client:client,version:version});},
     clearClientType:function(){return fishpi.call('chat.clearClientType',{});}
 };
+fishpi.http=function(opts){
+    opts=opts||{};
+    var body=opts.body;
+    if(body!==null&&body!==undefined&&typeof body!=='string'){body=JSON.stringify(body);}
+    return fishpi.call('http.request',{
+        url:opts.url||'',
+        method:(opts.method||'GET'),
+        headers:opts.headers||{},
+        body:(body===undefined?null:body),
+        timeoutMs:opts.timeoutMs||30000
+    }).then(function(r){
+        if(r&&r.ok){
+            var parsed=r.body;
+            if(opts.json&&typeof r.body==='string'){try{parsed=JSON.parse(r.body);}catch(e){}}
+            return {ok:true,status:r.status,body:r.body,json:parsed};
+        }
+        return {ok:false,status:(r&&r.status)||0,error:(r&&r.error)||'request failed'};
+    });
+};
+var _streams={};
+fishpi.httpStream=function(opts,handlers){
+    opts=opts||{};handlers=handlers||{};
+    var id='s-'+Math.random().toString(36).slice(2)+Date.now();
+    _streams[id]=handlers;
+    var body=opts.body;
+    if(body!==null&&body!==undefined&&typeof body!=='string'){body=JSON.stringify(body);}
+    fishpi.call('http.stream.start',{
+        streamId:id,
+        url:opts.url||'',
+        method:(opts.method||'POST'),
+        headers:opts.headers||{},
+        body:(body===undefined?null:body),
+        timeoutMs:opts.timeoutMs||120000
+    });
+    return {abort:function(){fishpi.call('http.stream.abort',{streamId:id});delete _streams[id];}};
+};
+on('httpStream',function(e){
+    if(!e||!e.streamId)return;
+    var h=_streams[e.streamId];if(!h)return;
+    if(e.type==='chunk'){if(h.onChunk)h.onChunk(e.data);}
+    else if(e.type==='done'){if(h.onDone)h.onDone();delete _streams[e.streamId];}
+    else if(e.type==='error'){if(h.onError)h.onError(e.error||'stream error');delete _streams[e.streamId];}
+});
 var storage={
     get:function(key,def){
         var v=__bridge.getStorage(key,'__fishpi_null__');
@@ -196,7 +239,18 @@ fishpi.ui=(function(){
             userCard:function(opts){return this.push(Object.assign({type:'userCard'},opts||{}));},
             articleCard:function(opts){return this.push(Object.assign({type:'articleCard'},opts||{}));},
             actionBar:function(actions){return this.push({type:'actionBar',actions:(actions||[]).map(bindAction)});},
-            button:function(label,fn,opts){opts=opts||{};var id=opts.id||('action-'+Math.random().toString(36).slice(2));if(fn)callbacks[id]=fn;return this.push(Object.assign({type:'button',label:label,actionId:id},opts));}
+            button:function(label,fn,opts){opts=opts||{};var id=opts.id||('action-'+Math.random().toString(36).slice(2));if(fn)callbacks[id]=fn;return this.push(Object.assign({type:'button',label:label,actionId:id},opts));},
+            stream:function(opts){
+                opts=opts||{};
+                var sid=opts.streamId||('stream-'+Math.random().toString(36).slice(2));
+                this.push({type:'stream',id:sid,streamId:sid,markdown:opts.markdown!==false,style:opts.style||'body'});
+                return {
+                    streamId:sid,
+                    push:function(delta){return fishpi.call('ui.streamPush',{streamId:sid,delta:String(delta||'')});},
+                    set:function(text){return fishpi.call('ui.streamPush',{streamId:sid,delta:String(text||''),replace:true});},
+                    done:function(finalText){var p={streamId:sid};if(finalText!==undefined&&finalText!==null)p.finalText=String(finalText);return fishpi.call('ui.streamEnd',p);}
+                };
+            }
         };
         return api;
     }

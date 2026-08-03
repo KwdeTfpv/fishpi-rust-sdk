@@ -5,7 +5,7 @@ description: FishPi Android 主题与插件系统开发文档
 
 # FishPi Android 扩展开发指南
 
-FishPi Android 插件是放在手机本地的 JavaScript 文件，运行在 App 内置 WebView 沙箱中。插件可以监听聊天室消息、修改待发送文本、调用已暴露的 SDK API、保存配置、发送系统提示，注册聊天室快捷动作和消息长按菜单动作，并生成原生插件页面、对话框和表单 UI。
+FishPi Android 插件是放在手机本地的 JavaScript 文件，运行在 App 内置 WebView 沙箱中。插件可以监听聊天室消息、修改待发送文本、调用已暴露的 SDK API、保存配置、发送系统提示，在聊天室 / 私聊 / 帖子 / 通知 / 我的等页面注册快捷动作和消息长按菜单动作，发起原生 HTTP 与流式（SSE）请求，并生成原生插件页面、对话框和表单 UI。
 
 ## 自定义主题
 
@@ -205,7 +205,7 @@ on('message', function(msg) {
 });
 ```
 
-进入聊天室点击输入区 `+` 菜单中的“插件”即可管理插件。插件文件名是插件主键，例如 `my-plugin.js`，重命名文件会被视为新插件。
+在 App 首页 → 扩展中心 顶栏的「管理」按钮进入插件管理（也可从聊天室顶栏拼图图标进入）。插件文件名是插件主键，例如 `my-plugin.js`，重命名文件会被视为新插件。
 
 ## 文件头
 
@@ -228,13 +228,19 @@ on('message', function(msg) {
 | `@scenes` | 否 | 生效场景，逗号分隔；留空表示全局 |
 | `@permissions` | 否 | 当前版本会解析但不做权限校验 |
 
-当前已接入插件事件和快捷工具栏的场景是：
+场景取值：
 
 | scene | 说明 |
 |------|------|
 | `chatRoom` | 聊天室 |
+| `privateChat` | 私聊 |
+| `article` | 帖子详情 |
+| `notice` | 通知 |
+| `me` | 我的 |
 
-`privateChat`、`article`、`notice`、`me` 可以写在文件头中，但当前版本主要用于后续扩展；插件事件不会自动在这些页面分发。
+`@scenes` 决定插件的**快捷工具栏入口和消息长按菜单动作在哪个页面露出**。当前活动场景由页面进入时压栈、离开时出栈维护（owner-token 场景栈，多个页面同时存活时以栈顶为准），因此在常驻 Tab 间来回切换不会串场景。留空表示全局，任意页面都显示入口。
+
+注意：`message` 消息事件目前只在聊天室分发；`@scenes` 主要约束的是工具栏 / 菜单入口以及它们回传的上下文。
 
 ## 运行环境
 
@@ -268,7 +274,7 @@ off('message', handleMessage);
 | 事件 | 触发场景 | 参数 |
 |------|----------|------|
 | `message` | 聊天室收到新消息时 | `ChatRoomMessage` |
-| `toolbarAction` | 用户点击插件快捷动作时 | `{ entryId, actionId }` |
+| `toolbarAction` | 用户点击插件快捷动作时 | `{ entryId, actionId, context }` |
 | `menuAction` | 用户点击插件注册的消息长按菜单动作时 | `{ scene, actionId, message }` |
 
 ### message 事件
@@ -411,6 +417,64 @@ fishpi.call('openRedPacket', { messageId: msg.oId, gesture: -1 }).then(function(
 - 发送/撤回等无返回数据的接口成功时通常返回 `null` 或 `{}`，插件不要依赖固定空对象。
 - 文档中的结构是当前 Android native 层整理后的结构，服务端未来新增字段时可能额外出现更多字段。
 
+## fishpi.http / fishpi.httpStream
+
+调用外部 HTTP 接口。WebView 里直接 `fetch` 外部地址会被 CORS 拦截，所以统一走原生发请求。常用于让插件对接第三方服务，例如 LLM。
+
+> ⚠️ 安全：`fishpi.http` / `fishpi.httpStream` 都**不会**注入你的登录 apiKey，会话 token 绝不外泄。要鉴权请自己在 `headers` 里带。密钥请存进插件私有 `storage` 并用 `secure` 输入框收集，不要硬编码进代码，也不要打印到日志。
+
+### fishpi.http(opts)
+
+普通请求，返回 `Promise`。
+
+```javascript
+fishpi.http({
+    url: 'https://api.example.com/v1/models',
+    method: 'GET',                 // 默认 GET
+    headers: { 'Authorization': 'Bearer ' + key },
+    body: { foo: 1 },              // 对象自动 JSON.stringify；GET/HEAD 忽略
+    json: true,                    // 自动把响应体解析进 .json
+    timeoutMs: 30000
+}).then(function(r) {
+    // 成功：{ ok: true, status, body, json }
+    // 失败：{ ok: false, status, error }
+});
+```
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| `url` | 是 | 仅支持 `http://` / `https://` |
+| `method` | 否 | 默认 `GET` |
+| `headers` | 否 | 请求头对象 |
+| `body` | 否 | 字符串直接发送，对象自动 `JSON.stringify`；`GET`/`HEAD` 忽略 |
+| `json` | 否 | 为 `true` 时把响应体解析进返回的 `.json` |
+| `timeoutMs` | 否 | 请求超时毫秒数 |
+
+### fishpi.httpStream(opts, handlers)
+
+流式（SSE）请求，用于打字机式输出，例如 LLM 的 `stream: true`。原生按 `data:` 行把原始负载逐段回传，`[DONE]` 已在原生侧过滤；OpenAI 兼容的 delta 解析由插件自己做，保持桥接的通用性。返回 `{ abort }`，可中断。
+
+```javascript
+var stream = fishpi.httpStream({
+    url: base + '/v1/chat/completions',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+    body: { model: 'gpt-4o-mini', stream: true, messages: [] },
+    timeoutMs: 180000
+}, {
+    onChunk: function(data) { /* data 是一行 SSE 原始负载，自行 JSON.parse 取 delta */ },
+    onDone:  function() { /* 流正常结束 */ },
+    onError: function(err) { /* 网络或 HTTP 错误 */ }
+});
+
+// 需要时中断：
+stream.abort();
+```
+
+- `onChunk` 每次收到一行 `data:` 负载后的原始字符串；OpenAI 兼容格式下通常是 `JSON.parse(data).choices[0].delta.content`。
+- 用户中断（`abort()`）不会当成错误回调。
+- 要把增量流式显示到界面上，配合插件 UI 的[流式文本节点](#流式文本节点打字机--llm-输出)：`onChunk` 里 `handle.push(...)`，`onDone` 时 `handle.done()`。
+
 ## 聊天室发送身份
 
 插件默认使用 App 的聊天室发送身份。插件也可以为自己声明独立的 client type，只影响当前插件后续调用 `sendChatRoomMessage`，不影响 App 正常发送，也不影响其它插件。
@@ -480,9 +544,11 @@ type ToolbarAction = {
 - 一个插件可以注册多个入口。
 - 同一个插件重复注册相同 `id` 会覆盖旧入口。
 - `enabled: false` 的动作会显示为禁用，不会触发点击。
-- 入口只在插件 `@scenes` 命中的当前场景显示。
+- 入口只在插件 `@scenes` 命中的当前场景显示；工具栏入口现已支持聊天室以外的页面（私聊、帖子、通知、我的）。
 
 ### 接收点击事件
+
+`toolbarAction` 事件除了 `entryId` / `actionId`，还带一个 `context` 字段，是当前页面的上下文对象，方便动作直接拿到页面数据。
 
 ```javascript
 on('toolbarAction', function(action) {
@@ -500,6 +566,19 @@ on('toolbarAction', function(action) {
     }
 });
 ```
+
+`e.context` 随场景不同而不同。帖子详情场景（`article`）的 `context` 由文章详情映射而来，可直接把正文喂给外部模型，无需再调用 `getArticleDetail`：
+
+| 字段 | 说明 |
+|------|------|
+| `id` | 文章 ID |
+| `title` | 标题 |
+| `author` | 作者 |
+| `tags` | 标签 |
+| `markdown` | 正文 Markdown |
+| `content` | 正文（等同 `markdown`） |
+| `imageUrls` | 正文图片地址数组 |
+| `linkUrls` | 正文链接地址数组 |
 
 ### 删除入口
 
@@ -745,12 +824,50 @@ fishpi.call('getUserProfile', { userName: 'Kirito' }).then(function(user) {
 });
 ```
 
+### 流式文本节点（打字机 / LLM 输出）
+
+要做流式（打字机）输出——比如把 `fishpi.httpStream` 收到的 LLM 增量逐段显示——**不要用高频 `update()` 去改 `markdown` 节点**。`update()` 每次都替换整份节点并重组整个面板，高频调用会闪屏。
+
+正确做法是 `stream` 节点：面板只建一次，之后只往这一个节点的原生 cell 追加文本，面板结构不重组；流式过程中就渲染真实 Markdown（未闭合的语法会被自动补齐再渲染，不会在纯文本和 Markdown 之间跳变），结束时定版。
+
+`.stream(opts)` 返回一个 handle：
+
+```javascript
+var dlg = ui.dialog('AI 总结');
+var s = dlg.stream({ markdown: true });   // markdown: 是否按 Markdown 渲染，默认 true
+dlg.button('停止', function () { /* ... */ });
+dlg.open();
+
+// 收到增量就 push，只传新增部分，原生侧自动追加：
+s.push('这是');
+s.push('一段流式');
+s.push('文本。');
+
+// 需要整体替换当前内容时用 set：
+// s.set('替换成这段完整文本');
+
+// 流结束时 done，切到最终 Markdown 定版、去掉光标：
+s.done();
+```
+
+| 方法 | 说明 |
+|------|------|
+| `.stream(opts)` | 追加一个流式节点。`opts.markdown`（默认 `true`）决定是否按 Markdown 渲染；`opts.style` 为 `"body"`（默认）或 `"title"`。返回 handle。 |
+| `handle.push(delta)` | 追加一段增量文本（只传新增部分）。 |
+| `handle.set(text)` | 用 `text` 整体替换当前流式内容。 |
+| `handle.done(finalText?)` | 结束流式；可选传最终文本一次性定版。之后按 Markdown 渲染并去掉光标。 |
+
+配合 `fishpi.httpStream` 的典型写法：`onChunk` 里把解析出的增量 `handle.push(...)`（建议自己攒一小段、约 80ms 刷一次，减少过桥次数），`onDone` / `onError` / 用户点停止时调用 `handle.done()`。
+
+> 提示：流式内容不随面板持久化。关闭面板即结束这次展示；如需"重开还能看"，请在流正常结束后用 `storage` 自行归档（见 [storage](#storage)）。
+
 ### 支持的节点
 
 | 节点 | Builder | 主要字段 |
 |------|---------|----------|
 | `text` | `.text(text, opts)` | `text`, `style: "body" \| "title"` |
 | `markdown` | `.markdown(text)` | `text` |
+| `stream` | `.stream(opts)` | `markdown`, `style`；返回可推流的 handle，见「流式文本节点」 |
 | `image` | `.image(url, opts)` | `url`, `caption` |
 | `divider` | `.divider()` | 无 |
 | `space` | `.space(height)` | `height` |
@@ -809,6 +926,8 @@ on('uiAction', function(e) {
 
 规则：
 
+- `input` 节点传 `{ secure: true }`（或 `inputType: 'password'`）会变成密码框：内容默认掩码，带一个「👁」按钮临时明文查看，适合收集 API 密钥等敏感值。留空提交时插件应自行避免覆盖已保存的旧值。
+- 面板打开后可以改节点再 `update()` 局部刷新，适合内容整体换一批的场景。**不要用高频 `update()` 做打字机**：每次 `update()` 都会替换整份节点并重组整个面板，流式高频调用会闪屏。流式文本请用下面的 `stream` 节点。
 - 插件 UI 是原生 Compose UI，插件不要写 HTML/CSS 布局。
 - `dialog` 适合轻量确认、表单和结果；`page` 适合信息较多的工具页；`sheet` 目前需要通过 `fishpi.call('ui.open', ...)` 使用。
 - `update()` 会替换当前 UI 的节点；如果当前插件没有打开 UI，会自动打开。
@@ -1356,7 +1475,7 @@ on('message', function(msg) {
 
 ## 插件管理
 
-聊天室输入区 `+` 菜单中的“插件”进入插件管理；聊天室右上角“更多”里可以显示或隐藏插件快捷浮窗。
+统一入口在 首页 → 扩展中心 顶栏的「管理」按钮（也可从聊天室顶栏拼图图标进入），打开同一个底部管理面板。聊天室右上角“更多”里可以显示或隐藏插件快捷浮窗。
 
 | 操作 | 说明 |
 |------|------|
@@ -1365,6 +1484,8 @@ on('message', function(msg) {
 | 开关 | 启用或禁用插件 |
 | 删除按钮 | 卸载插件文件 |
 | 安装按钮 | 从本机选择 `.js` 插件文件复制到插件目录 |
+
+管理面板与场景无关，列出所有已安装插件；`@scenes` 只影响工具栏 / 菜单入口在各页面的露出。
 
 默认示例插件会从 App assets 复制到 `/sdcard/fishpi/plugins/red-packet-assistant.js`。
 

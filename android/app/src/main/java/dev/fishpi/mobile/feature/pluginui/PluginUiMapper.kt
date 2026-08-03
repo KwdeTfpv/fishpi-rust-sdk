@@ -34,6 +34,12 @@ object PluginUiMapper {
         val id = raw.optString("id").ifBlank { fallbackId }
         return when (type) {
             "markdown" -> PluginUiNode.Markdown(id, raw.optString("text", raw.optString("content")))
+            "stream" -> PluginUiNode.Stream(
+                id = id,
+                streamId = raw.optString("streamId").ifBlank { id },
+                markdown = raw.optBoolean("markdown", true),
+                style = raw.optString("style", "body"),
+            )
             "image" -> PluginUiNode.Image(id, raw.optString("url"), raw.optString("caption"))
             "divider" -> PluginUiNode.Divider(id)
             "space" -> PluginUiNode.Space(id, raw.optInt("height", 12))
@@ -55,6 +61,7 @@ object PluginUiMapper {
                 label = raw.optString("label").ifBlank { raw.optString("name").ifBlank { "输入" } },
                 value = raw.optString("value"),
                 placeholder = raw.optString("placeholder"),
+                secure = raw.optBoolean("secure", false) || raw.optString("inputType") == "password",
             )
             "textarea" -> PluginUiNode.Input(
                 id = id,

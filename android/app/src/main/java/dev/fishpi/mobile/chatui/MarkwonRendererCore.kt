@@ -130,6 +130,8 @@ internal class MarkwonRendererCore(
         textView.text = ""
     }
 
+    suspend fun renderToSpanned(source: String): Spanned = render(source)
+
     private suspend fun render(source: String): Spanned {
         return markwonLock.withLock {
             renderMarkdown(source)

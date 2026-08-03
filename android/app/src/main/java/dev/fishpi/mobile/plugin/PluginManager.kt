@@ -22,6 +22,13 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 
 data class PluginInfo(
     val name: String, val version: String, val author: String,
@@ -180,8 +187,43 @@ class PluginManager private constructor(context: Context) {
         "markAllNoticesRead" to listOf("apiKey"),
     )
 
+    private val sceneLock = Any()
+    private val sceneStack = LinkedHashMap<SceneToken, String>()
+
+    @Volatile
     var currentScene: String = ""
         private set
+
+    class SceneToken
+
+    fun acquireSceneToken(): SceneToken = SceneToken()
+
+    fun setSceneFor(token: SceneToken, scene: String) {
+        synchronized(sceneLock) {
+            val trimmed = scene.trim()
+            if (trimmed.isEmpty()) {
+                sceneStack.remove(token)
+            } else {
+                sceneStack.remove(token)
+                sceneStack[token] = trimmed
+            }
+        }
+        onSceneChanged()
+    }
+
+    fun releaseSceneToken(token: SceneToken) {
+        val changed = synchronized(sceneLock) { sceneStack.remove(token) != null }
+        if (changed) onSceneChanged()
+    }
+
+    private fun onSceneChanged() {
+        val top = synchronized(sceneLock) { sceneStack.values.lastOrNull() ?: "" }
+        if (top == currentScene) return
+        currentScene = top
+        if (!loaded) loadInternal()
+        refreshToolbarEntries()
+        refreshMenuActions()
+    }
 
     fun getState(fileName: String): PluginRuntimeState =
         runtimeStates.getOrPut(fileName) { PluginRuntimeState(fileName) }
@@ -233,8 +275,13 @@ class PluginManager private constructor(context: Context) {
             "ui.update" -> return PluginUiController.get().update(pluginId, args)
             "ui.close" -> return PluginUiController.get().close(pluginId)
             "ui.clear" -> return PluginUiController.get().clear(pluginId)
+            "ui.streamPush" -> return PluginUiController.get().streamPush(pluginId, args)
+            "ui.streamEnd" -> return PluginUiController.get().streamEnd(pluginId, args)
             "chat.setClientType" -> return setPluginChatClientType(pluginId, args)
             "chat.clearClientType" -> return clearPluginChatClientType(pluginId)
+            "http.request" -> return performHttpRequest(pluginId, args)
+            "http.stream.start" -> return performHttpStreamStart(pluginId, args)
+            "http.stream.abort" -> return performHttpStreamAbort(args)
         }
         val state = getState(pluginId)
         val requestId = "${pluginId}:${action}:${System.currentTimeMillis()}"
@@ -356,18 +403,13 @@ class PluginManager private constructor(context: Context) {
         }
     }
 
-    fun setScene(scene: String) {
-        currentScene = scene
-        if (!loaded) loadInternal()
-        refreshToolbarEntries()
-        refreshMenuActions()
-    }
 
-    fun emitToolbarAction(pluginId: String, entryId: String, actionId: String) {
+    fun emitToolbarAction(pluginId: String, entryId: String, actionId: String, context: JSONObject? = null) {
         val sb = sandboxes.firstOrNull { it.fileName == pluginId } ?: return
         val payload = JSONObject()
             .put("entryId", entryId)
             .put("actionId", actionId)
+        if (context != null) payload.put("context", context)
         try {
             sb.bridge.emit("toolbarAction", payload.toString())
         } catch (e: Exception) {
@@ -756,6 +798,162 @@ class PluginManager private constructor(context: Context) {
 
     private fun clearPluginChatClientType(pluginId: String): JSONObject {
         chatClientConfigs.remove(pluginId)
+        return JSONObject().put("ok", true)
+    }
+
+    private fun performHttpRequest(pluginId: String, args: JSONObject): JSONObject {
+        val url = args.optString("url").trim()
+        if (!url.startsWith("https://") && !url.startsWith("http://")) {
+            return JSONObject().put("ok", false).put("error", "invalid url")
+        }
+        val method = args.optString("method", "GET").trim().uppercase().ifBlank { "GET" }
+        val headers = args.optJSONObject("headers") ?: JSONObject()
+        val body = if (args.isNull("body")) null else args.optString("body", "")
+        val timeoutMs = args.optInt("timeoutMs", 30_000).coerceIn(1_000, 120_000)
+        val latch = CountDownLatch(1)
+        var result: JSONObject? = null
+        Thread {
+            result = runCatching { httpExchange(url, method, headers, body, timeoutMs) }
+                .getOrElse { JSONObject().put("ok", false).put("error", it.message ?: "request failed") }
+            latch.countDown()
+        }.start()
+        latch.await((timeoutMs + 5_000).toLong(), TimeUnit.MILLISECONDS)
+        getState(pluginId).lastEventAt = System.currentTimeMillis()
+        return result ?: JSONObject().put("ok", false).put("error", "timeout")
+    }
+
+    private fun httpExchange(
+        url: String,
+        method: String,
+        headers: JSONObject,
+        body: String?,
+        timeoutMs: Int,
+    ): JSONObject {
+        val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+            requestMethod = method
+            connectTimeout = timeoutMs
+            readTimeout = timeoutMs
+            setRequestProperty("Accept", "application/json, text/plain, */*")
+            setRequestProperty("User-Agent", "FishPi-Mobile-Android")
+            headers.keys().forEach { key -> setRequestProperty(key, headers.optString(key)) }
+            if (body != null && method != "GET" && method != "HEAD") {
+                doOutput = true
+                outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            }
+        }
+        return try {
+            val status = conn.responseCode
+            val stream = if (status in 200..299) conn.inputStream else conn.errorStream
+            val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
+            JSONObject().put("ok", status in 200..299).put("status", status).put("body", text)
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private val streamClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(0, TimeUnit.SECONDS)
+            .build()
+    }
+    private val activeStreams = ConcurrentHashMap<String, Call>()
+
+    private fun emitStreamEvent(pluginId: String, payload: JSONObject) {
+        val sb = sandboxes.firstOrNull { it.fileName == pluginId } ?: return
+        try {
+            sb.bridge.emit("httpStream", payload.toString())
+        } catch (e: Exception) {
+            getState(pluginId).recordError("emit httpStream: ${e.message}")
+        }
+    }
+
+    private fun performHttpStreamStart(pluginId: String, args: JSONObject): JSONObject {
+        val streamId = args.optString("streamId").trim()
+        if (streamId.isBlank()) return JSONObject().put("ok", false).put("error", "streamId required")
+        val url = args.optString("url").trim()
+        if (!url.startsWith("https://") && !url.startsWith("http://")) {
+            return JSONObject().put("ok", false).put("error", "invalid url")
+        }
+        val method = args.optString("method", "POST").trim().uppercase().ifBlank { "POST" }
+        val headers = args.optJSONObject("headers") ?: JSONObject()
+        val bodyStr = if (args.isNull("body")) null else args.optString("body", "")
+        val timeoutMs = args.optInt("timeoutMs", 120_000).coerceIn(1_000, 600_000)
+
+        val builder = Request.Builder().url(url)
+            .header("Accept", "text/event-stream")
+            .header("User-Agent", "FishPi-Mobile-Android")
+        headers.keys().forEach { key -> builder.header(key, headers.optString(key)) }
+        val mediaType = headers.optString("Content-Type", "application/json").toMediaTypeOrNull()
+        val reqBody = if (bodyStr != null && method != "GET" && method != "HEAD") {
+            bodyStr.toRequestBody(mediaType)
+        } else null
+        builder.method(method, reqBody)
+
+        val call = streamClient.newBuilder()
+            .callTimeout(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
+            .build()
+            .newCall(builder.build())
+        activeStreams[streamId] = call
+        getState(pluginId).lastEventAt = System.currentTimeMillis()
+        call.enqueue(streamCallback(pluginId, streamId))
+        return JSONObject().put("ok", true)
+    }
+
+    private fun streamCallback(pluginId: String, streamId: String) = object : Callback {
+        override fun onFailure(call: Call, e: java.io.IOException) {
+            activeStreams.remove(streamId)
+            if (call.isCanceled()) return  // abort 主动取消,不当作错误
+            emitStreamEvent(pluginId, JSONObject().put("streamId", streamId)
+                .put("type", "error").put("error", e.message ?: "network error"))
+        }
+
+        override fun onResponse(call: Call, response: Response) {
+            response.use { resp ->
+                val code = resp.code
+                if (!resp.isSuccessful) {
+                    val detail = try { resp.body?.string()?.take(500) ?: "" } catch (_: Exception) { "" }
+                    activeStreams.remove(streamId)
+                    emitStreamEvent(pluginId, JSONObject().put("streamId", streamId)
+                        .put("type", "error").put("error", "HTTP $code").put("detail", detail))
+                    return
+                }
+                val source = resp.body?.source()
+                if (source == null) {
+                    activeStreams.remove(streamId)
+                    emitStreamEvent(pluginId, JSONObject().put("streamId", streamId)
+                        .put("type", "error").put("error", "empty body"))
+                    return
+                }
+                try {
+                    while (!source.exhausted()) {
+                        val line = source.readUtf8Line() ?: break
+                        if (line.startsWith("data:")) {
+                            val data = line.substring(5).trim()
+                            if (data == "[DONE]") break
+                            if (data.isNotEmpty()) {
+                                emitStreamEvent(pluginId, JSONObject().put("streamId", streamId)
+                                    .put("type", "chunk").put("data", data))
+                            }
+                        }
+                        getState(pluginId).lastEventAt = System.currentTimeMillis()
+                    }
+                    activeStreams.remove(streamId)
+                    emitStreamEvent(pluginId, JSONObject().put("streamId", streamId).put("type", "done"))
+                } catch (e: Exception) {
+                    activeStreams.remove(streamId)
+                    if (!call.isCanceled()) {
+                        emitStreamEvent(pluginId, JSONObject().put("streamId", streamId)
+                            .put("type", "error").put("error", e.message ?: "read error"))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun performHttpStreamAbort(args: JSONObject): JSONObject {
+        val streamId = args.optString("streamId").trim()
+        activeStreams.remove(streamId)?.cancel()
         return JSONObject().put("ok", true)
     }
 
