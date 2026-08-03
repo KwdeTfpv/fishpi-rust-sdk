@@ -321,6 +321,21 @@ data class ArticleDetailView(
     val comments: List<ArticleCommentView>,
 )
 
+fun ArticleDetailView.toPluginJson(): org.json.JSONObject = org.json.JSONObject().apply {
+    put("id", id)
+    put("title", title)
+    put("author", author)
+    put("authorUserName", authorUserName)
+    put("time", time)
+    put("tags", tags)
+    put("markdown", markdown)
+    put("content", markdown)
+    put("imageUrls", org.json.JSONArray(imageUrls))
+    put("linkUrls", org.json.JSONArray(linkUrls))
+    put("commentCount", commentCount)
+    put("viewCount", viewCount)
+}
+
 data class ArticleCommentView(
     val id: String,
     val author: String,

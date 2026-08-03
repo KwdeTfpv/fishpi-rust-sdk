@@ -284,6 +284,7 @@ internal interface DefaultChatUiBridge {
     val pluginMenuActions: List<PluginMenuAction>
 
     fun setPluginScene(scene: String)
+    fun releasePluginScene()
     fun setPluginSystemMessageHandler(shouldFollowBottom: () -> Boolean)
     fun clearError()
     fun showError(reason: String)
@@ -421,11 +422,12 @@ private fun DefaultChatUiContent(
     val keepPositionAfterPrependCount = bridge.keepPositionAfterPrependCount
     val preloadedImageUrls = remember { LinkedHashSet<String>() }
 
-    LaunchedEffect(Unit) {
+    DisposableEffect(Unit) {
         bridge.setPluginScene("chatRoom")
         bridge.setPluginSystemMessageHandler {
             chatListNearBottom && actionAnchor == null
         }
+        onDispose { bridge.releasePluginScene() }
     }
 
     LaunchedEffect(error, messages.isNotEmpty()) {

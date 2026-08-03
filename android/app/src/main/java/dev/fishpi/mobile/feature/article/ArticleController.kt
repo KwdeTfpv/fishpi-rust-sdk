@@ -1,11 +1,15 @@
 package dev.fishpi.mobile.feature.article
 
+import android.content.Context
 import dev.fishpi.mobile.core.ui.UiController
 import dev.fishpi.mobile.data.ArticleDetailView
 import dev.fishpi.mobile.data.ArticleRealtimeClient
 import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.data.FishPiApiClient
+import dev.fishpi.mobile.data.toPluginJson
+import dev.fishpi.mobile.plugin.PluginManager
+import dev.fishpi.mobile.plugin.PluginToolbarEntry
 import dev.fishpi.mobile.feature.article.mapper.toArticleSummaryUiModel
 import dev.fishpi.mobile.feature.article.mapper.toSummary
 import dev.fishpi.mobile.feature.article.model.ArticleOverlayState
@@ -28,7 +32,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 internal class ArticleController(
+    context: Context,
     private val apiKey: String,
+    currentUsername: String = "",
     private val api: FishPiApiClient = FishPiApiClient.shared,
     private val realtime: ArticleRealtimeClient = ArticleRealtimeClient(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
@@ -41,6 +47,29 @@ internal class ArticleController(
 
     private val requestedPages = mutableSetOf<Int>()
     private var heatJob: Job? = null
+
+    private val pluginManager = PluginManager.init(context).also {
+        it.apiKey = apiKey
+        if (currentUsername.isNotBlank()) it.userName = currentUsername
+    }
+
+    val pluginToolbarEntries: List<PluginToolbarEntry>
+        get() = pluginManager.toolbarEntries
+
+    private val sceneToken = pluginManager.acquireSceneToken()
+
+    fun setPluginScene(scene: String) {
+        pluginManager.setSceneFor(sceneToken, scene)
+    }
+
+    fun releasePluginScene() {
+        pluginManager.releaseSceneToken(sceneToken)
+    }
+
+    fun emitPluginToolbarAction(entry: PluginToolbarEntry, actionId: String) {
+        val context = _state.value.detail?.toPluginJson()
+        pluginManager.emitToolbarAction(entry.pluginId, entry.id, actionId, context)
+    }
 
     override fun dispatch(action: ArticleAction) {
         when (action) {

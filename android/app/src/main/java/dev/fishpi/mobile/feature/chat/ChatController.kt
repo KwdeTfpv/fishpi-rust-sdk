@@ -189,8 +189,14 @@ internal class ChatController(
         }
     }
 
+    private val sceneToken = pluginManager.acquireSceneToken()
+
     fun setPluginScene(scene: String) {
-        pluginManager.setScene(scene)
+        pluginManager.setSceneFor(sceneToken, scene)
+    }
+
+    fun releasePluginScene() {
+        pluginManager.releaseSceneToken(sceneToken)
     }
 
     fun setPluginSystemMessageHandler(shouldFollowBottom: () -> Boolean) {

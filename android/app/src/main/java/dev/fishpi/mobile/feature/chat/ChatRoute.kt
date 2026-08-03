@@ -128,6 +128,7 @@ internal fun ChatRoute(
                 override val pluginMenuActions get() = chatController.pluginMenuActions
 
                 override fun setPluginScene(scene: String) = chatController.setPluginScene(scene)
+                override fun releasePluginScene() = chatController.releasePluginScene()
                 override fun setPluginSystemMessageHandler(shouldFollowBottom: () -> Boolean) = chatController.setPluginSystemMessageHandler(shouldFollowBottom)
                 override fun clearError() {
                     routeError = null

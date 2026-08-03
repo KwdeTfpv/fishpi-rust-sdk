@@ -38,7 +38,13 @@ internal fun ArticleRoute(
     onOpenUserProfile: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
-    val controller = remember(session.apiKey) { ArticleController(apiKey = session.apiKey) }
+    val controller = remember(session.apiKey) {
+        ArticleController(
+            context = context.applicationContext,
+            apiKey = session.apiKey,
+            currentUsername = session.user.userName,
+        )
+    }
     val publishController = remember(session.apiKey) { ArticlePublishController(apiKey = session.apiKey) }
     val state by controller.state.collectAsState()
     val publishState by publishController.state.collectAsState()
@@ -115,6 +121,14 @@ internal fun ArticleRoute(
         onDetailActiveChange(state.selected != null || state.publishOpen)
     }
 
+    LaunchedEffect(active, state.selected != null, state.publishOpen) {
+        controller.setPluginScene(if (active && state.selected != null && !state.publishOpen) "article" else "")
+    }
+
+    DisposableEffect(controller) {
+        onDispose { controller.releasePluginScene() }
+    }
+
     DisposableEffect(active, state.selected?.id, state.publishOpen) {
         controller.connectArticleRealtime(active && !state.publishOpen)
         onDispose {
@@ -147,6 +161,8 @@ internal fun ArticleRoute(
                 dispatch = controller::dispatch,
                 pendingJump = pendingArticleJump,
                 pendingJumpSummary = if (pendingArticleJump && jumpSummary?.id == jumpArticleId) jumpSummary else null,
+                pluginToolbarEntries = controller.pluginToolbarEntries,
+                onPluginToolbarAction = controller::emitPluginToolbarAction,
             )
         }
     }

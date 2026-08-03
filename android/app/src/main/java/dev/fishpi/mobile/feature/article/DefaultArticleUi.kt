@@ -73,6 +73,7 @@ import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AttachMoney
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BrokenImage
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FilterAlt
@@ -98,8 +99,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import dev.fishpi.mobile.plugin.PluginToolbarEntry
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -196,6 +200,8 @@ internal fun DefaultArticleUi(
     dispatch: (ArticleAction) -> Unit,
     pendingJump: Boolean = false,
     pendingJumpSummary: ArticleSummary? = null,
+    pluginToolbarEntries: List<PluginToolbarEntry> = emptyList(),
+    onPluginToolbarAction: (PluginToolbarEntry, String) -> Unit = { _, _ -> },
 ) {
     val listState = rememberLazyListState()
     val imageViewer = LocalImageViewer.current
@@ -316,6 +322,8 @@ internal fun DefaultArticleUi(
             onPickCommentImage = { dispatch(ArticleAction.PickCommentImage) },
             onCaptureCommentImage = { dispatch(ArticleAction.CaptureCommentImage) },
             onShare = { dispatch(ArticleAction.ShareArticle) },
+            pluginToolbarEntries = pluginToolbarEntries,
+            onPluginToolbarAction = onPluginToolbarAction,
         )
     }
     }
@@ -1151,6 +1159,8 @@ private fun ArticleDetailPage(
     onPickCommentImage: () -> Unit,
     onCaptureCommentImage: () -> Unit,
     onShare: () -> Unit,
+    pluginToolbarEntries: List<PluginToolbarEntry> = emptyList(),
+    onPluginToolbarAction: (PluginToolbarEntry, String) -> Unit = { _, _ -> },
 ) {
     val bodyListState = rememberLazyListState()
     val commentListState = rememberLazyListState()
@@ -1196,6 +1206,11 @@ private fun ArticleDetailPage(
                         )
                     }
                 }
+                ArticlePluginToolbarButton(
+                    entries = pluginToolbarEntries,
+                    enabled = detail != null,
+                    onAction = onPluginToolbarAction,
+                )
                 IconActionButton(
                     icon = Icons.Rounded.IosShare,
                     contentDescription = "分享",
@@ -1520,6 +1535,45 @@ private fun ArticleHeatBadge(heat: Long?) {
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
         )
+    }
+}
+
+@Composable
+private fun ArticlePluginToolbarButton(
+    entries: List<PluginToolbarEntry>,
+    enabled: Boolean,
+    onAction: (PluginToolbarEntry, String) -> Unit,
+) {
+    val actions = remember(entries) {
+        entries.flatMap { entry -> entry.actions.filter { it.enabled }.map { entry to it } }
+    }
+    if (actions.isEmpty()) return
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconActionButton(
+            icon = Icons.Rounded.AutoAwesome,
+            contentDescription = "插件",
+            enabled = enabled,
+            onClick = {
+                if (actions.size == 1) {
+                    val (entry, action) = actions.first()
+                    onAction(entry, action.id)
+                } else {
+                    expanded = true
+                }
+            },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            actions.forEach { (entry, action) ->
+                DropdownMenuItem(
+                    text = { Text(action.label) },
+                    onClick = {
+                        expanded = false
+                        onAction(entry, action.id)
+                    },
+                )
+            }
+        }
     }
 }
 
