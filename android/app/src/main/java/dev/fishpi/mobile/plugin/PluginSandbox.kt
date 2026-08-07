@@ -195,7 +195,9 @@ var ui={
             ? Object.assign({},textOrOptions)
             : {text:String(textOrOptions||''),type:type||'info'};
         return fishpi.call('app.notify',payload);
-    }
+    },
+    copy:function(text){return fishpi.call('ui.copy',{text:String(text||'')});},
+    exportCard:function(opts){return fishpi.call('ui.exportCard',opts||{});}
 };
 fishpi.ui=(function(){
     var callbacks={};

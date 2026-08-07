@@ -1,7 +1,9 @@
 package dev.fishpi.mobile.feature.pluginui
 
+import android.text.method.LinkMovementMethod
 import android.widget.TextView
 import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -164,8 +167,53 @@ private fun PluginUiSurface(
                 }
             }
         },
+        bottomBar = {
+            val actionNodes = document.nodes.takeLastWhile {
+                it is PluginUiNode.Button || it is PluginUiNode.ActionBar
+            }
+            if (actionNodes.isNotEmpty()) {
+                ControlSurface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(
+                            horizontal = FishPiTheme.spacingPage,
+                            vertical = FishPiTheme.spacingItem,
+                        ),
+                ) {
+                    val allButtons = actionNodes.all { it is PluginUiNode.Button }
+                    if (allButtons) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
+                        ) {
+                            actionNodes.forEach { node ->
+                                node as PluginUiNode.Button
+                                ActionChipButton(
+                                    text = node.label,
+                                    onClick = { dispatch(PluginUiAction.TriggerAction(node.actionId, node.id)) },
+                                    enabled = node.enabled,
+                                    selected = true,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem)) {
+                            actionNodes.forEach { node ->
+                                PluginUiNodeView(node = node, state = state, dispatch = dispatch)
+                            }
+                        }
+                    }
+                }
+            }
+        },
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
     ) { innerPadding ->
+        val bottomActionCount = document.nodes.takeLastWhile {
+            it is PluginUiNode.Button || it is PluginUiNode.ActionBar
+        }.size
+        val scrollNodes = document.nodes.dropLast(bottomActionCount)
         UiLayerScaffold {
             LazyColumn(
                 modifier = Modifier
@@ -180,10 +228,10 @@ private fun PluginUiSurface(
                 document.error?.let {
                     item { PluginErrorText(it) }
                 }
-                if (document.nodes.isEmpty()) {
+                if (document.nodes.isEmpty() && document.error == null) {
                     item { PluginEmptyText("暂无插件内容") }
                 }
-                items(document.nodes, key = { it.id }) { node ->
+                items(scrollNodes, key = { it.id }) { node ->
                     PluginUiNodeView(node = node, state = state, dispatch = dispatch)
                 }
             }
@@ -256,7 +304,7 @@ private fun PluginStream(node: PluginUiNode.Stream) {
                 style = MaterialTheme.typography.bodyMedium,
             )
         } else {
-            PluginMarkdown(projected, node.id)
+            StreamingPluginMarkdown(projected)
         }
     } else {
         Text(
@@ -269,7 +317,7 @@ private fun PluginStream(node: PluginUiNode.Stream) {
 }
 
 @Composable
-private fun PluginMarkdown(text: String, key: String) {
+private fun rememberPluginMarkwonRenderer(): MarkwonContentRenderer {
     val context = LocalContext.current
     val cache = remember { ChatMarkdownRenderCache(maxEntries = 40, maxChars = 120_000) }
     val scope = remember { kotlinx.coroutines.CoroutineScope(SupervisorJob() + Dispatchers.Default) }
@@ -290,12 +338,54 @@ private fun PluginMarkdown(text: String, key: String) {
             cache.clear()
         }
     }
+    return renderer
+}
+
+@Composable
+private fun PluginMarkdown(text: String, key: String) {
+    val renderer = rememberPluginMarkwonRenderer()
     AndroidView(
         modifier = Modifier.fillMaxWidth(),
         factory = { TextView(it) },
         update = { view -> renderer.renderInto(view, "plugin-md-$key-${text.hashCode()}", text) },
         onRelease = { view -> renderer.clear(view) },
     )
+}
+
+@Composable
+private fun StreamingPluginMarkdown(text: String) {
+    val renderer = rememberPluginMarkwonRenderer()
+    var rendered by remember { mutableStateOf<CharSequence?>(null) }
+    val textColorArgb = FishPiTheme.onSurface.toArgb()
+
+    LaunchedEffect(text, renderer) {
+        val spanned = runCatching { renderer.renderToSpanned(text) }.getOrNull()
+        if (spanned != null) rendered = spanned
+    }
+
+    val display = rendered
+    if (display == null) {
+        Text(
+            text = text,
+            color = FishPiTheme.onSurface,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    } else {
+        AndroidView(
+            modifier = Modifier.fillMaxWidth(),
+            factory = { ctx ->
+                TextView(ctx).apply {
+                    setTextColor(textColorArgb)
+                    textSize = 15f
+                    includeFontPadding = false
+                    setLineSpacing(0f, 1.24f)
+                    movementMethod = LinkMovementMethod.getInstance()
+                }
+            },
+            update = { view -> view.text = display },
+        )
+    }
 }
 
 @Composable

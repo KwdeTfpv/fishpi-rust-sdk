@@ -326,6 +326,7 @@ fun ArticleDetailView.toPluginJson(): org.json.JSONObject = org.json.JSONObject(
     put("title", title)
     put("author", author)
     put("authorUserName", authorUserName)
+    put("avatar", avatar)
     put("time", time)
     put("tags", tags)
     put("markdown", markdown)

@@ -59,6 +59,22 @@ fun PluginListSheet(onDismiss: () -> Unit) {
             FishPiNotifier.error("安装失败: ${e.message ?: "未知错误"}")
         }
     }
+    var reimportTarget by remember { mutableStateOf<String?>(null) }
+    val reimportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        val target = reimportTarget
+        reimportTarget = null
+        if (uri == null || target == null) return@rememberLauncherForActivityResult
+        runCatching {
+            pm.reimportPluginFromUri(uri, target)
+        }.onSuccess { fileName ->
+            plugins = pm.pluginInfos()
+            FishPiNotifier.success("已修复导入: $fileName，启用前需要确认安全风险")
+        }.onFailure { e ->
+            FishPiNotifier.error("修复失败: ${e.message ?: "未知错误"}")
+        }
+    }
 
     // Delete confirmation
     deleteConfirm?.let { plugin ->
@@ -222,6 +238,17 @@ fun PluginListSheet(onDismiss: () -> Unit) {
                         contentPadding = PaddingValues(bottom = 10.dp),
                     ) {
                         items(plugins, key = { it.fileName }) { plugin ->
+                            if (!plugin.readable) {
+                                UnreadablePluginCard(
+                                    fileName = plugin.fileName,
+                                    onReimport = {
+                                        reimportTarget = plugin.fileName
+                                        reimportLauncher.launch(arrayOf("text/*", "application/javascript"))
+                                    },
+                                    onDelete = { deleteConfirm = plugin },
+                                )
+                                return@items
+                            }
                             val state = pm.getState(plugin.fileName)
                             Card(
                                 shape = RoundedCornerShape(16.dp),
@@ -315,6 +342,38 @@ private fun PluginSource.label(): String = when (this) {
     PluginSource.Store -> "扩展集市"
     PluginSource.Local -> "本地导入"
     PluginSource.Unknown -> "未知来源"
+}
+
+@Composable
+private fun UnreadablePluginCard(
+    fileName: String,
+    onReimport: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(fileName, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = FishPiTheme.onSurface,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("⚠️ 权限受限，无法读取", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+            Text("该文件由其它应用写入、权限受限，App 读不到内容。点「重新导入」重选此文件即可修复。",
+                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onDelete, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)) {
+                    Text("删除", color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                }
+                Spacer(Modifier.width(4.dp))
+                TextButton(onClick = onReimport, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)) {
+                    Icon(Icons.Rounded.FileOpen, "重新导入", modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("重新导入", fontSize = 13.sp)
+                }
+            }
+        }
+    }
 }
 
 @Composable

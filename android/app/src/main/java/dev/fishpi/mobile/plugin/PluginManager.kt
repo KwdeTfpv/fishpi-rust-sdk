@@ -34,6 +34,7 @@ data class PluginInfo(
     val name: String, val version: String, val author: String,
     val scenes: List<String>, val fileName: String, val enabled: Boolean,
     val source: PluginSource = PluginSource.Unknown,
+    val readable: Boolean = true,
 )
 
 enum class PluginSource { Store, Local, Unknown }
@@ -277,6 +278,8 @@ class PluginManager private constructor(context: Context) {
             "ui.clear" -> return PluginUiController.get().clear(pluginId)
             "ui.streamPush" -> return PluginUiController.get().streamPush(pluginId, args)
             "ui.streamEnd" -> return PluginUiController.get().streamEnd(pluginId, args)
+            "ui.copy" -> return copyToClipboard(args)
+            "ui.exportCard" -> return exportSummaryCard(args)
             "chat.setClientType" -> return setPluginChatClientType(pluginId, args)
             "chat.clearClientType" -> return clearPluginChatClientType(pluginId)
             "http.request" -> return performHttpRequest(pluginId, args)
@@ -446,17 +449,31 @@ class PluginManager private constructor(context: Context) {
     fun pluginInfos(): List<PluginInfo> {
         val disabled = disabledFileNames()
         return pluginDir.listFiles { f -> f.extension == "js" }?.mapNotNull { f ->
-            val h = PluginHeaderParser.parse(f.readText()) ?: return@mapNotNull null
-            val needsConfirmation = requiresSafetyConfirmation(f.name)
-            PluginInfo(
-                h.name,
-                h.version,
-                h.author,
-                h.scenes,
-                f.name,
-                !disabled.contains(f.name) && !needsConfirmation,
-                pluginSource(f.name),
-            )
+            runCatching {
+                val h = PluginHeaderParser.parse(f.readText()) ?: return@runCatching null
+                val needsConfirmation = requiresSafetyConfirmation(f.name)
+                PluginInfo(
+                    h.name,
+                    h.version,
+                    h.author,
+                    h.scenes,
+                    f.name,
+                    !disabled.contains(f.name) && !needsConfirmation,
+                    pluginSource(f.name),
+                    readable = true,
+                )
+            }.getOrElse {
+                PluginInfo(
+                    name = f.nameWithoutExtension,
+                    version = "",
+                    author = "",
+                    scenes = emptyList(),
+                    fileName = f.name,
+                    enabled = false,
+                    source = PluginSource.Unknown,
+                    readable = false,
+                )
+            }
         }?.toList() ?: emptyList()
     }
 
@@ -511,7 +528,8 @@ class PluginManager private constructor(context: Context) {
         if (!file.exists()) return false
         if (isStoreVerified(fileName, file)) return false
         val approvedHash = storageFor("__manager").getString("approved_hash:$fileName", "")
-        return approvedHash != file.sha256()
+        val currentHash = runCatching { file.sha256() }.getOrNull() ?: return true
+        return approvedHash != currentHash
     }
 
     fun approvePluginForCurrentContent(fileName: String) {
@@ -535,6 +553,29 @@ class PluginManager private constructor(context: Context) {
             .replace(Regex("[^A-Za-z0-9._-]"), "_")
         val finalName = if (safeBase.endsWith(".js", ignoreCase = true)) safeBase else "$safeBase.js"
         val target = File(pluginDir, finalName)
+        appContext.contentResolver.openInputStream(uri)?.use { input ->
+            target.outputStream().use { output -> input.copyTo(output) }
+        } ?: throw IOException("无法读取所选文件")
+        markPluginSource(finalName, PluginSource.Local)
+        val disabled = disabledFileNames().toMutableSet()
+        disabled.add(finalName)
+        storageFor("__manager").edit()
+            .putStringSet("disabled", disabled)
+            .remove("approved_hash:$finalName")
+            .remove("store_hash:$finalName")
+            .apply()
+        destroyPlugin(finalName)
+        getState(finalName).status = PluginStatus.Disabled
+        return finalName
+    }
+
+    fun reimportPluginFromUri(uri: Uri, targetFileName: String): String {
+        pluginDir.mkdirs()
+        val finalName = targetFileName.takeIf {
+            it.endsWith(".js", ignoreCase = true) && !it.contains('/') && !it.contains('\\')
+        } ?: throw IOException("非法目标文件名")
+        val target = File(pluginDir, finalName)
+        runCatching { if (target.exists()) target.delete() }
         appContext.contentResolver.openInputStream(uri)?.use { input ->
             target.outputStream().use { output -> input.copyTo(output) }
         } ?: throw IOException("无法读取所选文件")
@@ -957,6 +998,35 @@ class PluginManager private constructor(context: Context) {
         return JSONObject().put("ok", true)
     }
 
+    private fun copyToClipboard(args: JSONObject): JSONObject {
+        val text = args.optString("text")
+        if (text.isBlank()) return JSONObject().put("ok", false).put("error", "empty text")
+        val run = Runnable {
+            runCatching {
+                val cm = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("FishPi", text))
+                FishPiNotifier.success("已复制")
+            }.onFailure { FishPiNotifier.error("复制失败：${it.message}") }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) run.run() else mainHandler.post(run)
+        return JSONObject().put("ok", true)
+    }
+
+    private fun exportSummaryCard(args: JSONObject): JSONObject {
+        val markdown = args.optString("markdown")
+        if (markdown.isBlank()) return JSONObject().put("ok", false).put("error", "empty markdown")
+        PluginCardExporter.export(
+            appContext = appContext,
+            title = args.optString("title"),
+            author = args.optString("author"),
+            avatarUrl = args.optString("avatar"),
+            source = args.optString("source").ifBlank { "摸鱼派 · AI 总结" },
+            markdown = markdown,
+            footer = args.optString("footer"),
+        )
+        return JSONObject().put("ok", true)
+    }
+
     private fun refreshToolbarEntries() {
         val visible = synchronized(toolbarLock) {
             toolbarEntriesByPlugin.values
@@ -1011,7 +1081,9 @@ class PluginManager private constructor(context: Context) {
 
     private fun isStoreVerified(fileName: String, file: File = File(pluginDir, fileName)): Boolean {
         val storeHash = storageFor("__manager").getString("store_hash:$fileName", "") ?: ""
-        return storeHash.isNotBlank() && file.exists() && storeHash == file.sha256()
+        if (storeHash.isBlank() || !file.exists()) return false
+        val hash = runCatching { file.sha256() }.getOrNull() ?: return false
+        return storeHash == hash
     }
 
     private fun markPluginSource(fileName: String, source: PluginSource) {
@@ -1034,13 +1106,13 @@ class PluginManager private constructor(context: Context) {
         val disabled = disabledFileNames()
         pluginDir.listFiles { f -> f.extension == "js" }?.forEach { file ->
             if (file.name in disabled) return@forEach
-            if (requiresSafetyConfirmation(file.name)) {
-                getState(file.name).status = PluginStatus.Disabled
-                return@forEach
-            }
             runCatching {
+                if (requiresSafetyConfirmation(file.name)) {
+                    getState(file.name).status = PluginStatus.Disabled
+                    return@runCatching
+                }
                 val script = file.readText()
-                val header = PluginHeaderParser.parse(script) ?: return@forEach
+                val header = PluginHeaderParser.parse(script) ?: return@runCatching
                 val sandbox = PluginSandbox(appContext, file.name, header, script)
                 sandbox.start()
                 sandboxes.add(sandbox)
