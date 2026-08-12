@@ -942,6 +942,7 @@ on('uiAction', function(e) {
 - [聊天室](#聊天室)
 - [红包](#红包)
 - [用户](#用户)
+- [职业成长](#职业成长)
 - [私聊](#私聊)
 - [文章](#文章)
 - [表情](#表情)
@@ -1128,6 +1129,103 @@ fishpi.call('sendRedPacket', {
     "medal_attr": "backcolor=...&fontcolor=...&url=..."
   }
 ]
+```
+
+### 职业成长
+
+| 方法 | 参数 | 返回 |
+|------|------|------|
+| `getProfessionMe` | 无 | `ProfessionSettings` |
+| `getProfessionDetail` | `professionId: string, dark: boolean` | `ProfessionDetail` |
+| `getProfessionRecords` | `professionId: string, beforeOccurredAt: number, beforeEffectId: string, limit: number` | `ProfessionRecordsPage` |
+| `setPrimaryProfession` | `professionId: string` | `ProfessionSettings` |
+| `skipProfessionPrompt` | 无 | `null` |
+| `updateProfessionPrivacy` | `preset: string, professions: boolean, experience: boolean, contributions: boolean, activity: boolean, ranking: boolean` | `ProfessionSettings` |
+| `getUserProfession` | `userName: string, position: string, dark: boolean` | `PublicProfessionProfile` |
+| `getProfessionRanking` | `professionId: string, dark: boolean` | `ProfessionRanking` |
+
+这些方法走 App native SDK 调用，插件不需要也不应该手动传 Cookie 或 csrfToken。`preset` 可选值：`ALL_PUBLIC`、`LEVEL_ONLY`、`PRIMARY_ONLY`、`SELF_ONLY`、`FULLY_HIDDEN`、`CUSTOM`。当 `preset` 为 `CUSTOM` 时，后面的五个布尔参数会作为完整 `moduleVisibility` 提交；其他预设会忽略这些布尔参数。
+
+`ProfessionSettings`：
+
+```json
+{
+  "primaryProfessionId": "1760000000000000000",
+  "progress": [
+    { "professionId": "1760000000000000000", "totalExperience": 120 }
+  ],
+  "availableProfessions": [
+    { "professionId": "1760000000000000000", "displayName": "著述家" }
+  ],
+  "growthGuides": {
+    "1760000000000000000": ["article.published"]
+  },
+  "privacyPreset": "LEVEL_ONLY",
+  "moduleVisibility": {
+    "professions": true,
+    "experience": false,
+    "contributions": true,
+    "activity": false,
+    "ranking": false
+  }
+}
+```
+
+`ProfessionDetail`：
+
+```json
+{
+  "profession": {
+    "professionId": "1760000000000000000",
+    "displayName": "著述家",
+    "levelCode": "writer.2",
+    "levelName": "成章",
+    "totalExperience": 120
+  },
+  "levels": [
+    { "code": "writer.1", "displayName": "入门", "requiredExperience": 0 }
+  ],
+  "rarity": { "rank": 12, "surpassedPercent": 80 },
+  "contributions": [
+    { "actionCode": "article.publish", "sourceLabel": "发布帖子", "eventCount": 12, "experienceSum": 120 }
+  ]
+}
+```
+
+`ProfessionRecordsPage`：
+
+```json
+{
+  "records": [
+    {
+      "effectId": "1760000000000000001",
+      "actionCode": "article.publish",
+      "sourceLabel": "发布帖子",
+      "experienceDelta": 20,
+      "beforeExperience": 100,
+      "afterExperience": 120,
+      "occurredAt": 1760000000000
+    }
+  ],
+  "nextCursor": {
+    "beforeOccurredAt": 1760000000000,
+    "beforeEffectId": "1760000000000000001"
+  }
+}
+```
+
+`ProfessionRanking.entries[]`：
+
+```json
+{
+  "rank": 1,
+  "userName": "adlered",
+  "userNickname": "阿达",
+  "userAvatarURL48": "https://...",
+  "professionName": "著述家",
+  "levelName": "成章",
+  "totalExperience": 101
+}
 ```
 
 ### 私聊

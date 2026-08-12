@@ -2,12 +2,12 @@ use crate::jni_utils::{emit_callback, string_arg, to_jstring};
 use crate::mappers::*;
 use crate::runtime::runtime_json;
 use crate::session::current_user;
-use fishpi_sdk::api::article::ArticleListener;
-use fishpi_sdk::api::ws::WebSocketClient;
-use fishpi_sdk::model::article::{ArticleDraftSave, ArticlePost, ArticleType, CommentPost};
+use fishpi_sdk::client::{ArticleConnection, ArticleDraftSave, ArticlePost};
+use fishpi_sdk::domain::article::ArticleType;
+use fishpi_sdk::domain::comment::CommentPost;
 use jni::JNIEnv;
 use jni::objects::{JClass, JObject, JString};
-use jni::sys::{jlong, jstring};
+use jni::sys::{jboolean, jlong, jstring};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -15,7 +15,7 @@ use tokio::time::timeout;
 
 struct AndroidArticleConnection {
     _runtime: tokio::runtime::Runtime,
-    ws: Mutex<WebSocketClient>,
+    connection: Mutex<ArticleConnection>,
 }
 
 fn blank_to_none(value: String) -> Option<String> {
@@ -51,7 +51,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getArticles(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let article = &user.article;
+                let article = user.article();
                 let tag_opt = if tag_name.trim().is_empty() {
                     None
                 } else {
@@ -102,7 +102,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getUserArticles(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user_client = current_user(&token).await?;
-                let article = &user_client.article;
+                let article = user_client.article();
                 let list = timeout(
                     Duration::from_secs(15),
                     article.list_by_user(user.trim(), page.max(1) as u32, 20),
@@ -143,20 +143,22 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getArticleDetail
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let article = &user.article;
+                let article = user.article();
                 let page = page.max(1) as u32;
-                let mut detail = timeout(Duration::from_secs(15), article.detail(&id, page))
-                    .await
-                    .map_err(|_| "加载帖子详情超时".to_string())?
-                    .map_err(|err| format!("加载帖子详情失败: {err}"))?;
-                if let Ok(markdown_result) =
-                    timeout(Duration::from_secs(10), article.markdown_source(&id)).await
+                let mut detail =
+                    timeout(Duration::from_secs(15), article.detail(id.as_str(), page))
+                        .await
+                        .map_err(|_| "加载帖子详情超时".to_string())?
+                        .map_err(|err| format!("加载帖子详情失败: {err}"))?;
+                if let Ok(markdown_result) = timeout(
+                    Duration::from_secs(10),
+                    article.markdown_source(id.as_str()),
+                )
+                .await
+                    && let Ok(source) = markdown_result
+                    && !source.trim().is_empty()
                 {
-                    if let Ok(source) = markdown_result {
-                        if !source.trim().is_empty() {
-                            detail.source = source;
-                        }
-                    }
+                    detail.source = source;
                 }
                 Ok(article_detail_to_json(detail, page))
             })
@@ -180,7 +182,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getArticleHeat(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let heat = timeout(Duration::from_secs(10), user.article.heat(&id))
+                let heat = timeout(Duration::from_secs(10), user.article().heat(id.as_str()))
                     .await
                     .map_err(|_| "加载阅读人数超时".to_string())?
                     .map_err(|err| format!("加载阅读人数失败: {err}"))?;
@@ -212,45 +214,43 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_connectArticle(
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|err| format!("Rust runtime init failed: {err}"))?;
 
-        let ws = runtime.block_on(async {
-            let user = current_user(&token).await?;
-            let article_type = ArticleType::from_index(article_type.max(0) as usize);
-            let java_vm_for_article = Arc::clone(&java_vm);
-            let callback_for_article = callback.clone();
-            let listener: ArticleListener = Arc::new(move |msg: Value| {
-                let java_vm = Arc::clone(&java_vm_for_article);
-                let callback = callback_for_article.clone();
-                Box::pin(async move {
-                    if msg["type"].as_str() == Some("articleHeat") {
-                        emit_callback(
-                            &java_vm,
-                            &callback,
-                            json!({
-                                "event": "articleHeat",
-                                "articleId": msg["articleId"].as_str().unwrap_or(""),
-                                "operation": msg["operation"].as_str().unwrap_or(""),
-                            }),
-                        );
-                    }
-                })
-            });
-            user.article
-                .add_listener(&id, article_type, listener)
+        let connection = runtime.block_on(async {
+            let client = current_user(&token).await?;
+            let article_type = ArticleType::from_index(article_type.max(0) as i64);
+            let connection = client
+                .article()
+                .connect(id.as_str(), article_type)
                 .await
-                .map_err(|err| format!("帖子监听连接失败: {err}"))
+                .map_err(|err| format!("帖子监听连接失败: {err}"))?;
+            let vm = Arc::clone(&java_vm);
+            let cb = callback.clone();
+            connection
+                .on_message(move |value| {
+                    if value["type"].as_str() != Some("articleHeat") {
+                        return;
+                    }
+                    emit_callback(
+                        &vm,
+                        &cb,
+                        json!({
+                            "event": "articleHeat",
+                            "articleId": value["articleId"].as_str().unwrap_or(""),
+                            "operation": value["operation"].as_str().unwrap_or(""),
+                        }),
+                    );
+                })
+                .await;
+            Ok::<ArticleConnection, String>(connection)
         })?;
 
         let handle = Box::new(AndroidArticleConnection {
             _runtime: runtime,
-            ws: Mutex::new(ws),
+            connection: Mutex::new(connection),
         });
         Ok(Box::into_raw(handle) as jlong)
     })();
 
-    match result {
-        Ok(handle) => handle,
-        Err(_err) => 0,
-    }
+    result.unwrap_or_default()
 }
 
 #[unsafe(no_mangle)]
@@ -264,10 +264,34 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_disconnectArticl
     }
 
     let connection = unsafe { Box::from_raw(handle as *mut AndroidArticleConnection) };
-    if let Ok(ws) = connection.ws.lock() {
-        ws.disconnect();
+    if let Ok(mut conn) = connection.connection.lock() {
+        conn.disconnect();
     }
     drop(connection);
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_reconnectArticle(
+    _env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+) -> jboolean {
+    if handle == 0 {
+        return 0;
+    }
+    let connection = unsafe { &*(handle as *mut AndroidArticleConnection) };
+    let result = (|| {
+        let mut conn = connection
+            .connection
+            .lock()
+            .map_err(|_| "帖子监听连接锁已损坏".to_string())?;
+        connection
+            ._runtime
+            .block_on(async { conn.reconnect().await })
+            .map_err(|err| format!("帖子监听重连失败: {err}"))?;
+        Ok::<(), String>(())
+    })();
+    if result.is_ok() { 1 } else { 0 }
 }
 
 #[unsafe(no_mangle)]
@@ -281,7 +305,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getArticleDrafts
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let drafts = timeout(Duration::from_secs(15), user.article.list_drafts())
+                let drafts = timeout(Duration::from_secs(15), user.article().list_drafts())
                     .await
                     .map_err(|_| "加载草稿超时".to_string())?
                     .map_err(|err| format!("加载草稿失败: {err}"))?
@@ -310,10 +334,13 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getArticleDraftD
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let detail = timeout(Duration::from_secs(15), user.article.draft_detail(&id))
-                    .await
-                    .map_err(|_| "加载草稿详情超时".to_string())?
-                    .map_err(|err| format!("加载草稿详情失败: {err}"))?;
+                let detail = timeout(
+                    Duration::from_secs(15),
+                    user.article().draft_detail(id.as_str()),
+                )
+                .await
+                .map_err(|_| "加载草稿详情超时".to_string())?
+                .map_err(|err| format!("加载草稿详情失败: {err}"))?;
                 Ok(article_draft_detail_to_json(detail))
             })
         }))
@@ -370,7 +397,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_saveArticleDraft
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let draft = timeout(Duration::from_secs(15), user.article.save_draft(&payload))
+                let draft = timeout(Duration::from_secs(15), user.article().save_draft(&payload))
                     .await
                     .map_err(|_| "保存草稿超时".to_string())?
                     .map_err(|err| format!("保存草稿失败: {err}"))?;
@@ -396,10 +423,13 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_deleteArticleDra
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let deleted_id = timeout(Duration::from_secs(15), user.article.delete_draft(&id))
-                    .await
-                    .map_err(|_| "删除草稿超时".to_string())?
-                    .map_err(|err| format!("删除草稿失败: {err}"))?;
+                let deleted_id = timeout(
+                    Duration::from_secs(15),
+                    user.article().delete_draft(id.as_str()),
+                )
+                .await
+                .map_err(|_| "删除草稿超时".to_string())?
+                .map_err(|err| format!("删除草稿失败: {err}"))?;
                 Ok(json!({ "id": deleted_id }))
             })
         }))
@@ -449,12 +479,11 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_publishArticle(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let article_id =
-                    timeout(Duration::from_secs(20), user.article.post_article(&payload))
-                        .await
-                        .map_err(|_| "发布帖子超时".to_string())?
-                        .map_err(|err| format!("发布帖子失败: {err}"))?;
-                Ok(json!({ "articleId": article_id }))
+                let article_id = timeout(Duration::from_secs(20), user.article().post(&payload))
+                    .await
+                    .map_err(|_| "发布帖子超时".to_string())?
+                    .map_err(|err| format!("发布帖子失败: {err}"))?;
+                Ok(json!({ "articleId": article_id.into_string() }))
             })
         }))
     })()
@@ -480,26 +509,19 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendArticleComme
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let comment = &user.comment;
+                let comment = user.comment();
                 let payload = CommentPost {
-                    article_id: id,
+                    article_id: id.into(),
                     anonymous: false,
-                    // commentVisible=true 会触发“仅作者和楼主可见”，默认评论应公开显示。
+                    // commentVisible=true 会触发”仅作者和楼主可见”，默认评论应公开显示。
                     visible: false,
                     content: text,
                     reply_id: reply,
                 };
-                let result = timeout(Duration::from_secs(15), comment.send(payload))
+                timeout(Duration::from_secs(15), comment.post(payload))
                     .await
                     .map_err(|_| "发送评论超时".to_string())?
                     .map_err(|err| format!("发送评论失败: {err}"))?;
-                if !result.success {
-                    return Err(if result.msg.is_empty() {
-                        "发送评论失败".to_string()
-                    } else {
-                        result.msg
-                    });
-                }
                 Ok(Value::Null)
             })
         }))
@@ -524,8 +546,8 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_voteArticle(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let article = &user.article;
-                timeout(Duration::from_secs(15), article.vote(&id, is_like))
+                let article = user.article();
+                timeout(Duration::from_secs(15), article.vote(id.as_str(), is_like))
                     .await
                     .map_err(|_| "帖子投票超时".to_string())?
                     .map_err(|err| format!("帖子投票失败: {err}"))?;
@@ -551,18 +573,11 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_thankArticle(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let article = &user.article;
-                let result = timeout(Duration::from_secs(15), article.thank(&id))
+                let article = user.article();
+                timeout(Duration::from_secs(15), article.thank(id.as_str()))
                     .await
                     .map_err(|_| "感谢帖子超时".to_string())?
                     .map_err(|err| format!("感谢帖子失败: {err}"))?;
-                if !result.success {
-                    return Err(if result.msg.is_empty() {
-                        "感谢帖子失败".to_string()
-                    } else {
-                        result.msg
-                    });
-                }
                 Ok(Value::Null)
             })
         }))
@@ -587,8 +602,8 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_voteComment(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let comment = &user.comment;
-                timeout(Duration::from_secs(15), comment.vote(&id, is_like))
+                let comment = user.comment();
+                timeout(Duration::from_secs(15), comment.vote(id.as_str(), is_like))
                     .await
                     .map_err(|_| "评论点赞超时".to_string())?
                     .map_err(|err| format!("评论点赞失败: {err}"))?;
@@ -614,18 +629,11 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_thankComment(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let comment = &user.comment;
-                let result = timeout(Duration::from_secs(15), comment.thank(&id))
+                let comment = user.comment();
+                timeout(Duration::from_secs(15), comment.thank(id.as_str()))
                     .await
                     .map_err(|_| "感谢评论超时".to_string())?
                     .map_err(|err| format!("感谢评论失败: {err}"))?;
-                if !result.success {
-                    return Err(if result.msg.is_empty() {
-                        "感谢评论失败".to_string()
-                    } else {
-                        result.msg
-                    });
-                }
                 Ok(Value::Null)
             })
         }))
@@ -648,17 +656,10 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_rewardArticle(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let result = timeout(Duration::from_secs(15), user.article.reward(&id))
+                timeout(Duration::from_secs(15), user.article().reward(id.as_str()))
                     .await
                     .map_err(|_| "打赏帖子超时".to_string())?
                     .map_err(|err| format!("打赏帖子失败: {err}"))?;
-                if !result.success {
-                    return Err(if result.msg.is_empty() {
-                        "打赏帖子失败".to_string()
-                    } else {
-                        result.msg
-                    });
-                }
                 Ok(Value::Null)
             })
         }))
@@ -681,18 +682,11 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_followArticle(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let article = &user.article;
-                let result = timeout(Duration::from_secs(15), article.follow(&id))
+                let article = user.article();
+                timeout(Duration::from_secs(15), article.follow(id.as_str()))
                     .await
                     .map_err(|_| "收藏帖子超时".to_string())?
                     .map_err(|err| format!("收藏帖子失败: {err}"))?;
-                if !result.success {
-                    return Err(if result.msg.is_empty() {
-                        "收藏帖子失败".to_string()
-                    } else {
-                        result.msg
-                    });
-                }
                 Ok(Value::Null)
             })
         }))
@@ -715,18 +709,13 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_unfollowArticle(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let result = timeout(Duration::from_secs(15), user.article.unfollow(&id))
-                    .await
-                    .map_err(|_| "取消收藏超时".to_string())?
-                    .map_err(|err| format!("取消收藏失败: {err}"))?;
-                if !result.success {
-                    return Err(if result.msg.is_empty() {
-                        "取消收藏失败".to_string()
-                    } else {
-                        result.msg
-                    });
-                }
-
+                timeout(
+                    Duration::from_secs(15),
+                    user.article().unfollow(id.as_str()),
+                )
+                .await
+                .map_err(|_| "取消收藏超时".to_string())?
+                .map_err(|err| format!("取消收藏失败: {err}"))?;
                 Ok(Value::Null)
             })
         }))
@@ -749,18 +738,11 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_watchArticle(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let article = &user.article;
-                let result = timeout(Duration::from_secs(15), article.watch(&id))
+                let article = user.article();
+                timeout(Duration::from_secs(15), article.watch(id.as_str()))
                     .await
                     .map_err(|_| "关注帖子超时".to_string())?
                     .map_err(|err| format!("关注帖子失败: {err}"))?;
-                if !result.success {
-                    return Err(if result.msg.is_empty() {
-                        "关注帖子失败".to_string()
-                    } else {
-                        result.msg
-                    });
-                }
                 Ok(Value::Null)
             })
         }))

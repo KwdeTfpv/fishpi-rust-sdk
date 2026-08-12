@@ -1,16 +1,66 @@
 use crate::media::{extract_image_urls, extract_link_urls, strip_html_tags};
-use fishpi_sdk::api::chatroom::ChatRoomEventData;
-use fishpi_sdk::model::article::{
+use fishpi_sdk::domain::article::{
     ArticleDetail, ArticleDraftDetail, ArticleDraftSummary, ArticleListType, VoteStatus,
 };
-use fishpi_sdk::model::chat::{ChatData, ChatNotice};
-use fishpi_sdk::model::chatroom::{
-    BarragerMsg, ChatRoomMessageType, ChatRoomMsg, CustomMsg, MusicMsg, OnlineInfo,
+use fishpi_sdk::domain::chat::{ChatData, ChatNotice};
+use fishpi_sdk::domain::chatroom::{
+    BarragerMsg, ChatRoomEvent, ChatRoomMsg, CustomMsg, MusicMsg, OnlineInfo,
 };
-use fishpi_sdk::model::notice::{NoticeDataType, NoticeItem};
-use fishpi_sdk::model::redpacket::{GestureType, RedPacketInfo, RedPacketStatusMsg};
+use fishpi_sdk::domain::notice::NoticeItem;
+use fishpi_sdk::domain::reaction::ReactionSummaryItem;
+use fishpi_sdk::domain::redpacket::{GestureType, RedPacketInfo, RedPacketStatusMsg};
 use serde_json::{Value, json};
 use std::collections::HashMap;
+
+/// 通知数据类型，值对应服务端 `dataType`。
+#[derive(Clone, Copy)]
+#[repr(u32)]
+enum NoticeDataType {
+    Article = 0,
+    Comment = 1,
+    Commented = 3,
+    PointCharge = 5,
+    PointTransfer = 6,
+    PointArticleReward = 7,
+    PointCommentThank = 8,
+    Broadcast = 9,
+    PointExchange = 10,
+    AbusePointDeduct = 11,
+    PointArticleThank = 12,
+    Reply = 13,
+    SysAnnounceArticle = 15,
+    SysAnnounceNewUser = 16,
+    SysAnnounceRoleChanged = 19,
+    FollowingArticleUpdate = 20,
+    FollowingArticleComment = 21,
+    PointPerfectArticle = 22,
+    ArticleNewFollower = 23,
+    ArticleNewWatcher = 24,
+    CommentVoteUp = 25,
+    CommentVoteDown = 26,
+    ArticleVoteUp = 27,
+    ArticleVoteDown = 28,
+    PointCommentAccept = 33,
+    PointReportHandled = 36,
+    ExtensionStoreReview = 41,
+}
+
+/// 把表态汇总映射成 Android 侧读取的 JSON 数组。
+pub(crate) fn reaction_summary_to_json(summary: &[ReactionSummaryItem]) -> Value {
+    Value::Array(
+        summary
+            .iter()
+            .map(|item| {
+                json!({
+                    "value": item.value,
+                    "emoji": item.emoji,
+                    "count": item.count,
+                    "selected": item.selected,
+                })
+            })
+            .collect(),
+    )
+}
 
 fn chatroom_payload_type(value: &Value) -> Option<&str> {
     value
@@ -24,14 +74,11 @@ fn payload_type_is(value: &Value, expected: &str) -> bool {
 }
 
 pub(crate) fn chat_message_to_json(msg: ChatRoomMsg, _self_username: &str) -> Value {
-    if payload_type_is(&msg.content, "music")
-        && let Ok(music) = MusicMsg::from_chatroom_msg(msg.clone())
-    {
-        return music_message_to_json(music);
+    if payload_type_is(&msg.content, "music") {
+        return music_from_chatroom_msg(msg);
     }
 
-    let is_redpacket =
-        msg.r#type == ChatRoomMessageType::RedPacket || payload_type_is(&msg.content, "redPacket");
+    let is_redpacket = payload_type_is(&msg.content, "redPacket");
     let redpacket_preview = if is_redpacket {
         redpacket_preview_from_value(&msg.content, _self_username)
     } else {
@@ -54,8 +101,9 @@ pub(crate) fn chat_message_to_json(msg: ChatRoomMsg, _self_username: &str) -> Va
     } else {
         content_md.clone()
     };
+    let type_str = if is_redpacket { "redPacket" } else { "msg" };
     let mut payload = json!({
-        "oId": msg.oId,
+        "oId": msg.id,
         "userName": msg.user_name,
         "userNickname": msg.user_nickname,
         "userAvatarURL": msg.user_avatar_url,
@@ -63,9 +111,9 @@ pub(crate) fn chat_message_to_json(msg: ChatRoomMsg, _self_username: &str) -> Va
         "md": content_md,
         "time": msg.time,
         "client": msg.client,
-        "type": msg.r#type.as_str(),
-        "revoked": msg.r#type == ChatRoomMessageType::Revoke,
-        "reactionSummary": msg.reaction_summary,
+        "type": type_str,
+        "revoked": false,
+        "reactionSummary": reaction_summary_to_json(&msg.reaction_summary),
         "currentUserReaction": msg.current_user_reaction,
     });
     if let Some(preview) = redpacket_preview {
@@ -83,7 +131,7 @@ pub(crate) fn music_message_to_json(msg: MusicMsg) -> Value {
     };
 
     json!({
-        "oId": msg.base.oId,
+        "oId": msg.base.id,
         "userName": msg.base.user_name,
         "userNickname": msg.base.user_nickname,
         "userAvatarURL": msg.base.user_avatar_url,
@@ -91,15 +139,54 @@ pub(crate) fn music_message_to_json(msg: MusicMsg) -> Value {
         "md": raw_music_text,
         "time": msg.base.time,
         "client": msg.base.client,
-        "type": msg.base.r#type.as_str(),
+        "type": "msg",
         "revoked": false,
-        "reactionSummary": msg.base.reaction_summary,
+        "reactionSummary": reaction_summary_to_json(&msg.base.reaction_summary),
         "currentUserReaction": msg.base.current_user_reaction,
         "music": {
             "coverURL": msg.cover_url,
             "source": msg.source,
             "title": msg.title,
             "from": msg.from,
+            "raw": raw_music,
+        },
+    })
+}
+
+/// 历史消息里识别到音乐 payload 时，从 `ChatRoomMsg.content` 直接构造音乐消息 JSON。
+fn music_from_chatroom_msg(msg: ChatRoomMsg) -> Value {
+    let field = |k: &str| {
+        msg.content
+            .get(k)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let raw_music = msg.content.clone();
+    let raw_music_text = if msg.md.trim().is_empty() {
+        raw_music.to_string()
+    } else {
+        msg.md.clone()
+    };
+
+    json!({
+        "oId": msg.id,
+        "userName": msg.user_name,
+        "userNickname": msg.user_nickname,
+        "userAvatarURL": msg.user_avatar_url,
+        "content": raw_music_text.clone(),
+        "md": raw_music_text,
+        "time": msg.time,
+        "client": msg.client,
+        "type": "msg",
+        "revoked": false,
+        "reactionSummary": reaction_summary_to_json(&msg.reaction_summary),
+        "currentUserReaction": msg.current_user_reaction,
+        "music": {
+            "coverURL": field("coverURL"),
+            "source": field("source"),
+            "title": field("title"),
+            "from": field("from"),
             "raw": raw_music,
         },
     })
@@ -133,7 +220,7 @@ pub(crate) fn private_session_to_json(msg: ChatData, self_username: &str, unread
         "time": msg.time,
         "avatar": if msg.sender_user_name.eq_ignore_ascii_case(self_username) { msg.receiver_avatar } else { msg.sender_avatar },
         "unread": unread,
-        "sort": msg.oId.parse::<i64>().unwrap_or(0),
+        "sort": msg.id.parse::<i64>().unwrap_or(0),
     })
 }
 
@@ -164,7 +251,7 @@ pub(crate) fn private_message_to_json(msg: ChatData, _self_username: &str) -> Va
     let link_urls = extract_link_urls(&content_html, &content_md);
 
     json!({
-        "oId": msg.oId,
+        "oId": msg.id,
         "userName": msg.sender_user_name,
         "userAvatarURL": msg.sender_avatar,
         "content": content,
@@ -262,7 +349,7 @@ pub(crate) fn notice_item_to_json(item: NoticeItem) -> Option<Value> {
                 "article"
             };
             Some(json!({
-                "id": v.oId,
+                "id": v.id,
                 "category": "积分",
                 "title": point_title(v.data_type),
                 "content": v.description,
@@ -275,7 +362,7 @@ pub(crate) fn notice_item_to_json(item: NoticeItem) -> Option<Value> {
             }))
         }
         NoticeItem::Comment(v) => Some(json!({
-            "id": v.oId,
+            "id": v.id,
             "category": "评论",
             "author": v.author,
             "title": v.title,
@@ -288,7 +375,7 @@ pub(crate) fn notice_item_to_json(item: NoticeItem) -> Option<Value> {
             "mentionUser": "",
         })),
         NoticeItem::Reply(v) => Some(json!({
-            "id": v.oId,
+            "id": v.id,
             "category": "回复",
             "author": v.author,
             "title": v.title,
@@ -320,7 +407,7 @@ pub(crate) fn notice_item_to_json(item: NoticeItem) -> Option<Value> {
             };
             let article_jump_id = if v.at_in_article {
                 first_non_empty([
-                    v.article_id.trim().to_string(),
+                    v.article_id.as_str().trim().to_string(),
                     parse_article_id_from_url(&v.url).unwrap_or_default(),
                     v.data_id.trim().to_string(),
                 ])
@@ -328,7 +415,7 @@ pub(crate) fn notice_item_to_json(item: NoticeItem) -> Option<Value> {
                 resolve_article_jump_id_default(v.data_type, &v.data_id, &body)
             };
             Some(json!({
-                "id": v.oId,
+                "id": v.id,
                 "category": "@",
                 "title": title,
                 "content": body,
@@ -341,7 +428,7 @@ pub(crate) fn notice_item_to_json(item: NoticeItem) -> Option<Value> {
             }))
         }
         NoticeItem::Follow(v) => Some(json!({
-            "id": v.oId,
+            "id": v.id,
             "category": "关注",
             "author": v.author,
             "title": v.title,
@@ -359,7 +446,7 @@ pub(crate) fn notice_item_to_json(item: NoticeItem) -> Option<Value> {
                 v.description.trim().to_string(),
             ]);
             Some(json!({
-                "id": v.oId,
+                "id": v.id,
                 "category": "系统",
                 "title": system_title(v.data_type),
                 "content": display_content,
@@ -560,7 +647,7 @@ pub(crate) fn article_summary_to_json(item: ArticleDetail) -> Value {
         item.thumbnail_url.clone()
     };
     json!({
-        "id": item.oId,
+        "id": item.id,
         "title": article_display_title(&item),
         "author": item.author_name,
         "authorUserName": item.author_name,
@@ -603,7 +690,7 @@ pub(crate) fn article_detail_to_json(item: ArticleDetail, page: u32) -> Value {
     let link_urls = extract_link_urls(&item.content, &markdown);
 
     json!({
-        "id": item.oId,
+        "id": item.id,
         "title": title,
         "author": item.author_name,
         "authorUserName": item.author_name,
@@ -636,7 +723,7 @@ pub(crate) fn article_detail_to_json(item: ArticleDetail, page: u32) -> Value {
 
 pub(crate) fn article_draft_summary_to_json(item: ArticleDraftSummary) -> Value {
     json!({
-        "id": item.oId,
+        "id": item.id,
         "title": item.title,
         "summary": item.summary,
         "tags": item.tags,
@@ -651,7 +738,7 @@ pub(crate) fn article_draft_summary_to_json(item: ArticleDraftSummary) -> Value 
 
 pub(crate) fn article_draft_detail_to_json(item: ArticleDraftDetail) -> Value {
     json!({
-        "id": item.oId,
+        "id": item.id,
         "title": item.title,
         "content": item.content,
         "thoughtContent": item.thought_content,
@@ -672,7 +759,7 @@ pub(crate) fn article_draft_detail_to_json(item: ArticleDraftDetail) -> Value {
     })
 }
 
-pub(crate) fn article_comment_to_json(item: fishpi_sdk::model::article::ArticleComment) -> Value {
+pub(crate) fn article_comment_to_json(item: fishpi_sdk::domain::article::ArticleComment) -> Value {
     let vote_state = match item.vote {
         VoteStatus::Up => 1,
         VoteStatus::Down => -1,
@@ -695,7 +782,7 @@ pub(crate) fn article_comment_to_json(item: fishpi_sdk::model::article::ArticleC
         item.author.clone()
     };
     json!({
-        "id": item.oId,
+        "id": item.id,
         "author": author_label,
         "displayName": if display_name.is_empty() { item.author.clone() } else { display_name.to_string() },
         "userName": if user_name.is_empty() { item.author.clone() } else { user_name.to_string() },
@@ -713,19 +800,19 @@ pub(crate) fn article_comment_to_json(item: fishpi_sdk::model::article::ArticleC
     })
 }
 
-pub(crate) fn emoji_group_to_json(item: fishpi_sdk::model::emoji::EmojiGroup) -> Value {
+pub(crate) fn emoji_group_to_json(item: fishpi_sdk::domain::emoji::EmojiGroup) -> Value {
     json!({
-        "id": item.oId,
+        "id": item.id,
         "name": item.name,
         "sort": item.sort,
         "isDefault": item.is_default,
-        "count": item.emoji_count,
     })
 }
 
-pub(crate) fn emoji_item_to_json(item: fishpi_sdk::model::emoji::EmojiItem) -> Value {
+pub(crate) fn emoji_item_to_json(item: fishpi_sdk::domain::emoji::EmojiItem) -> Value {
     json!({
-        "id": item.oId,
+        "id": item.id,
+        "emojiId": item.emoji_id,
         "groupId": item.group_id,
         "name": item.name,
         "url": item.url,
@@ -733,9 +820,9 @@ pub(crate) fn emoji_item_to_json(item: fishpi_sdk::model::emoji::EmojiItem) -> V
     })
 }
 
-pub(crate) fn breezemoon_to_json(item: fishpi_sdk::model::breezemoon::BreezemoonContent) -> Value {
+pub(crate) fn breezemoon_to_json(item: fishpi_sdk::domain::breezemoon::Breezemoon) -> Value {
     json!({
-        "id": item.oId,
+        "id": item.id,
         "authorName": item.author_name,
         "updated": item.updated,
         "created": item.created,
@@ -743,7 +830,7 @@ pub(crate) fn breezemoon_to_json(item: fishpi_sdk::model::breezemoon::Breezemoon
         "content": item.content,
         "createTime": item.create_time,
         "city": item.city,
-        "avatar": item.thumbnail_url48,
+        "avatar": item.author_avatar,
     })
 }
 
@@ -787,7 +874,7 @@ pub(crate) fn online_to_json(
 pub(crate) fn redpacket_status_to_json(status: RedPacketStatusMsg) -> Value {
     json!({
         "event": "redPacketStatus",
-        "id": status.oId,
+        "id": status.o_id,
         "count": status.count,
         "got": status.got,
         "whoGive": status.who_give,
@@ -922,46 +1009,45 @@ pub(crate) fn redpacket_info_to_json(info: RedPacketInfo) -> Value {
     })
 }
 
-pub(crate) fn chatroom_event_to_json(event: ChatRoomEventData, self_username: &str) -> Value {
+pub(crate) fn chatroom_event_to_json(event: ChatRoomEvent, self_username: &str) -> Value {
     match event {
-        ChatRoomEventData::Online {
+        ChatRoomEvent::Online {
             users,
             discussing,
             online_chat_cnt,
         } => online_to_json(users, discussing, online_chat_cnt),
-        ChatRoomEventData::DiscussChanged(topic) => json!({
+        ChatRoomEvent::DiscussChanged(topic) => json!({
             "event": "discussChanged",
             "topic": topic,
         }),
-        ChatRoomEventData::Revoke(id) => json!({
+        ChatRoomEvent::Revoke(id) => json!({
             "event": "revoke",
             "id": id,
         }),
-        ChatRoomEventData::Msg(msg)
-        | ChatRoomEventData::RedPacket(msg)
-        | ChatRoomEventData::Weather(msg) => json!({
-            "event": "message",
-            "message": chat_message_to_json(msg, self_username),
-        }),
-        ChatRoomEventData::Music(msg) => json!({
+        ChatRoomEvent::Msg(msg) | ChatRoomEvent::RedPacket(msg) | ChatRoomEvent::Weather(msg) => {
+            json!({
+                "event": "message",
+                "message": chat_message_to_json(msg, self_username),
+            })
+        }
+        ChatRoomEvent::Music(msg) => json!({
             "event": "message",
             "message": music_message_to_json(msg),
         }),
-        ChatRoomEventData::Barrager(msg) => json!({
+        ChatRoomEvent::Barrager(msg) => json!({
             "event": "message",
             "message": barrager_to_json(msg),
         }),
-        ChatRoomEventData::RedPacketStatus(status) => redpacket_status_to_json(status),
-        ChatRoomEventData::Custom(message) => custom_to_json(message),
-        ChatRoomEventData::ChatReaction(reaction) => json!({
+        ChatRoomEvent::RedPacketStatus(status) => redpacket_status_to_json(status),
+        ChatRoomEvent::Custom(message) => custom_to_json(message),
+        ChatRoomEvent::ChatReaction(reaction) => json!({
             "event": "chatReaction",
-            "id": reaction.oId,
-            "reactionSummary": reaction.summary,
+            "id": reaction.id,
+            "reactionSummary": reaction_summary_to_json(&reaction.summary),
             "actorReaction": reaction.actor_reaction,
             "actorUserId": reaction.actor_user_id,
             "targetType": reaction.target_type,
             "groupType": reaction.group_type,
-            "data": reaction.raw,
         }),
     }
 }

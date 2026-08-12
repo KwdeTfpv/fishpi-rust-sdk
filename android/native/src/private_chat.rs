@@ -2,7 +2,7 @@ use crate::jni_utils::{emit_callback, string_arg, to_jstring};
 use crate::mappers::*;
 use crate::runtime::runtime_json;
 use crate::session::current_user;
-use fishpi_sdk::api::chat::Chat;
+use fishpi_sdk::client::ChatConnection;
 use jni::JNIEnv;
 use jni::objects::{JClass, JObject, JString};
 use jni::sys::{jboolean, jlong, jstring};
@@ -13,8 +13,7 @@ use tokio::time::timeout;
 
 struct AndroidPrivateChatConnection {
     _runtime: tokio::runtime::Runtime,
-    chat: Mutex<Chat>,
-    peer: Option<String>,
+    chat: Mutex<ChatConnection>,
 }
 
 #[unsafe(no_mangle)]
@@ -29,8 +28,8 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getPrivateChatSe
         let username = string_arg(&mut env, self_username)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let chat = &user.chat;
+                let client = current_user(&token).await?;
+                let chat = client.chat();
                 let unread = chat
                     .unread()
                     .await
@@ -77,11 +76,11 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getPrivateChatHi
         let username = string_arg(&mut env, self_username)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let chat = &user.chat;
+                let client = current_user(&token).await?;
+                let chat = client.chat();
                 let history_result = timeout(
                     Duration::from_secs(15),
-                    chat.history(peer_name.clone(), page.max(1) as u32, 50, false),
+                    chat.history(peer_name, page.max(1) as u32, 50, false),
                 )
                 .await
                 .map_err(|_| "加载私聊历史超时，请稍后重试".to_string())?;
@@ -124,12 +123,14 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendPrivateChatM
         let text = string_arg(&mut env, content)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let mut chat = user.chat;
-                chat.connect(false, Some(peer_name.clone()))
+                let client = current_user(&token).await?;
+                let connection = client
+                    .chat()
+                    .connect(Some(peer_name.trim()))
                     .await
                     .map_err(|err| format!("私聊连接失败: {err}"))?;
-                chat.send_ws(&text)
+                connection
+                    .send(&text)
                     .map_err(|err| format!("私聊发送失败: {err}"))?;
                 Ok(Value::Null)
             })
@@ -157,7 +158,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendPrivateChatM
             .chat
             .lock()
             .map_err(|_| "私聊连接状态异常".to_string())?;
-        chat.send_ws(&text)
+        chat.send(&text)
             .map_err(|err| format!("私聊发送失败: {err}"))?;
         Ok(runtime_json(|_| Ok(Value::Null)))
     })()
@@ -178,9 +179,9 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_revokePrivateCha
         let id = string_arg(&mut env, message_id)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let chat = &user.chat;
-                timeout(Duration::from_secs(10), chat.revoke(&id))
+                let client = current_user(&token).await?;
+                let chat = client.chat();
+                timeout(Duration::from_secs(10), chat.revoke(id.as_str()))
                     .await
                     .map_err(|_| "私聊撤回超时，请稍后重试".to_string())?
                     .map_err(|err| format!("私聊撤回失败: {err}"))?;
@@ -205,8 +206,8 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_markPrivateChatR
         let peer_name = string_arg(&mut env, peer)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let chat = &user.chat;
+                let client = current_user(&token).await?;
+                let chat = client.chat();
                 timeout(Duration::from_secs(8), chat.mark_as_read(peer_name))
                     .await
                     .map_err(|_| "标记私聊已读超时".to_string())?
@@ -237,7 +238,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_connectPrivateCh
         let connect_target = if connect_peer.is_empty() {
             None
         } else {
-            Some(connect_peer.clone())
+            Some(connect_peer)
         };
         let java_vm = Arc::new(env.get_java_vm().map_err(|err| err.to_string())?);
         let callback = env
@@ -247,11 +248,15 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_connectPrivateCh
             .map_err(|err| format!("Rust runtime init failed: {err}"))?;
 
         let chat = runtime.block_on(async {
-            let user = current_user(&token).await?;
-            let mut chat = user.chat;
+            let client = current_user(&token).await?;
+            let mut chat = client
+                .chat()
+                .connect(connect_target.as_deref())
+                .await
+                .map_err(|err| format!("私聊实时连接失败: {err}"))?;
             let java_vm_for_log = Arc::clone(&java_vm);
             let callback_for_log = callback.clone();
-            chat.on_ws_log(move |message| {
+            chat.set_log_hook(move |message: &str| {
                 emit_callback(
                     &java_vm_for_log,
                     &callback_for_log,
@@ -294,21 +299,17 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_connectPrivateCh
                 emit_callback(
                     &java_vm_for_revoke,
                     &callback_for_revoke,
-                    json!({ "event": "revoke", "id": revoke.data }),
+                    json!({ "event": "revoke", "id": revoke.id }),
                 );
             })
             .await;
 
-            chat.connect(false, connect_target.clone())
-                .await
-                .map_err(|err| format!("私聊实时连接失败: {err}"))?;
-            Ok::<Chat, String>(chat)
+            Ok::<ChatConnection, String>(chat)
         })?;
 
         let handle = Box::new(AndroidPrivateChatConnection {
             _runtime: runtime,
             chat: Mutex::new(chat),
-            peer: connect_target,
         });
         emit_callback(
             &java_vm,
@@ -353,7 +354,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_reconnectPrivate
             .map_err(|_| "私聊连接锁已损坏".to_string())?;
         connection
             ._runtime
-            .block_on(async { chat.reconnect(connection.peer.clone()).await })
+            .block_on(async { chat.reconnect().await })
             .map_err(|err| format!("私聊重连失败: {err}"))?;
         Ok::<(), String>(())
     })();

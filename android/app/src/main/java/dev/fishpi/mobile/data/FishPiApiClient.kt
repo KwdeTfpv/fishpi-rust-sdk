@@ -437,6 +437,60 @@ class FishPiApiClient private constructor() {
         }
     }
 
+    fun getProfessionMe(apiKey: String): JSONObject =
+        dataObject(FishPiNative.getProfessionMe(apiKey))
+
+    fun getProfessionDetail(apiKey: String, professionId: String, dark: Boolean = false): JSONObject =
+        dataObject(FishPiNative.getProfessionDetail(apiKey, professionId, dark))
+
+    fun getProfessionRecords(
+        apiKey: String,
+        professionId: String,
+        beforeOccurredAt: Long = 0L,
+        beforeEffectId: String = "",
+        limit: Int = 30,
+    ): JSONObject =
+        dataObject(FishPiNative.getProfessionRecords(apiKey, professionId, beforeOccurredAt, beforeEffectId, limit))
+
+    fun setPrimaryProfession(apiKey: String, professionId: String): JSONObject =
+        dataObject(FishPiNative.setPrimaryProfession(apiKey, professionId))
+
+    fun skipProfessionPrompt(apiKey: String) {
+        FishPiNative.skipProfessionPrompt(apiKey).unwrapApiResult()
+    }
+
+    fun updateProfessionPrivacy(
+        apiKey: String,
+        preset: String,
+        professions: Boolean = true,
+        experience: Boolean = true,
+        contributions: Boolean = true,
+        activity: Boolean = true,
+        ranking: Boolean = true,
+    ): JSONObject =
+        dataObject(
+            FishPiNative.updateProfessionPrivacy(
+                apiKey = apiKey,
+                preset = preset,
+                professions = professions,
+                experience = experience,
+                contributions = contributions,
+                activity = activity,
+                ranking = ranking,
+            ),
+        )
+
+    fun getUserProfession(
+        apiKey: String,
+        userName: String,
+        position: String = "homeProfile",
+        dark: Boolean = false,
+    ): JSONObject =
+        dataObject(FishPiNative.getUserProfession(apiKey, userName, position, dark))
+
+    fun getProfessionRanking(apiKey: String, professionId: String = "", dark: Boolean = false): JSONObject =
+        dataObject(FishPiNative.getProfessionRanking(apiKey, professionId, dark))
+
     fun getBreezemoons(apiKey: String, page: Int = 1, size: Int = 20): List<BreezemoonView> {
         return dataArray(FishPiNative.getBreezemoons(apiKey, page, size)).toBreezemoons()
     }

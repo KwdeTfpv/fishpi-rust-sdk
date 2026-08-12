@@ -1,7 +1,7 @@
 use crate::jni_utils::{string_arg, to_jstring};
 use crate::mappers::*;
 use crate::runtime::runtime_json;
-use fishpi_sdk::api::emoji::Emoji;
+use crate::session::current_user;
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::jstring;
@@ -19,7 +19,8 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getEmojiGroups(
         let token = string_arg(&mut env, api_key)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let emoji = Emoji::new(token);
+                let user = current_user(&token).await?;
+                let emoji = user.emoji();
                 let groups = timeout(Duration::from_secs(15), emoji.groups())
                     .await
                     .map_err(|_| "加载表情包分组超时".to_string())?
@@ -47,8 +48,9 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getEmojiGroupIte
         let id = string_arg(&mut env, group_id)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let emoji = Emoji::new(token);
-                let items = timeout(Duration::from_secs(15), emoji.group_emojis(&id))
+                let user = current_user(&token).await?;
+                let emoji = user.emoji();
+                let items = timeout(Duration::from_secs(15), emoji.group_items(id.as_str()))
                     .await
                     .map_err(|_| "加载表情包超时".to_string())?
                     .map_err(|err| format!("加载表情包失败: {err}"))?;

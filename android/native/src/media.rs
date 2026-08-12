@@ -121,12 +121,13 @@ pub(crate) fn collect_markdown_image_urls(input: &str, urls: &mut Vec<String>) {
     let mut offset = 0;
     while let Some(pos) = input[offset..].find("](") {
         let start = offset + pos + 2;
-        if start >= 2 && input[..start - 2].ends_with('!') {
-            if let Some(end_rel) = input[start..].find(')') {
-                push_image_url(&input[start..start + end_rel], urls);
-                offset = start + end_rel + 1;
-                continue;
-            }
+        if start >= 2
+            && input[..start - 2].ends_with('!')
+            && let Some(end_rel) = input[start..].find(')')
+        {
+            push_image_url(&input[start..start + end_rel], urls);
+            offset = start + end_rel + 1;
+            continue;
         }
         offset = start;
     }

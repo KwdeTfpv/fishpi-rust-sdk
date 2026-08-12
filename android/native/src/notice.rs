@@ -2,11 +2,11 @@ use crate::jni_utils::{emit_callback, string_arg, to_jstring};
 use crate::mappers::*;
 use crate::runtime::{runtime_json, shared_runtime};
 use crate::session::current_user;
-use fishpi_sdk::api::notice::Notice;
-use fishpi_sdk::model::notice::NoticeType;
+use fishpi_sdk::client::NoticeConnection;
+use fishpi_sdk::domain::notice::NoticeType;
 use jni::JNIEnv;
 use jni::objects::{JClass, JObject, JString};
-use jni::sys::{jlong, jstring};
+use jni::sys::{jboolean, jlong, jstring};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -14,7 +14,7 @@ use tokio::time::timeout;
 
 struct AndroidNoticeConnection {
     _runtime: tokio::runtime::Runtime,
-    notice: Mutex<Notice>,
+    connection: Mutex<NoticeConnection>,
 }
 
 #[unsafe(no_mangle)]
@@ -28,7 +28,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getNoticeUnreadC
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let notice = &user.notice;
+                let notice = user.notice();
                 let count = timeout(Duration::from_secs(12), notice.count())
                     .await
                     .map_err(|_| "获取通知未读数超时".to_string())?
@@ -63,7 +63,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getNotices(
         let rt = shared_runtime()?;
         let data = rt.block_on(async {
             let user = current_user(&token).await?;
-            let notice = &user.notice;
+            let notice = user.notice();
             let mut items = Vec::new();
             for ty in [
                 NoticeType::Reply,
@@ -74,7 +74,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getNotices(
                 NoticeType::System,
                 NoticeType::Broadcast,
             ] {
-                let list = timeout(Duration::from_secs(10), notice.list(ty.clone())).await;
+                let list = timeout(Duration::from_secs(10), notice.list(ty)).await;
                 if let Ok(Ok(list)) = list {
                     for item in list {
                         if let Some(view) = notice_item_to_json(item) {
@@ -106,7 +106,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_markAllNoticesRe
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let notice = &user.notice;
+                let notice = user.notice();
                 timeout(Duration::from_secs(12), notice.read_all())
                     .await
                     .map_err(|_| "通知全部已读超时".to_string())?
@@ -136,16 +136,20 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_connectNotice(
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|err| format!("Rust runtime init failed: {err}"))?;
 
-        let notice = runtime.block_on(async {
+        let connection = runtime.block_on(async {
             let user = current_user(&token).await?;
-            let mut notice = user.notice;
-            let java_vm_for_notice = Arc::clone(&java_vm);
-            let callback_for_notice = callback.clone();
-            notice
-                .on_notice(move |msg| {
+            let connection = user
+                .notice()
+                .connect()
+                .await
+                .map_err(|err| format!("通知连接失败: {err}"))?;
+            let vm = Arc::clone(&java_vm);
+            let cb = callback.clone();
+            connection
+                .on_all(move |msg| {
                     emit_callback(
-                        &java_vm_for_notice,
-                        &callback_for_notice,
+                        &vm,
+                        &cb,
                         json!({
                             "event": "notice",
                             "command": msg.command,
@@ -155,25 +159,17 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_connectNotice(
                     );
                 })
                 .await;
-
-            notice
-                .connect(false)
-                .await
-                .map_err(|err| format!("通知连接失败: {err}"))?;
-            Ok::<Notice, String>(notice)
+            Ok::<NoticeConnection, String>(connection)
         })?;
 
         let handle = Box::new(AndroidNoticeConnection {
             _runtime: runtime,
-            notice: Mutex::new(notice),
+            connection: Mutex::new(connection),
         });
         Ok(Box::into_raw(handle) as jlong)
     })();
 
-    match result {
-        Ok(handle) => handle,
-        Err(_err) => 0,
-    }
+    result.unwrap_or_default()
 }
 
 #[unsafe(no_mangle)]
@@ -187,8 +183,32 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_disconnectNotice
     }
 
     let connection = unsafe { Box::from_raw(handle as *mut AndroidNoticeConnection) };
-    if let Ok(mut notice) = connection.notice.lock() {
-        notice.disconnect();
+    if let Ok(mut conn) = connection.connection.lock() {
+        conn.disconnect();
     }
     drop(connection);
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_reconnectNotice(
+    _env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+) -> jboolean {
+    if handle == 0 {
+        return 0;
+    }
+    let connection = unsafe { &*(handle as *mut AndroidNoticeConnection) };
+    let result = (|| {
+        let mut conn = connection
+            .connection
+            .lock()
+            .map_err(|_| "通知连接锁已损坏".to_string())?;
+        connection
+            ._runtime
+            .block_on(async { conn.reconnect().await })
+            .map_err(|err| format!("通知重连失败: {err}"))?;
+        Ok::<(), String>(())
+    })();
+    if result.is_ok() { 1 } else { 0 }
 }

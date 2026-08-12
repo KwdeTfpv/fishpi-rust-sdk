@@ -1,42 +1,5 @@
-pub mod article;
-pub mod breezemoon;
-pub mod chat;
-pub mod chatroom;
-pub mod emoji;
-pub mod finger;
 pub mod misc;
-pub mod notice;
-pub mod reaction;
-pub mod redpacket;
 pub mod user;
-
-use crate::{
-    model::user::{Metal, to_metal},
-    utils::error::Error,
-};
-use serde::{Deserialize, Deserializer};
-
-#[derive(Clone, Debug, Default, Deserialize)]
-pub struct MuteItem {
-    /// 解除禁言时间戳
-    pub time: u64,
-    /// 用户头像
-    #[serde(rename = "userAvatarURL")]
-    pub user_avatar_url: String,
-    /// 用户名
-    #[serde(rename = "userName")]
-    pub user_name: String,
-    /// 用户昵称
-    #[serde(rename = "userNickname")]
-    pub user_nickname: String,
-}
-
-impl MuteItem {
-    pub fn from_value(data: &serde_json::Value) -> Result<Self, Error> {
-        serde_json::from_value(data.clone())
-            .map_err(|e| Error::Parse(format!("Failed to parse MuteItem: {}", e)))
-    }
-}
 
 #[macro_export]
 macro_rules! impl_str_enum {
@@ -69,51 +32,4 @@ macro_rules! impl_str_enum {
             }
         }
     };
-}
-
-pub fn bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value: i64 = Deserialize::deserialize(deserializer)?;
-    Ok(value != 0)
-}
-
-pub fn bool_from_zero<'de, D>(deserializer: D) -> Result<bool, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value: i64 = Deserialize::deserialize(deserializer)?;
-    Ok(value == 0)
-}
-
-pub fn deserialize_sys_metal<'de, D>(deserializer: D) -> Result<Vec<Metal>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value: serde_json::Value = Deserialize::deserialize(deserializer)?;
-    let mut metals = Vec::new();
-
-    match value {
-        // 兼容旧格式：["{\"list\":[...]}"]
-        serde_json::Value::Array(arr) => {
-            for item in arr {
-                if let Some(s) = item.as_str()
-                    && let Ok(m) = to_metal(s)
-                {
-                    metals.extend(m);
-                }
-            }
-        }
-        // 兼容旧格式："{"list":[...]}"
-        serde_json::Value::String(s) => {
-            if let Ok(m) = to_metal(&s) {
-                metals.extend(m);
-            }
-        }
-        // 新格式（对象数组）当前 SDK 不消费勋章细节，这里忽略以避免影响主流程解析
-        _ => {}
-    }
-
-    Ok(metals)
 }

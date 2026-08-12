@@ -161,6 +161,28 @@ object FishPiNative {
 
     external fun watchArticle(apiKey: String, articleId: String): String
     external fun getUserMedals(apiKey: String, userName: String): String
+    external fun getProfessionMe(apiKey: String): String
+    external fun getProfessionDetail(apiKey: String, professionId: String, dark: Boolean): String
+    external fun getProfessionRecords(
+        apiKey: String,
+        professionId: String,
+        beforeOccurredAt: Long,
+        beforeEffectId: String,
+        limit: Int,
+    ): String
+    external fun setPrimaryProfession(apiKey: String, professionId: String): String
+    external fun skipProfessionPrompt(apiKey: String): String
+    external fun updateProfessionPrivacy(
+        apiKey: String,
+        preset: String,
+        professions: Boolean,
+        experience: Boolean,
+        contributions: Boolean,
+        activity: Boolean,
+        ranking: Boolean,
+    ): String
+    external fun getUserProfession(apiKey: String, userName: String, position: String, dark: Boolean): String
+    external fun getProfessionRanking(apiKey: String, professionId: String, dark: Boolean): String
     external fun getBreezemoons(apiKey: String, page: Int, size: Int): String
     external fun getUserBreezemoons(apiKey: String, userName: String, page: Int, size: Int): String
     external fun sendBreezemoon(apiKey: String, content: String): String

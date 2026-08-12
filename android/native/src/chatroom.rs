@@ -2,64 +2,49 @@ use crate::jni_utils::{emit_callback, string_arg, to_jstring};
 use crate::mappers::*;
 use crate::runtime::runtime_json;
 use crate::session::current_user;
-use fishpi_sdk::api::chatroom::ChatRoom;
-use fishpi_sdk::api::redpacket::Redpacket;
-use fishpi_sdk::api::ws::build_ws_url;
-use fishpi_sdk::model::chatroom::{ChatContentType, ChatRoomMessageType, ChatRoomMsg, ClientType};
+use fishpi_sdk::FishPi;
+use fishpi_sdk::client::ChatRoomConnection;
+use fishpi_sdk::domain::chatroom::ChatContentType;
 use jni::JNIEnv;
 use jni::objects::{JClass, JObject, JString};
 use jni::sys::{jboolean, jlong, jstring};
 use serde_json::{Value, json};
-use std::str::FromStr;
-use std::sync::OnceLock;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
-static CHATROOM_CLIENT_CONFIG: OnceLock<Mutex<Option<(ClientType, String)>>> = OnceLock::new();
+/// App 侧配置的消息来源标识（`客户端/版本`）。
+static CLIENT_TAG: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 
-fn chatroom_client_config() -> &'static Mutex<Option<(ClientType, String)>> {
-    CHATROOM_CLIENT_CONFIG.get_or_init(|| Mutex::new(None))
+fn client_tag_slot() -> &'static Mutex<Option<String>> {
+    CLIENT_TAG.get_or_init(|| Mutex::new(None))
 }
 
-fn apply_chatroom_client_config(chatroom: &mut ChatRoom) {
-    let Ok(guard) = chatroom_client_config().lock() else {
-        return;
-    };
-    if let Some((client, version)) = guard.as_ref() {
-        chatroom.set_client_type(client.clone(), Some(version.clone()));
-    }
+fn stored_client_tag() -> Option<String> {
+    client_tag_slot().lock().ok().and_then(|g| g.clone())
 }
 
-pub(crate) fn apply_redpacket_client_config(redpacket: &mut Redpacket) {
-    let Ok(guard) = chatroom_client_config().lock() else {
-        return;
-    };
-    if let Some((client, version)) = guard.as_ref() {
-        redpacket.set_client_type(client.clone(), Some(version.clone()));
+/// 按 App 配置的 client_tag 派生客户端；未配置则用默认。
+fn with_stored_tag(client: FishPi) -> FishPi {
+    match stored_client_tag() {
+        Some(tag) => client.with_client_tag(tag),
+        None => client,
     }
-}
-
-fn parse_chatroom_client_type(client_name: &str) -> Result<ClientType, String> {
-    let normalized_client = client_name.trim();
-    if normalized_client.is_empty() {
-        return Err("client is required".to_string());
-    }
-    ClientType::from_str(normalized_client)
-        .map_err(|_| format!("Unknown client type: {normalized_client}"))
-}
-
-fn normalize_chatroom_client_version(version_name: &str) -> Result<String, String> {
-    let normalized_version = version_name.trim();
-    if normalized_version.is_empty() {
-        return Err("version is required".to_string());
-    }
-    Ok(normalized_version.to_string())
 }
 
 struct AndroidChatRoomConnection {
     _runtime: tokio::runtime::Runtime,
-    chatroom: Mutex<ChatRoom>,
+    connection: Mutex<ChatRoomConnection>,
     java_vm: Arc<jni::JavaVM>,
     callback: jni::objects::GlobalRef,
+}
+
+/// 拼接消息来源标识（`客户端/版本`），任一为空返回 None。
+fn build_client_tag(client: &str, version: &str) -> Option<String> {
+    let client = client.trim();
+    let version = version.trim();
+    if client.is_empty() || version.is_empty() {
+        return None;
+    }
+    Some(format!("{client}/{version}"))
 }
 
 #[unsafe(no_mangle)]
@@ -75,9 +60,9 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getChatRoomHisto
         let username = string_arg(&mut env, self_username)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let mut history = user
-                    .chatroom
+                let client = current_user(&token).await?;
+                let mut history = client
+                    .chatroom()
                     .history(page.max(1) as u32, ChatContentType::Html)
                     .await
                     .map_err(|err| format!("加载历史失败: {err}"))?;
@@ -96,48 +81,21 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getChatRoomHisto
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getChatRoomWsUrl(
-    mut env: JNIEnv,
-    _class: JClass,
-    api_key: JString,
-) -> jstring {
-    let result = (|| {
-        let token = string_arg(&mut env, api_key)?;
-        Ok(runtime_json(|rt| {
-            rt.block_on(async {
-                let user = current_user(&token).await?;
-                let chatroom = &user.chatroom;
-                let url = chatroom.get_ws_url().await.or_else(|_| {
-                    build_ws_url("fishpi.cn", "chat-room-channel", &[("apiKey", token)])
-                });
-                url.map(Value::String)
-                    .map_err(|err| format!("获取聊天室节点失败: {err}"))
-            })
-        }))
-    })()
-    .unwrap_or_else(|err: String| json!({ "ok": false, "error": err }).to_string());
-
-    to_jstring(&mut env, result)
-}
-
-#[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_setChatRoomClientType(
     mut env: JNIEnv,
     _class: JClass,
     client: JString,
     version: JString,
 ) {
-    let result = (|| {
-        let client_name = string_arg(&mut env, client)?;
-        let version_name = string_arg(&mut env, version)?;
-        let client_type = parse_chatroom_client_type(&client_name)?;
-        let normalized_version = normalize_chatroom_client_version(&version_name)?;
-        if let Ok(mut guard) = chatroom_client_config().lock() {
-            *guard = Some((client_type, normalized_version));
-        }
-        Ok::<(), String>(())
-    })();
-    let _ = result;
+    let Ok(client_name) = string_arg(&mut env, client) else {
+        return;
+    };
+    let Ok(version_name) = string_arg(&mut env, version) else {
+        return;
+    };
+    if let Ok(mut guard) = client_tag_slot().lock() {
+        *guard = build_client_tag(&client_name, &version_name);
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -154,14 +112,16 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendChatRoomMess
         let text = string_arg(&mut env, content)?;
         let client_name = string_arg(&mut env, client)?;
         let version_name = string_arg(&mut env, version)?;
-        let client_type = parse_chatroom_client_type(&client_name)?;
-        let normalized_version = normalize_chatroom_client_version(&version_name)?;
+        let client_tag = build_client_tag(&client_name, &version_name);
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let mut chatroom = user.chatroom;
-                chatroom.set_client_type(client_type, Some(normalized_version));
-                chatroom
+                let base = current_user(&token).await?;
+                let client = match client_tag {
+                    Some(tag) => base.with_client_tag(tag),
+                    None => base,
+                };
+                client
+                    .chatroom()
                     .send(text)
                     .await
                     .map_err(|err| format!("发送失败: {err}"))?;
@@ -186,10 +146,9 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendChatRoomMess
         let text = string_arg(&mut env, content)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let mut chatroom = user.chatroom;
-                apply_chatroom_client_config(&mut chatroom);
-                chatroom
+                let client = with_stored_tag(current_user(&token).await?);
+                client
+                    .chatroom()
                     .send(text)
                     .await
                     .map_err(|err| format!("发送失败: {err}"))?;
@@ -217,9 +176,12 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_setChatRoomDiscu
         }
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let chatroom = user.chatroom;
-                chatroom.set_discuss(text).await;
+                let client = with_stored_tag(current_user(&token).await?);
+                client
+                    .chatroom()
+                    .set_discuss(text)
+                    .await
+                    .map_err(|err| format!("设置话题失败: {err}"))?;
                 Ok(Value::Null)
             })
         }))
@@ -243,11 +205,10 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendChatRoomBarr
         let barrage_color = string_arg(&mut env, color)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let mut chatroom = user.chatroom;
-                apply_chatroom_client_config(&mut chatroom);
-                let message = chatroom
-                    .barrager(text, Some(barrage_color))
+                let client = with_stored_tag(current_user(&token).await?);
+                let message = client
+                    .chatroom()
+                    .barrager(text, Some(barrage_color.as_str()))
                     .await
                     .map_err(|err| format!("弹幕发送失败: {err}"))?;
                 Ok(json!({ "message": message }))
@@ -269,9 +230,9 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getChatRoomBarra
         let token = string_arg(&mut env, api_key)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let chatroom = user.chatroom;
-                let cost = chatroom
+                let client = current_user(&token).await?;
+                let cost = client
+                    .chatroom()
                     .barrage_cost()
                     .await
                     .map_err(|err| format!("获取弹幕花费失败: {err}"))?;
@@ -300,13 +261,13 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_revokeChatRoomMe
         let id = string_arg(&mut env, message_id)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let chatroom = &user.chatroom;
-                let revoked = chatroom
-                    .revoke(&id)
+                let client = current_user(&token).await?;
+                let revoked = client
+                    .chatroom()
+                    .revoke(id)
                     .await
                     .map_err(|err| format!("撤回失败: {err}"))?;
-                Ok(json!({ "msg": revoked.msg }))
+                Ok(json!({ "msg": revoked }))
             })
         }))
     })()
@@ -329,18 +290,18 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_reactChatRoomMes
         let reaction_value = string_arg(&mut env, value)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let chatroom = &user.chatroom;
-                let result = chatroom
-                    .reaction(&id, &reaction_value)
+                let client = current_user(&token).await?;
+                let result = client
+                    .reaction()
+                    .chat_room(id, reaction_value)
                     .await
                     .map_err(|err| format!("贴表情失败: {err}"))?;
                 Ok(json!({
-                                            "targetId": result.target_id,
-                                            "targetType": result.target_type,
-                                            "groupType": result.group_type,
-                                            "currentUserReaction": result.current_user_reaction,
-                    "summary": result.summary,
+                    "targetId": result.target_id,
+                    "targetType": result.target_type,
+                    "groupType": result.group_type,
+                    "currentUserReaction": result.current_user_reaction,
+                    "summary": reaction_summary_to_json(&result.summary),
                 }))
             })
         }))
@@ -374,12 +335,17 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_connectChatRoom(
             json!({ "event": "status", "message": "正在连接聊天室..." }),
         );
 
-        let chatroom = runtime.block_on(async {
-            let user = current_user(&token).await?;
-            let mut chatroom = user.chatroom;
+        let connection = runtime.block_on(async {
+            let client = current_user(&token).await?;
+            let mut connection = client
+                .chatroom()
+                .connect()
+                .await
+                .map_err(|err| format!("聊天室连接失败: {err}"))?;
+
             let java_vm_for_log = Arc::clone(&java_vm);
             let callback_for_log = callback.clone();
-            chatroom.on_ws_log(move |message| {
+            connection.set_log_hook(move |message| {
                 emit_callback(
                     &java_vm_for_log,
                     &callback_for_log,
@@ -387,14 +353,12 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_connectChatRoom(
                 );
             });
 
-            // Keep the SDK's internal discuss cache in sync. Android UI events are still
-            // emitted through on_all below, so this listener intentionally does not emit.
-            chatroom.on_discuss(|_| {}).await;
+            connection.on_discuss(|_| {}).await;
 
             let java_vm_for_event = Arc::clone(&java_vm);
             let callback_for_event = callback.clone();
             let username_for_event = username.clone();
-            chatroom
+            connection
                 .on_all(move |event| {
                     emit_callback(
                         &java_vm_for_event,
@@ -404,24 +368,19 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_connectChatRoom(
                 })
                 .await;
 
-            chatroom
-                .connect(false)
-                .await
-                .map_err(|err| format!("聊天室连接失败: {err}"))?;
-            if let Some(node_name) = chatroom.current_node_name().await {
+            if let Some(node_name) = connection.node_name() {
                 emit_callback(
                     &java_vm,
                     &callback,
                     json!({ "event": "node", "name": node_name }),
                 );
             }
-            Ok::<ChatRoom, String>(chatroom)
+            Ok::<ChatRoomConnection, String>(connection)
         })?;
 
-        // Keep the Rust runtime alive; the SDK's WS tasks run on it after connect returns.
         let handle = Box::new(AndroidChatRoomConnection {
             _runtime: runtime,
-            chatroom: Mutex::new(chatroom),
+            connection: Mutex::new(connection),
             java_vm: Arc::clone(&java_vm),
             callback: callback.clone(),
         });
@@ -460,11 +419,11 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_disconnectChatRo
         return;
     }
 
-    let connection = unsafe { Box::from_raw(handle as *mut AndroidChatRoomConnection) };
-    if let Ok(mut chatroom) = connection.chatroom.lock() {
-        chatroom.disconnect();
+    let handle = unsafe { Box::from_raw(handle as *mut AndroidChatRoomConnection) };
+    if let Ok(mut connection) = handle.connection.lock() {
+        connection.disconnect();
     }
-    drop(connection);
+    drop(handle);
 }
 
 #[unsafe(no_mangle)]
@@ -477,30 +436,21 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_reconnectChatRoo
         return 0;
     }
 
-    let connection = unsafe { &*(handle as *mut AndroidChatRoomConnection) };
+    let handle = unsafe { &*(handle as *mut AndroidChatRoomConnection) };
     let result = (|| {
-        let mut chatroom = connection
-            .chatroom
+        let mut connection = handle
+            .connection
             .lock()
             .map_err(|_| "聊天室连接锁已损坏".to_string())?;
-        connection
+        handle
             ._runtime
-            .block_on(async {
-                chatroom.reconnect().await?;
-                Ok::<Option<String>, fishpi_sdk::api::ws::WebSocketError>(
-                    chatroom.current_node_name().await,
-                )
-            })
-            .map(|node_name| {
-                if let Some(node_name) = node_name {
-                    emit_callback(
-                        &connection.java_vm,
-                        &connection.callback,
-                        json!({ "event": "node", "name": node_name }),
-                    );
-                }
-            })
+            .block_on(async { connection.reconnect().await })
             .map_err(|err| format!("聊天室重连失败: {err}"))?;
+        emit_callback(
+            &handle.java_vm,
+            &handle.callback,
+            json!({ "event": "status", "message": "聊天室已重连" }),
+        );
         Ok::<(), String>(())
     })();
 
@@ -521,97 +471,4 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_resumeChatRoomEv
     _class: JClass,
     _handle: jlong,
 ) {
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_parseChatRoomWsMessage(
-    mut env: JNIEnv,
-    _class: JClass,
-    text: JString,
-    self_username: JString,
-) -> jstring {
-    let result = (|| {
-        let raw = string_arg(&mut env, text)?;
-        let username = string_arg(&mut env, self_username)?;
-        let json_value: Value = serde_json::from_str(&raw).map_err(|err| err.to_string())?;
-        let type_str = json_value["type"].as_str().unwrap_or("");
-        let event = ChatRoomMessageType::from_str(type_str)
-            .map_err(|_| format!("Unknown message type: {type_str}"))?;
-
-        let data = match event {
-            ChatRoomMessageType::Online => {
-                let users = json_value["users"]
-                    .as_array()
-                    .map(|items| {
-                        items
-                            .iter()
-                            .filter_map(|u| {
-                                u["userName"]
-                                    .as_str()
-                                    .map(|name| Value::String(name.to_string()))
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
-                json!({
-                    "event": "online",
-                    "users": users,
-                    "discussing": json_value["discussing"].as_str().unwrap_or(""),
-                    "onlineCount": json_value["onlineChatCnt"]
-                        .as_u64()
-                        .or_else(|| json_value["onlineCnt"].as_u64())
-                        .unwrap_or(users.len() as u64),
-                })
-            }
-            ChatRoomMessageType::DiscussChanged => json!({
-                "event": "discussChanged",
-                "topic": json_value["newDiscuss"].as_str().unwrap_or(""),
-            }),
-            ChatRoomMessageType::Revoke => json!({
-                "event": "revoke",
-                "id": json_value["oId"].as_str().unwrap_or(""),
-            }),
-            ChatRoomMessageType::Msg | ChatRoomMessageType::RedPacket => {
-                let msg = ChatRoomMsg::from_value(&json_value).map_err(|err| err.to_string())?;
-                json!({
-                    "event": "message",
-                    "message": chat_message_to_json(msg, &username),
-                })
-            }
-            ChatRoomMessageType::Barrager => {
-                let msg = fishpi_sdk::model::chatroom::BarragerMsg::from_value(&json_value)
-                    .map_err(|err| err.to_string())?;
-                json!({
-                    "event": "message",
-                    "message": barrager_to_json(msg),
-                })
-            }
-            ChatRoomMessageType::RedPacketStatus => json!({
-                "event": "redPacketStatus",
-                "id": json_value["oId"].as_str().unwrap_or(""),
-                "count": json_value["count"].as_u64().unwrap_or(0),
-                "got": json_value["got"].as_u64().unwrap_or(0),
-                "whoGive": json_value["whoGive"].as_str().unwrap_or(""),
-            }),
-            ChatRoomMessageType::Custom => json!({
-                "event": "custom",
-                "message": json_value["message"].as_str().unwrap_or(""),
-            }),
-            ChatRoomMessageType::ChatReaction => json!({
-                "event": "chatReaction",
-                "id": json_value["oId"].as_str().unwrap_or(""),
-                "reactionSummary": json_value["summary"].clone(),
-                "actorReaction": json_value["actorReaction"].as_str().unwrap_or(""),
-                "actorUserId": json_value["actorUserId"].as_str().unwrap_or(""),
-                "targetType": json_value["targetType"].as_str().unwrap_or(""),
-                "groupType": json_value["groupType"].as_str().unwrap_or(""),
-                "data": json_value,
-            }),
-        };
-
-        Ok(json!({ "ok": true, "data": data }).to_string())
-    })()
-    .unwrap_or_else(|err: String| json!({ "ok": false, "error": err }).to_string());
-
-    to_jstring(&mut env, result)
 }

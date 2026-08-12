@@ -7,6 +7,7 @@ mod mappers;
 mod media;
 mod notice;
 mod private_chat;
+mod profession;
 mod redpacket;
 mod runtime;
 mod search;

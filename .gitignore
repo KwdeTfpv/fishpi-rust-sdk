@@ -6,6 +6,8 @@
 !build.gradle.kts
 !gradle.properties
 !src/
+!src/**
+src/main.rs
 !Cargo.toml
 
 # docs — VitePress source only

@@ -1,9 +1,9 @@
-use crate::chatroom::apply_redpacket_client_config;
 use crate::jni_utils::{string_arg, to_jstring};
 use crate::mappers::*;
 use crate::runtime::runtime_json;
 use crate::session::current_user;
-use fishpi_sdk::model::redpacket::{RedPacket, RedPacketType};
+use fishpi_sdk::client::RedPacketSend;
+use fishpi_sdk::domain::redpacket::RedPacketType;
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::jstring;
@@ -22,10 +22,10 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_openRedPacket(
         let id = string_arg(&mut env, message_id)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let redpacket = &user.redpacket;
-                let info = redpacket
-                    .open(&id, gesture_from_index(gesture))
+                let client = current_user(&token).await?;
+                let info = client
+                    .redpacket()
+                    .open(id, gesture_from_index(gesture))
                     .await
                     .map_err(|err| format!("拆红包失败: {err}"))?;
                 Ok(redpacket_info_to_json(info))
@@ -72,27 +72,25 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendRedPacket(
             .collect::<Vec<_>>();
         Ok(runtime_json(|rt| {
             rt.block_on(async {
-                let user = current_user(&token).await?;
-                let mut redpacket = user.redpacket;
-                apply_redpacket_client_config(&mut redpacket);
-                let packet = RedPacket {
-                    r#type: packet_type.clone(),
-                    money: money as u32,
-                    count: count as u32,
-                    message: if msg.trim().is_empty() {
-                        match packet_type {
-                            RedPacketType::RockPaperScissors => "剪刀石头布!".to_string(),
-                            RedPacketType::Specify => "看看是不是给你的".to_string(),
-                            _ => "摸鱼者，事竟成".to_string(),
-                        }
-                    } else {
-                        msg.trim().to_string()
-                    },
-                    receivers,
-                    gesture: gesture_from_index(gesture),
+                let client = current_user(&token).await?;
+                let message = if msg.trim().is_empty() {
+                    match packet_type {
+                        RedPacketType::RockPaperScissors => "剪刀石头布!".to_string(),
+                        RedPacketType::Specify => "看看是不是给你的".to_string(),
+                        _ => "摸鱼者，事竟成".to_string(),
+                    }
+                } else {
+                    msg.trim().to_string()
                 };
-                redpacket
-                    .send(&packet)
+                let mut packet =
+                    RedPacketSend::new(packet_type, money as u32, count as u32, message)
+                        .with_receivers(receivers);
+                if let Some(gesture) = gesture_from_index(gesture) {
+                    packet = packet.with_gesture(gesture);
+                }
+                client
+                    .redpacket()
+                    .send(packet)
                     .await
                     .map_err(|err| format!("发送红包失败: {err}"))?;
                 Ok(Value::Null)

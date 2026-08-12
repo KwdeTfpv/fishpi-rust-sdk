@@ -24,8 +24,8 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getBreezemoons(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let breezemoon = &user.breezemoon;
-                let list = timeout(Duration::from_secs(15), breezemoon.list(p, s, None))
+                let breezemoon = user.breezemoon();
+                let list = timeout(Duration::from_secs(15), breezemoon.list(p, s, None::<&str>))
                     .await
                     .map_err(|_| "加载清风明月超时".to_string())?
                     .map_err(|err| format!("加载清风明月失败: {err}"))?;
@@ -57,11 +57,14 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getUserBreezemoo
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user_client = current_user(&token).await?;
-                let breezemoon = &user_client.breezemoon;
-                let list = timeout(Duration::from_secs(15), breezemoon.list(p, s, Some(&user)))
-                    .await
-                    .map_err(|_| "加载用户清风明月超时".to_string())?
-                    .map_err(|err| format!("加载用户清风明月失败: {err}"))?;
+                let breezemoon = user_client.breezemoon();
+                let list = timeout(
+                    Duration::from_secs(15),
+                    breezemoon.list(p, s, Some(user.as_str())),
+                )
+                .await
+                .map_err(|_| "加载用户清风明月超时".to_string())?
+                .map_err(|err| format!("加载用户清风明月失败: {err}"))?;
                 Ok(Value::Array(
                     list.into_iter().map(breezemoon_to_json).collect(),
                 ))
@@ -89,18 +92,11 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendBreezemoon(
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let user = current_user(&token).await?;
-                let breezemoon = &user.breezemoon;
-                let rsp = timeout(Duration::from_secs(15), breezemoon.send(text.trim()))
+                let breezemoon = user.breezemoon();
+                timeout(Duration::from_secs(15), breezemoon.send(text.trim()))
                     .await
                     .map_err(|_| "发送清风明月超时".to_string())?
                     .map_err(|err| format!("发送清风明月失败: {err}"))?;
-                if !rsp.success {
-                    return Err(if rsp.msg.is_empty() {
-                        "发送清风明月失败".to_string()
-                    } else {
-                        rsp.msg
-                    });
-                }
                 Ok(Value::Null)
             })
         }))
