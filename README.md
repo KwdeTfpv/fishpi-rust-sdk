@@ -86,6 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `fishpi.emoji()` | 表情分组与表情项的增删改查 |
 | `fishpi.reaction()` | 给帖子/评论/聊天室消息贴表情 |
 | `fishpi.redpacket()` | 打开、发送红包 |
+| `fishpi.profession()` | 职业成长：查询/设置主职业、等级详情、经验记录、隐私配置、公开资料、排行榜 |
 | `fishpi.breezemoon()` | 清风明月列表、发送 |
 | `fishpi.finger(gold_key)` | 摸金手指（管理员，需金手指密钥）：勋章增删、背包、积分、活跃度、登录 IP |
 
