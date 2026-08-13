@@ -5,6 +5,7 @@ import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.NotificationPrefs
 import dev.fishpi.mobile.data.PrivateChatNotice
 import dev.fishpi.mobile.data.SessionStore
+import dev.fishpi.mobile.utils.toPlainMessageText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -46,13 +47,18 @@ class RealtimeNotificationDispatcher(
         val self = RealtimeConnectionManager.currentSession()?.username.orEmpty()
         if (message.userName.equals(self, ignoreCase = true)) return
 
-        val plain = message.content.htmlToPlain()
-        val mentioned = self.isNotBlank() && plain.contains("@$self", ignoreCase = true)
-        val hitKeyword = prefs.matchesChatKeyword(plain)
+        val raw = message.content
+        val quotedSelf = self.isNotBlank() && raw.contains("引用 @$self")
+        val plain = raw.substringBefore("##### 引用").ifBlank { raw }.toNotificationText()
+        val mentioned = self.isNotBlank() && (
+            raw.contains("/member/$self", ignoreCase = true) ||
+                plain.contains("@$self", ignoreCase = true)
+            )
+        val hitKeyword = if (prefs.chatKeywordsOnly) prefs.matchedChatKeyword(plain) else null
 
         val shouldNotify = when {
-            mentioned -> prefs.chatMentions
-            prefs.chatKeywordsOnly -> hitKeyword
+            quotedSelf || mentioned -> prefs.chatMentions
+            prefs.chatKeywordsOnly -> hitKeyword != null
             else -> false
         }
         if (!shouldNotify) return
@@ -61,8 +67,12 @@ class RealtimeNotificationDispatcher(
         RealtimeNotifier.notify(
             context = appContext,
             id = notificationId(),
-            title = if (mentioned) "$sender 在聊天室提到了你" else "$sender",
-            body = plain.take(120),
+            title = when {
+                quotedSelf -> "$sender 引用你的消息"
+                mentioned -> "$sender @你"
+                else -> sender
+            },
+            body = plain.take(120).ifBlank { "[消息]" },
             target = RealtimeNavTarget.ChatRoom(message.oId.ifBlank { null }),
         )
     }
@@ -74,8 +84,8 @@ class RealtimeNotificationDispatcher(
         RealtimeNotifier.notify(
             context = appContext,
             id = privateNotificationId(notice.peer),
-            title = "私聊：${notice.peer}",
-            body = notice.preview.htmlToPlain().take(120).ifBlank { "[新消息]" },
+            title = notice.peer,
+            body = notice.preview.toNotificationText().take(120).ifBlank { "[新消息]" },
             target = RealtimeNavTarget.PrivateChat(notice.peer),
         )
     }
@@ -89,8 +99,21 @@ class RealtimeNotificationDispatcher(
     private fun privateNotificationId(peer: String): Int =
         3000 + (peer.hashCode() and 0x3FF)
 
-    private fun String.htmlToPlain(): String =
-        replace(Regex("<[^>]*>"), " ")
-            .replace(Regex("\\s+"), " ")
+    private fun String.toNotificationText(): String {
+        val withoutQuotes = lineSequence()
+            .filterNot { it.trimStart().startsWith(">") }
+            .joinToString("\n")
+        return withoutQuotes
+            .toPlainMessageText()
+            .replace(MarkdownLinkRegex) { it.groupValues.getOrNull(1).orEmpty() }
+            .replace(PlainUrlRegex, "[链接]")
+            .replace(WhitespaceRegex, " ")
             .trim()
+    }
+
+    private companion object {
+        val MarkdownLinkRegex = Regex("""\[([^\]]*)]\([^)]*\)""")
+        val PlainUrlRegex = Regex("""https?://[^\s<>()\[\]{}"']+""", RegexOption.IGNORE_CASE)
+        val WhitespaceRegex = Regex("\\s+")
+    }
 }

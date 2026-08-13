@@ -421,11 +421,14 @@ data class NotificationPrefs(
     }
 
     // 关键词条目：以 /.../ 包裹视为正则，否则按包含匹配（大小写不敏感）
-    fun matchesChatKeyword(text: String): Boolean {
-        if (plainKeywords.any { text.contains(it, ignoreCase = true) }) return true
-        return compiledKeywordRegex.any { regex ->
-            runCatching { regex.containsMatchIn(text) }.getOrDefault(false)
+    fun matchesChatKeyword(text: String): Boolean = matchedChatKeyword(text) != null
+
+    fun matchedChatKeyword(text: String): String? {
+        plainKeywords.firstOrNull { text.contains(it, ignoreCase = true) }?.let { return it }
+        compiledKeywordRegex.forEach { regex ->
+            runCatching { regex.find(text)?.value }.getOrNull()?.let { return it }
         }
+        return null
     }
 }
 

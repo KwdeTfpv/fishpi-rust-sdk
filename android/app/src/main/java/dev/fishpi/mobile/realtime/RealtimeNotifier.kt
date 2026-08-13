@@ -75,6 +75,7 @@ object RealtimeNotifier {
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setSmallIcon(R.drawable.ic_client_chat)
+            .setLargeIcon(appLogoBitmap(context))
             .setAutoCancel(true)
             .setGroup(GROUP_MESSAGES)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -84,6 +85,17 @@ object RealtimeNotifier {
             NotificationManagerCompat.from(context).notify(id, notification)
         }
     }
+
+    private fun appLogoBitmap(context: Context): android.graphics.Bitmap? = runCatching {
+        val drawable = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_fishpi_logo)
+            ?: return null
+        val size = 128
+        val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        drawable.setBounds(0, 0, size, size)
+        drawable.draw(canvas)
+        bitmap
+    }.getOrNull()
 
     private fun contentIntent(
         context: Context,
