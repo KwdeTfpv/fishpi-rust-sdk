@@ -885,7 +885,6 @@ private fun DefaultChatUiContent(
                             expandedPluginId = if (expandedPluginId == group.pluginId) null else group.pluginId
                         },
                         onAction = { entry, action ->
-                            if (action.subtitle.isNotBlank()) FishPiNotifier.show(action.subtitle)
                             bridge.emitPluginToolbarAction(entry, action.id)
                         },
                         modifier = Modifier
