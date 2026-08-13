@@ -338,6 +338,7 @@ fn profession_rarity_to_json(v: fishpi_sdk::domain::profession::ProfessionRarity
     json!({
         "rank": v.rank,
         "surpassedPercent": v.surpassed_percent,
+        "totalUsers": v.total_users,
     })
 }
 

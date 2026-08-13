@@ -284,6 +284,7 @@ impl From<WireProfessionLevel> for ProfessionLevel {
 pub struct ProfessionRarity {
     pub rank: u32,
     pub surpassed_percent: f64,
+    pub total_users: u32,
 }
 
 impl From<WireProfessionRarity> for ProfessionRarity {
@@ -291,6 +292,7 @@ impl From<WireProfessionRarity> for ProfessionRarity {
         Self {
             rank: w.rank,
             surpassed_percent: w.surpassed_percent,
+            total_users: w.total_users,
         }
     }
 }
