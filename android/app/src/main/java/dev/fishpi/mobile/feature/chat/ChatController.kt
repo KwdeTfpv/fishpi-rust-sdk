@@ -64,6 +64,7 @@ internal class ChatController(
 ) : UiController<ChatState, ChatAction> {
     private val rawMessages = MutableStateFlow<List<ChatRoomMessage>>(emptyList())
     private val requestedHistoryPages = mutableSetOf<Int>()
+    private val pluginNotifiedIds = mutableSetOf<String>()
     private val store = SessionStore(context.applicationContext)
     private var livenessPollingJob: Job? = null
     private val pluginManager = PluginManager.init(context).also {
@@ -221,6 +222,7 @@ internal class ChatController(
     }
 
     private fun notifyPluginMessage(message: ChatRoomMessage, eventType: String) {
+        if (message.oId.isNotBlank() && !pluginNotifiedIds.add(message.oId)) return
         pluginManager.notify("message", message.toPluginJson(eventType).toString())
     }
 

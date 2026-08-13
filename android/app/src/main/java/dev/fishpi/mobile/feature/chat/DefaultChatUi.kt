@@ -461,7 +461,13 @@ private fun DefaultChatUiContent(
         }
     }
     val dispatchedIds = remember { mutableSetOf<String>() }
+    var pluginDispatchSeeded by remember { mutableStateOf(false) }
     LaunchedEffect(visibleMessages) {
+        if (!pluginDispatchSeeded) {
+            visibleMessages.forEach { dispatchedIds.add(it.oId) }
+            pluginDispatchSeeded = true
+            return@LaunchedEffect
+        }
         visibleMessages.forEach { msg ->
             if (dispatchedIds.add(msg.oId)) {
                 val eventType = when { msg.redPacket != null -> "redPacket"; msg.type == "system" -> "system"; else -> "msg" }
