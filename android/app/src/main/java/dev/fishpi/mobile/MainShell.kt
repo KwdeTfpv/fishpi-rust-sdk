@@ -72,7 +72,11 @@ import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.FishPiApiClient
-import dev.fishpi.mobile.data.NoticeRealtimeClient
+import dev.fishpi.mobile.realtime.PendingRealtimeNavigation
+import dev.fishpi.mobile.realtime.RealtimeConnectionManager
+import dev.fishpi.mobile.realtime.RealtimeLifecycleController
+import dev.fishpi.mobile.realtime.RealtimeNavTarget
+import dev.fishpi.mobile.realtime.RealtimeSession
 import dev.fishpi.mobile.data.ReleaseUpdateInfo
 import dev.fishpi.mobile.data.SavedAccount
 import dev.fishpi.mobile.data.SessionStore
@@ -104,8 +108,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
-private const val ChatRealtimeGraceMillis = 20_000L
-
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
 internal fun MainShell(
@@ -127,7 +129,6 @@ internal fun MainShell(
     onLogout: () -> Unit,
 ) {
     val api = remember { FishPiApiClient.shared }
-    val noticeRealtime = remember { NoticeRealtimeClient() }
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -190,17 +191,6 @@ internal fun MainShell(
     val secondaryBlocking = !onMainLayer || privateChatDetailActive || articleDetailActive
     val bottomNavHidden = secondaryBlocking || bottomNavSuppressed
 
-    var chatRealtimeEnabled by remember { mutableStateOf(chatRoomOpen && appInForeground) }
-    LaunchedEffect(chatRoomOpen, appInForeground) {
-        when {
-            chatRoomOpen && appInForeground -> chatRealtimeEnabled = true
-            !appInForeground -> chatRealtimeEnabled = false
-            else -> {
-                delay(ChatRealtimeGraceMillis)
-                chatRealtimeEnabled = false
-            }
-        }
-    }
     val totalMessageUnread = noticeUnread + privateUnread
 
     fun saveChatFilters(next: ChatFilterConfig) {
@@ -396,23 +386,52 @@ internal fun MainShell(
         }
     }
 
-    DisposableEffect(session.apiKey, appInForeground) {
-        if (appInForeground) {
-            noticeRealtime.connect(
-                apiKey = session.apiKey,
-                onNotice = { refreshNoticeUnread(force = true) },
-            )
-        } else {
-            noticeRealtime.disconnect()
-        }
-        onDispose {
-            noticeRealtime.disconnect()
+    // 登录态交给进程级连接管理器；连接与前台服务由 RealtimeLifecycleController 托管
+    DisposableEffect(session.apiKey, session.user.userName) {
+        RealtimeLifecycleController.onSession(
+            RealtimeSession(session.apiKey, session.user.userName),
+        )
+        onDispose { }
+    }
+
+    // 消费来自系统通知点击的待处理跳转
+    LaunchedEffect(Unit) {
+        PendingRealtimeNavigation.target.collect { target ->
+            if (target == null) return@collect
+            when (target) {
+                is RealtimeNavTarget.ChatRoom -> openChatRoomDetail()
+                is RealtimeNavTarget.Article -> openArticleDetail(target.articleId)
+                is RealtimeNavTarget.PrivateChat -> openPrivateChat(target.peer)
+                RealtimeNavTarget.Notice -> openNotice()
+            }
+            PendingRealtimeNavigation.consume()
         }
     }
 
+    LaunchedEffect(session.apiKey) {
+        RealtimeConnectionManager.noticeEvents.collect {
+            refreshNoticeUnread(force = true)
+        }
+    }
+
+    LaunchedEffect(session.apiKey) {
+        RealtimeConnectionManager.privateNotices.collect {
+            privateUnread += 1
+        }
+    }
+
+    // 通知分发器需知道聊天室是否可见，避免在聊天室内重复弹通知
+    LaunchedEffect(chatRoomOpen, appInForeground) {
+        (context.applicationContext as? FishPiApplication)?.notificationDispatcher?.let {
+            it.chatRoomVisible = chatRoomOpen
+            it.appInForeground = appInForeground
+        }
+    }
+
+    // 始终订阅聊天室事件用于 UI 渲染；连接生命周期与 UI 解耦
     ChatRealtimeRouteLifecycle(
         chatController = chatController,
-        enabled = chatRealtimeEnabled,
+        enabled = true,
         chatFilters = chatFilters,
         isRoomVisible = { chatRoomOpen },
         shouldFollowBottom = {

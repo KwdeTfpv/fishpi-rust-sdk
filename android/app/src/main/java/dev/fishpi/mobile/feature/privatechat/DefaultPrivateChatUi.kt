@@ -10,14 +10,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.imeAnimationTarget
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -403,7 +408,7 @@ private fun PrivateSessionRow(
 private fun String.toPrivateChatDisplayName(): String =
     if (isFileTransferPeer()) "文件传输助手" else this
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun PrivateConversation(
     peer: String,
@@ -488,7 +493,7 @@ private fun PrivateConversation(
         modifier = Modifier
             .fillMaxSize()
             .background(FishPiTheme.chatBackground)
-            .imePadding(),
+            .windowInsetsPadding(WindowInsets.imeAnimationTarget.union(WindowInsets.navigationBars)),
     ) {
         TopAppBar(
             modifier = Modifier

@@ -175,7 +175,9 @@ internal fun DefaultProfileUi(
     val articlePage = state.articles
     val breezePage = state.breezemoons
     var showWebLoginScanner by remember { mutableStateOf(false) }
+    var notificationSettingsOpen by remember { mutableStateOf(false) }
     val isOverlayOpen = state.settingsOpen ||
+        notificationSettingsOpen ||
         state.filterSettingsOpen ||
         state.themeEditorOpen ||
         state.aboutOpen ||
@@ -289,6 +291,7 @@ internal fun DefaultProfileUi(
             },
             onChatWallpaperChange = { dispatch(ProfileAction.ChangeChatWallpaper(it)) },
             onOpenFilters = { dispatch(ProfileAction.OpenFilterSettings) },
+            onOpenNotifications = { notificationSettingsOpen = true },
             onSwitchAccount = { dispatch(ProfileAction.SwitchAccount(it)) },
             onAddAccount = { dispatch(ProfileAction.AddAccount) },
             onLogout = { dispatch(ProfileAction.Logout) },
@@ -302,6 +305,10 @@ internal fun DefaultProfileUi(
             onSave = { dispatch(ProfileAction.SaveChatFilters(it)) },
             onDismiss = { dispatch(ProfileAction.DismissFilterSettings) },
         )
+    }
+
+    if (notificationSettingsOpen) {
+        NotificationSettingsScreen(onDismiss = { notificationSettingsOpen = false })
     }
 
     if (state.themeEditorOpen) {
@@ -403,6 +410,7 @@ private fun ProfileSettingsOverlay(
     onDeleteCustomTheme: (String) -> Boolean,
     onChatWallpaperChange: (String) -> Unit,
     onOpenFilters: () -> Unit,
+    onOpenNotifications: () -> Unit,
     onSwitchAccount: (SavedAccount) -> Unit,
     onAddAccount: () -> Unit,
     onLogout: () -> Unit,
@@ -458,6 +466,7 @@ private fun ProfileSettingsOverlay(
                     chatFilters = chatFilters,
                     savedAccounts = savedAccounts,
                     onOpenFilters = onOpenFilters,
+                    onOpenNotifications = onOpenNotifications,
                     onLogout = onLogout,
                 )
             }
@@ -1205,9 +1214,16 @@ private fun ProfileActionSection(
     chatFilters: ChatFilterConfig,
     savedAccounts: List<SavedAccount>,
     onOpenFilters: () -> Unit,
+    onOpenNotifications: () -> Unit,
     onLogout: () -> Unit,
 ) {
     FishPiSettingsSection(title = "设置与管理") {
+        FishPiSettingsRow(
+            icon = { Icon(imageVector = Icons.Rounded.Notifications, contentDescription = null, tint = profileAccentColor()) },
+            title = "通知",
+            summary = "消息通知开关",
+            onClick = onOpenNotifications,
+        )
         FishPiSettingsRow(
             icon = { Icon(imageVector = Icons.Rounded.Block, contentDescription = null, tint = profileAccentColor()) },
             title = "聊天室过滤",

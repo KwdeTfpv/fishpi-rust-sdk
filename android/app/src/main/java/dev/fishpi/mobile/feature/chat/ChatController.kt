@@ -9,7 +9,8 @@ import dev.fishpi.mobile.core.ui.UiLoadState
 import dev.fishpi.mobile.data.AtUserCandidate
 import dev.fishpi.mobile.data.ChatReactionUpdate
 import dev.fishpi.mobile.data.ChatRoomMessage
-import dev.fishpi.mobile.data.ChatRoomRealtimeClient
+import dev.fishpi.mobile.realtime.ChatRoomEvent
+import dev.fishpi.mobile.realtime.RealtimeConnectionManager
 import dev.fishpi.mobile.data.EmojiGroupView
 import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.data.FishPiApiClient
@@ -59,7 +60,6 @@ internal class ChatController(
     private val apiKey: String,
     private val currentUsername: String,
     private val api: FishPiApiClient = FishPiApiClient.shared,
-    private val realtime: ChatRoomRealtimeClient = ChatRoomRealtimeClient(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) : UiController<ChatState, ChatAction> {
     private val rawMessages = MutableStateFlow<List<ChatRoomMessage>>(emptyList())
@@ -111,6 +111,7 @@ internal class ChatController(
     val pluginMenuActions: List<PluginMenuAction>
         get() = pluginManager.menuActions
     private var realtimeConnectConfig: RealtimeConnectConfig? = null
+    private var chatEventJob: Job? = null
 
     init {
         startLivenessPolling()
@@ -231,6 +232,7 @@ internal class ChatController(
         pluginManager.emitMenuAction(action.pluginId, action.id, action.scene, message.toPluginJson("menuAction"))
     }
 
+    // 订阅进程级连接管理器的事件流；连接本身由 RealtimeLifecycleController 托管
     fun connectRealtime(
         shouldBlockMessage: (ChatRoomMessage) -> Boolean,
         isRoomVisible: () -> Boolean,
@@ -245,59 +247,56 @@ internal class ChatController(
             maxRetainedMessages = maxRetainedMessages,
             trimMessagesTo = trimMessagesTo,
         )
-        realtime.connect(
-            apiKey = apiKey,
-            selfUsername = currentUsername,
-            onMessage = { incoming ->
+        if (chatEventJob?.isActive == true) return
+        chatEventJob = scope.launch {
+            RealtimeConnectionManager.chatEvents.collect { event ->
+                handleChatEvent(event)
+            }
+        }
+    }
+
+    private fun handleChatEvent(event: ChatRoomEvent) {
+        val config = realtimeConnectConfig
+        when (event) {
+            is ChatRoomEvent.Message -> {
+                val incoming = event.message
                 val isOwnMessage = incoming.userName.equals(currentUsername, ignoreCase = true)
                 val followBottom = _state.value.shouldFollowBottom
                 onMessage(
                     incoming = incoming,
-                    blocked = shouldBlockMessage(incoming),
-                    keepFollowing = isRoomVisible() && (isOwnMessage || followBottom || shouldFollowBottom()),
-                    maxRetained = maxRetainedMessages,
-                    trimTo = trimMessagesTo,
+                    blocked = config?.shouldBlockMessage?.invoke(incoming) ?: false,
+                    keepFollowing = (config?.isRoomVisible?.invoke() ?: true) &&
+                        (isOwnMessage || followBottom || (config?.shouldFollowBottom?.invoke() ?: false)),
+                    maxRetained = config?.maxRetainedMessages ?: 520,
+                    trimTo = config?.trimMessagesTo ?: 440,
                 )
-            },
-            onRevoke = ::onRevoke,
-            onReaction = ::onReaction,
-            onRedPacketStatus = ::onRedPacketStatus,
-            onOnline = ::onOnline,
-            onDiscussChanged = ::onDiscussChanged,
-            onNodeChanged = ::onNodeChanged,
-            onStatus = ::onStatus,
-        )
+            }
+            is ChatRoomEvent.Revoke -> onRevoke(event.messageId)
+            is ChatRoomEvent.Reaction -> onReaction(event.update)
+            is ChatRoomEvent.RedPacketStatus -> onRedPacketStatus(event.update)
+            is ChatRoomEvent.Online -> onOnline(event.count, event.topic, event.users)
+            is ChatRoomEvent.DiscussChanged -> onDiscussChanged(event.topic)
+            is ChatRoomEvent.NodeChanged -> onNodeChanged(event.nodeName)
+            is ChatRoomEvent.Status -> onStatus(event.status)
+        }
     }
 
+    // 离开聊天室 UI 只停止订阅与本地渲染，不断开进程级连接
     fun disconnectRealtime(markPaused: Boolean = true) {
-        realtime.disconnect()
+        chatEventJob?.cancel()
+        chatEventJob = null
         if (markPaused && !_state.value.isLoading) {
             updateConnectionStatus("聊天室实时连接已暂停")
         }
     }
 
     fun reconnectRealtime() {
-        val config = realtimeConnectConfig
-        if (config == null) {
-            onStatus("聊天室未连接")
-            return
-        }
-        if (!realtime.hasActiveHandle()) {
-            onStatus("聊天室正在重连...")
-            connectRealtime(
-                shouldBlockMessage = config.shouldBlockMessage,
-                isRoomVisible = config.isRoomVisible,
-                shouldFollowBottom = config.shouldFollowBottom,
-                maxRetainedMessages = config.maxRetainedMessages,
-                trimMessagesTo = config.trimMessagesTo,
-            )
-            return
-        }
-        realtime.reconnect(::onStatus)
+        RealtimeConnectionManager.reconnectChatRoom(::onStatus)
     }
 
     fun close() {
-        realtime.disconnect()
+        chatEventJob?.cancel()
+        chatEventJob = null
         livenessPollingJob?.cancel()
         livenessPollingJob = null
     }

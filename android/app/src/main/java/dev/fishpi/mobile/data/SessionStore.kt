@@ -345,6 +345,38 @@ class SessionStore(context: Context) {
             .apply()
     }
 
+    fun getNotificationPrefs(): NotificationPrefs {
+        val raw = prefs.getString(KEY_NOTIFICATION_PREFS, "").orEmpty()
+        if (raw.isBlank()) return NotificationPrefs()
+        return runCatching {
+            val json = JSONObject(raw)
+            NotificationPrefs(
+                keepAlive = json.optBoolean("keep_alive", false),
+                chatMentions = json.optBoolean("chat_mentions", true),
+                chatKeywordsOnly = json.optBoolean("chat_keywords_only", false),
+                chatKeywords = json.optJSONArray("chat_keywords").toUniqueStringList(emptyList()),
+                privateMessages = json.optBoolean("private_messages", true),
+                notices = json.optBoolean("notices", true),
+            )
+        }.getOrDefault(NotificationPrefs())
+    }
+
+    fun saveNotificationPrefs(prefs: NotificationPrefs) {
+        this.prefs.edit()
+            .putString(
+                KEY_NOTIFICATION_PREFS,
+                JSONObject()
+                    .put("keep_alive", prefs.keepAlive)
+                    .put("chat_mentions", prefs.chatMentions)
+                    .put("chat_keywords_only", prefs.chatKeywordsOnly)
+                    .put("chat_keywords", prefs.chatKeywords.toJsonArray())
+                    .put("private_messages", prefs.privateMessages)
+                    .put("notices", prefs.notices)
+                    .toString(),
+            )
+            .apply()
+    }
+
     private companion object {
         const val KEY_API_KEY = "api_key"
         const val KEY_ACCOUNTS = "accounts"
@@ -353,6 +385,47 @@ class SessionStore(context: Context) {
         const val KEY_IMPORTED_THEMES = "imported_themes"
         const val KEY_CHAT_WALLPAPER_URI = "chat_wallpaper_uri"
         const val KEY_HOME_WORK_SETTINGS = "home_work_settings"
+        const val KEY_NOTIFICATION_PREFS = "notification_prefs"
+    }
+}
+
+// 通知与保活偏好
+data class NotificationPrefs(
+    val keepAlive: Boolean = false,
+    val chatMentions: Boolean = true,
+    val chatKeywordsOnly: Boolean = false,
+    val chatKeywords: List<String> = emptyList(),
+    val privateMessages: Boolean = true,
+    val notices: Boolean = true,
+) {
+    private val compiledKeywordRegex: List<Regex> by lazy {
+        chatKeywords.mapNotNull { raw ->
+            val entry = raw.trim()
+            if (entry.length >= 2 && entry.startsWith("/") && entry.endsWith("/")) {
+                runCatching { Regex(entry.substring(1, entry.length - 1), RegexOption.IGNORE_CASE) }.getOrNull()
+            } else {
+                null
+            }
+        }
+    }
+
+    private val plainKeywords: List<String> by lazy {
+        chatKeywords.mapNotNull { raw ->
+            val entry = raw.trim()
+            if (entry.isBlank() || (entry.length >= 2 && entry.startsWith("/") && entry.endsWith("/"))) {
+                null
+            } else {
+                entry
+            }
+        }
+    }
+
+    // 关键词条目：以 /.../ 包裹视为正则，否则按包含匹配（大小写不敏感）
+    fun matchesChatKeyword(text: String): Boolean {
+        if (plainKeywords.any { text.contains(it, ignoreCase = true) }) return true
+        return compiledKeywordRegex.any { regex ->
+            runCatching { regex.containsMatchIn(text) }.getOrDefault(false)
+        }
     }
 }
 

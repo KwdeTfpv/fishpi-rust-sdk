@@ -9,13 +9,17 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import android.content.Intent
 import androidx.compose.runtime.DisposableEffect
 import dev.fishpi.mobile.data.FishPiNative
+import dev.fishpi.mobile.realtime.PendingRealtimeNavigation
+import dev.fishpi.mobile.realtime.RealtimeNavTarget
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         FishPiNative.setChatRoomClientType("Rust", BuildConfig.VERSION_NAME)
+        handleNavIntent(intent)
         preferHighestRefreshRate()
 
         setContent {
@@ -38,6 +42,17 @@ class MainActivity : ComponentActivity() {
 
             FishPiApp()
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNavIntent(intent)
+    }
+
+    private fun handleNavIntent(intent: Intent?) {
+        val target = RealtimeNavTarget.fromIntent(intent) ?: return
+        PendingRealtimeNavigation.submit(target)
     }
 
     override fun onResume() {
