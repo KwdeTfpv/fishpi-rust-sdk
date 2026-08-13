@@ -77,6 +77,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.SubcomposeAsyncImage
+import dev.fishpi.mobile.FishPiOverlayWindow
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.chatui.ChatMarkdownRenderCache
 import dev.fishpi.mobile.chatui.MarkwonContentRenderer
@@ -105,14 +106,18 @@ internal fun DefaultPluginUi(
             onDismissRequest = { dispatch(PluginUiAction.Close(document.pluginId)) },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            PluginUiSurface(document = document, state = state, dispatch = dispatch)
+            FishPiOverlayWindow {
+                PluginUiSurface(document = document, state = state, dispatch = dispatch)
+            }
         }
         PluginUiContainerType.Page -> {
             Dialog(
                 onDismissRequest = { dispatch(PluginUiAction.Close(document.pluginId)) },
                 properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
             ) {
-                PluginUiSurface(document = document, state = state, dispatch = dispatch)
+                FishPiOverlayWindow {
+                    PluginUiSurface(document = document, state = state, dispatch = dispatch)
+                }
             }
             BackHandler {
                 dispatch(PluginUiAction.Close(document.pluginId))
@@ -524,7 +529,18 @@ private fun PluginImage(node: PluginUiNode.Image) {
             node.options.forEach { option ->
                 FilterChip(
                     selected = value == option.value,
-                    onClick = { dispatch(PluginUiAction.ChangeText(node.name, option.value)) },
+                    onClick = {
+                        dispatch(PluginUiAction.ChangeText(node.name, option.value))
+                        if (node.actionId.isNotBlank()) {
+                            dispatch(
+                                PluginUiAction.TriggerAction(
+                                    actionId = node.actionId,
+                                    nodeId = node.id,
+                                    values = mapOf(node.name to PluginFormValue.Text(option.value)),
+                                ),
+                            )
+                        }
+                    },
                     label = { Text(option.label) },
                 )
             }

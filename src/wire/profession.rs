@@ -19,18 +19,126 @@ pub struct WireProfessionSettings {
     pub available_professions: Vec<WireProfessionSummary>,
     #[serde(rename = "growthGuides", default)]
     pub growth_guides: BTreeMap<String, Vec<String>>,
+    #[serde(rename = "rewardGuides", default)]
+    pub reward_guides: BTreeMap<String, Vec<WireProfessionRewardGuide>>,
     #[serde(rename = "privacyPreset", default, deserialize_with = "string_lossy")]
     pub privacy_preset: String,
-    #[serde(rename = "moduleVisibility", default)]
-    pub module_visibility: WireProfessionModuleVisibility,
+    #[serde(
+        rename = "moduleVisibilityJson",
+        default,
+        deserialize_with = "string_lossy"
+    )]
+    pub module_visibility_json: String,
+    #[serde(
+        rename = "primaryProfessionState",
+        default,
+        deserialize_with = "string_lossy"
+    )]
+    pub primary_profession_state: String,
+    #[serde(rename = "onboardingState", default, deserialize_with = "string_lossy")]
+    pub onboarding_state: String,
+    #[serde(
+        rename = "userProgressVersion",
+        default,
+        deserialize_with = "i64_lenient"
+    )]
+    pub user_progress_version: i64,
+    #[serde(
+        rename = "publicStatsVersion",
+        default,
+        deserialize_with = "i64_lenient"
+    )]
+    pub public_stats_version: i64,
+    #[serde(
+        rename = "userPrivacyVersion",
+        default,
+        deserialize_with = "i64_lenient"
+    )]
+    pub user_privacy_version: i64,
+    #[serde(rename = "oId", default, deserialize_with = "string_lossy")]
+    pub oid: String,
+    #[serde(rename = "userId", default, deserialize_with = "string_lossy")]
+    pub user_id: String,
+    #[serde(rename = "createdAt", default, deserialize_with = "i64_lenient")]
+    pub created_at: i64,
+    #[serde(rename = "updatedAt", default, deserialize_with = "i64_lenient")]
+    pub updated_at: i64,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
 pub struct WireProfessionProgress {
     #[serde(rename = "professionId", default, deserialize_with = "string_lossy")]
     pub profession_id: String,
+    #[serde(rename = "displayName", default, deserialize_with = "string_lossy")]
+    pub display_name: String,
+    #[serde(rename = "professionCode", default, deserialize_with = "string_lossy")]
+    pub profession_code: String,
+    #[serde(rename = "shortName", default, deserialize_with = "string_lossy")]
+    pub short_name: String,
+    #[serde(default, deserialize_with = "string_lossy")]
+    pub description: String,
+    #[serde(rename = "levelCode", default, deserialize_with = "string_lossy")]
+    pub level_code: String,
+    #[serde(rename = "levelName", default, deserialize_with = "string_lossy")]
+    pub level_name: String,
+    #[serde(
+        rename = "levelDescription",
+        default,
+        deserialize_with = "string_lossy"
+    )]
+    pub level_description: String,
+    #[serde(
+        rename = "requiredExperience",
+        default,
+        deserialize_with = "i64_lenient"
+    )]
+    pub required_experience: i64,
     #[serde(rename = "totalExperience", default, deserialize_with = "i64_lenient")]
     pub total_experience: i64,
+    #[serde(default)]
+    pub presentation: WireProfessionPresentation,
+}
+
+#[derive(Clone, Debug, Deserialize, Default)]
+pub struct WireProfessionRewardGuide {
+    #[serde(rename = "rewardType", default, deserialize_with = "string_lossy")]
+    pub reward_type: String,
+    #[serde(default, deserialize_with = "i64_lenient")]
+    pub amount: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Default)]
+pub struct WireProfessionPresentation {
+    #[serde(rename = "backgroundColor", default, deserialize_with = "string_lossy")]
+    pub background_color: String,
+    #[serde(rename = "borderColor", default, deserialize_with = "string_lossy")]
+    pub border_color: String,
+    #[serde(rename = "borderWidth", default, deserialize_with = "string_lossy")]
+    pub border_width: String,
+    #[serde(default, deserialize_with = "string_lossy")]
+    pub glow: String,
+    #[serde(rename = "iconUrl", default, deserialize_with = "string_lossy")]
+    pub icon_url: String,
+    #[serde(rename = "imageUrl", default, deserialize_with = "string_lossy")]
+    pub image_url: String,
+    #[serde(
+        rename = "levelUpAnimation",
+        default,
+        deserialize_with = "string_lossy"
+    )]
+    pub level_up_animation: String,
+    #[serde(rename = "primaryColor", default, deserialize_with = "string_lossy")]
+    pub primary_color: String,
+    #[serde(rename = "progressStyle", default, deserialize_with = "string_lossy")]
+    pub progress_style: String,
+    #[serde(rename = "secondaryColor", default, deserialize_with = "string_lossy")]
+    pub secondary_color: String,
+    #[serde(default, deserialize_with = "string_lossy")]
+    pub shadow: String,
+    #[serde(default, deserialize_with = "string_lossy")]
+    pub shape: String,
+    #[serde(rename = "textColor", default, deserialize_with = "string_lossy")]
+    pub text_color: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
@@ -50,10 +158,16 @@ pub struct WireProfessionSummary {
         deserialize_with = "string_lossy"
     )]
     pub display_name: String,
+    #[serde(rename = "professionCode", default, deserialize_with = "string_lossy")]
+    pub profession_code: String,
+    #[serde(rename = "shortName", default, deserialize_with = "string_lossy")]
+    pub short_name: String,
     #[serde(default, deserialize_with = "string_lossy")]
     pub code: String,
     #[serde(default, deserialize_with = "string_lossy")]
     pub description: String,
+    #[serde(default)]
+    pub presentation: WireProfessionPresentation,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
@@ -99,6 +213,12 @@ pub struct WireProfessionDisplay {
         deserialize_with = "string_lossy"
     )]
     pub display_name: String,
+    #[serde(rename = "professionCode", default, deserialize_with = "string_lossy")]
+    pub profession_code: String,
+    #[serde(rename = "shortName", default, deserialize_with = "string_lossy")]
+    pub short_name: String,
+    #[serde(default, deserialize_with = "string_lossy")]
+    pub description: String,
     #[serde(rename = "levelCode", default, deserialize_with = "string_lossy")]
     pub level_code: String,
     #[serde(
@@ -108,13 +228,32 @@ pub struct WireProfessionDisplay {
         deserialize_with = "string_lossy"
     )]
     pub level_name: String,
+    #[serde(
+        rename = "levelDescription",
+        default,
+        deserialize_with = "string_lossy"
+    )]
+    pub level_description: String,
+    #[serde(
+        rename = "requiredExperience",
+        default,
+        deserialize_with = "i64_lenient"
+    )]
+    pub required_experience: i64,
     #[serde(rename = "totalExperience", default, deserialize_with = "i64_lenient")]
     pub total_experience: i64,
+    #[serde(default)]
+    pub presentation: WireProfessionPresentation,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
 pub struct WireProfessionLevel {
-    #[serde(default, deserialize_with = "string_lossy")]
+    #[serde(
+        rename = "levelCode",
+        alias = "code",
+        default,
+        deserialize_with = "string_lossy"
+    )]
     pub code: String,
     #[serde(
         rename = "displayName",
@@ -123,12 +262,26 @@ pub struct WireProfessionLevel {
         deserialize_with = "string_lossy"
     )]
     pub display_name: String,
+    #[serde(rename = "shortName", default, deserialize_with = "string_lossy")]
+    pub short_name: String,
+    #[serde(default, deserialize_with = "string_lossy")]
+    pub description: String,
+    #[serde(
+        rename = "achievementDescription",
+        default,
+        deserialize_with = "string_lossy"
+    )]
+    pub achievement_description: String,
     #[serde(
         rename = "requiredExperience",
         default,
         deserialize_with = "i64_lenient"
     )]
     pub required_experience: i64,
+    #[serde(rename = "topLevel", default)]
+    pub top_level: bool,
+    #[serde(rename = "sortOrder", default, deserialize_with = "i64_lenient")]
+    pub sort_order: i64,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
@@ -137,10 +290,14 @@ pub struct WireProfessionRarity {
     pub rank: u32,
     #[serde(rename = "surpassedPercent", default, deserialize_with = "f64_lenient")]
     pub surpassed_percent: f64,
+    #[serde(rename = "totalUsers", default, deserialize_with = "u32_lenient")]
+    pub total_users: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
 pub struct WireProfessionContribution {
+    #[serde(rename = "professionId", default, deserialize_with = "string_lossy")]
+    pub profession_id: String,
     #[serde(rename = "actionCode", default, deserialize_with = "string_lossy")]
     pub action_code: String,
     #[serde(rename = "sourceLabel", default, deserialize_with = "string_lossy")]
@@ -149,6 +306,8 @@ pub struct WireProfessionContribution {
     pub event_count: u32,
     #[serde(rename = "experienceSum", default, deserialize_with = "i64_lenient")]
     pub experience_sum: i64,
+    #[serde(rename = "lastOccurredAt", default, deserialize_with = "i64_lenient")]
+    pub last_occurred_at: i64,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
@@ -179,6 +338,10 @@ pub struct WireProfessionRecord {
     pub before_experience: i64,
     #[serde(rename = "afterExperience", default, deserialize_with = "i64_lenient")]
     pub after_experience: i64,
+    #[serde(rename = "beforeLevelCode", default, deserialize_with = "string_lossy")]
+    pub before_level_code: String,
+    #[serde(rename = "afterLevelCode", default, deserialize_with = "string_lossy")]
+    pub after_level_code: String,
     #[serde(rename = "occurredAt", default, deserialize_with = "i64_lenient")]
     pub occurred_at: i64,
 }
@@ -213,6 +376,8 @@ pub struct WirePublicProfessionProfile {
 
 #[derive(Clone, Debug, Deserialize, Default)]
 pub struct WireProfessionActivity {
+    #[serde(rename = "professionId", default, deserialize_with = "string_lossy")]
+    pub profession_id: String,
     #[serde(rename = "actionCode", default, deserialize_with = "string_lossy")]
     pub action_code: String,
     #[serde(rename = "sourceLabel", default, deserialize_with = "string_lossy")]
@@ -276,6 +441,10 @@ pub struct WireProfessionRankingEntry {
     pub profession_name: String,
     #[serde(rename = "levelName", default, deserialize_with = "string_lossy")]
     pub level_name: String,
+    #[serde(rename = "primaryColor", default, deserialize_with = "string_lossy")]
+    pub primary_color: String,
+    #[serde(rename = "iconUrl", default, deserialize_with = "string_lossy")]
+    pub icon_url: String,
     #[serde(
         rename = "totalExperience",
         default,

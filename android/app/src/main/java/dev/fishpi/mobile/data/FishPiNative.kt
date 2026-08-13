@@ -175,11 +175,7 @@ object FishPiNative {
     external fun updateProfessionPrivacy(
         apiKey: String,
         preset: String,
-        professions: Boolean,
-        experience: Boolean,
-        contributions: Boolean,
-        activity: Boolean,
-        ranking: Boolean,
+        moduleVisibilityJson: String,
     ): String
     external fun getUserProfession(apiKey: String, userName: String, position: String, dark: Boolean): String
     external fun getProfessionRanking(apiKey: String, professionId: String, dark: Boolean): String

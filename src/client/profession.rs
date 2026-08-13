@@ -84,8 +84,10 @@ impl ProfessionApi {
         profession_id: impl AsRef<str>,
     ) -> Result<ProfessionSettings, Error> {
         let body = json!({ "professionId": profession_id.as_ref() });
-        let wire: WireProfessionSettings =
-            self.0.post_data("api/profession/me/primary", &body).await?;
+        let wire: WireProfessionSettings = self
+            .0
+            .post_page_data("api/profession/me/primary", &body)
+            .await?;
         Ok(wire.into())
     }
 
@@ -111,16 +113,23 @@ impl ProfessionApi {
             map.insert(
                 "moduleVisibility".to_string(),
                 json!({
-                    "professions": v.professions,
+                    "primaryProfession": v.primary_profession,
+                    "allProfessions": v.all_professions,
                     "experience": v.experience,
-                    "contributions": v.contributions,
-                    "activity": v.activity,
+                    "rarity": v.rarity,
+                    "majorContributions": v.major_contributions,
+                    "contributionStats": v.contribution_stats,
+                    "activityFeed": v.activity_feed,
+                    "levelHistory": v.level_history,
+                    "rewards": v.rewards,
                     "ranking": v.ranking,
                 }),
             );
         }
-        let wire: WireProfessionSettings =
-            self.0.post_data("api/profession/me/privacy", &body).await?;
+        let wire: WireProfessionSettings = self
+            .0
+            .post_page_data("api/profession/me/privacy", &body)
+            .await?;
         Ok(wire.into())
     }
 

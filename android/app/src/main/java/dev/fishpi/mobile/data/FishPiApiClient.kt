@@ -462,21 +462,13 @@ class FishPiApiClient private constructor() {
     fun updateProfessionPrivacy(
         apiKey: String,
         preset: String,
-        professions: Boolean = true,
-        experience: Boolean = true,
-        contributions: Boolean = true,
-        activity: Boolean = true,
-        ranking: Boolean = true,
+        moduleVisibilityJson: String = "",
     ): JSONObject =
         dataObject(
             FishPiNative.updateProfessionPrivacy(
                 apiKey = apiKey,
                 preset = preset,
-                professions = professions,
-                experience = experience,
-                contributions = contributions,
-                activity = activity,
-                ranking = ranking,
+                moduleVisibilityJson = moduleVisibilityJson,
             ),
         )
 

@@ -9,9 +9,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -27,8 +30,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,12 +52,18 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.zIndex
 import coil3.compose.SubcomposeAsyncImage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 internal enum class FishPiNoticeType {
     Info,
@@ -65,14 +77,30 @@ internal data class FishPiNotice(
     val type: FishPiNoticeType = FishPiNoticeType.Info,
     val durationMs: Long = 2_200L,
     val avatarUrl: String = "",
-    val id: Long = System.nanoTime(),
+    val id: Long,
 )
 
+internal const val FISHPI_NOTICE_MAX_VISIBLE = 3
+
+internal object FishPiNoticeReducer {
+    fun add(current: List<FishPiNotice>, notice: FishPiNotice): List<FishPiNotice> {
+        val next = current + notice
+        return if (next.size > FISHPI_NOTICE_MAX_VISIBLE) {
+            next.takeLast(FISHPI_NOTICE_MAX_VISIBLE)
+        } else {
+            next
+        }
+    }
+
+    fun remove(current: List<FishPiNotice>, id: Long): List<FishPiNotice> =
+        current.filterNot { it.id == id }
+}
+
 internal object FishPiNotifier {
-    private val _notices = MutableSharedFlow<FishPiNotice>(
-        extraBufferCapacity = 8,
-    )
-    val notices = _notices.asSharedFlow()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val _notices = MutableStateFlow<List<FishPiNotice>>(emptyList())
+    val notices: StateFlow<List<FishPiNotice>> = _notices.asStateFlow()
+    private val timers = mutableMapOf<Long, Job>()
 
     fun show(
         message: String?,
@@ -83,7 +111,29 @@ internal object FishPiNotifier {
         val text = message?.trim().orEmpty()
         if (text.isBlank()) return
         val duration = durationMs ?: readingDurationMs(text, type)
-        _notices.tryEmit(FishPiNotice(text, type, duration, avatarUrl.trim()))
+        val notice = FishPiNotice(
+            message = text,
+            type = type,
+            durationMs = duration,
+            avatarUrl = avatarUrl.trim(),
+            id = FishPiOverlayRegistry.nextId(),
+        )
+        scope.launch {
+            _notices.update { FishPiNoticeReducer.add(it, notice) }
+            timers[notice.id] = scope.launch {
+                delay(duration)
+                removeNow(notice.id)
+            }
+        }
+    }
+
+    fun dismiss(id: Long) {
+        scope.launch { removeNow(id) }
+    }
+
+    private fun removeNow(id: Long) {
+        timers.remove(id)?.cancel()
+        _notices.update { FishPiNoticeReducer.remove(it, id) }
     }
 
     fun success(message: String?) = show(message, FishPiNoticeType.Success)
@@ -99,51 +149,44 @@ internal object FishPiNotifier {
 
 @Composable
 internal fun FishPiNotificationHost() {
-    var notice by remember { mutableStateOf<FishPiNotice?>(null) }
-    var visible by remember { mutableStateOf(false) }
-    var dismissedId by remember { mutableStateOf<Long?>(null) }
-
-    LaunchedEffect(Unit) {
-        FishPiNotifier.notices.collect { next ->
-            notice = next
-            visible = true
-            dismissedId = null
-            var waited = 0L
-            val step = 80L
-            while (waited < next.durationMs && dismissedId != next.id) {
-                delay(step)
-                waited += step
-            }
-            if (notice?.id == next.id) {
-                visible = false
-                delay(260L)
-                if (notice?.id == next.id) {
-                    notice = null
-                }
-            }
-        }
+    val hostId = remember { FishPiOverlayRegistry.nextId() }
+    DisposableEffect(hostId) {
+        FishPiOverlayRegistry.push(hostId)
+        onDispose { FishPiOverlayRegistry.pop(hostId) }
     }
 
-    val current = notice
-    if (current != null) {
-        val dismiss: () -> Unit = {
-            dismissedId = current.id
-            visible = false
-        }
-        Popup(
-            alignment = Alignment.TopCenter,
-            properties = PopupProperties(
-                focusable = false,
-                dismissOnBackPress = false,
-                dismissOnClickOutside = false,
-            ),
+    val activeHostId by FishPiOverlayRegistry.activeHostId.collectAsState()
+    if (activeHostId != hostId) return
+
+    val notices by FishPiNotifier.notices.collectAsState()
+    if (notices.isEmpty()) return
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(Float.MAX_VALUE),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Column(
+            modifier = Modifier.statusBarsPadding(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            AnimatedVisibility(
-                visible = visible,
-                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-            ) {
-                FishPiNotificationPill(current, onDismiss = dismiss)
+            notices.forEach { notice ->
+                key(notice.id) {
+                    var visible by remember { mutableStateOf(false) }
+                    LaunchedEffect(notice.id) { visible = true }
+                    AnimatedVisibility(
+                        visible = visible,
+                        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                    ) {
+                        FishPiNotificationPill(
+                            notice = notice,
+                            onDismiss = { FishPiNotifier.dismiss(notice.id) },
+                        )
+                    }
+                }
             }
         }
     }
@@ -165,7 +208,6 @@ private fun FishPiNotificationPill(
     }
     Row(
         modifier = Modifier
-            .statusBarsPadding()
             .padding(top = 9.dp, start = 18.dp, end = 18.dp)
             .shadow(18.dp, RoundedCornerShape(999.dp), clip = false)
             .clip(RoundedCornerShape(999.dp))
@@ -201,7 +243,7 @@ private fun FishPiNotificationPill(
             }
             .padding(horizontal = 11.dp, vertical = 8.dp)
             .sizeIn(maxWidth = 328.dp, maxHeight = 220.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier

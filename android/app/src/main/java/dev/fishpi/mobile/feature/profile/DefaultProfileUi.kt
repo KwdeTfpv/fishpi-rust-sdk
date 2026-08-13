@@ -1655,7 +1655,6 @@ private fun ProfileTransferDialog(
                     }
                 }
             }
-            FishPiNotificationHost()
         }
     }
 }

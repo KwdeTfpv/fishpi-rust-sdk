@@ -164,28 +164,19 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_updateProfession
     _class: JClass,
     api_key: JString,
     preset: JString,
-    professions: jboolean,
-    experience: jboolean,
-    contributions: jboolean,
-    activity: jboolean,
-    ranking: jboolean,
+    module_visibility_json: JString,
 ) -> jstring {
     let result = (|| {
         let token = string_arg(&mut env, api_key)?;
         let preset_raw = string_arg(&mut env, preset)?;
+        let visibility_json = string_arg(&mut env, module_visibility_json)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let client = current_user(&token).await?;
                 let preset = ProfessionPrivacyPreset::from(preset_raw.as_str());
-                let visibility = (preset == ProfessionPrivacyPreset::Custom).then_some(
-                    ProfessionModuleVisibility::new(
-                        professions != 0,
-                        experience != 0,
-                        contributions != 0,
-                        activity != 0,
-                        ranking != 0,
-                    ),
-                );
+                let visibility = (preset == ProfessionPrivacyPreset::Custom
+                    && !visibility_json.trim().is_empty())
+                .then(|| ProfessionModuleVisibility::from_json(&visibility_json));
                 let settings = timeout(
                     Duration::from_secs(15),
                     client.profession().update_privacy(preset, visibility),
@@ -268,15 +259,24 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getProfessionRan
 }
 
 fn profession_settings_to_json(v: ProfessionSettings) -> Value {
+    let privacy_preset = v.privacy_preset;
     json!({
         "primaryProfessionId": v.primary_profession_id,
         "progress": v.progress.into_iter().map(|p| json!({
             "professionId": p.profession_id,
+            "displayName": p.display_name,
+            "professionCode": p.profession_code,
+            "shortName": p.short_name,
+            "description": p.description,
+            "levelCode": p.level_code,
+            "levelName": p.level_name,
+            "levelDescription": p.level_description,
+            "requiredExperience": p.required_experience,
             "totalExperience": p.total_experience,
         })).collect::<Vec<_>>(),
         "availableProfessions": v.available_professions.into_iter().map(profession_summary_to_json).collect::<Vec<_>>(),
         "growthGuides": v.growth_guides,
-        "privacyPreset": v.privacy_preset.as_str(),
+        "privacyPreset": privacy_preset.as_str(),
         "moduleVisibility": module_visibility_to_json(v.module_visibility),
     })
 }
@@ -285,6 +285,8 @@ fn profession_summary_to_json(v: ProfessionSummary) -> Value {
     json!({
         "professionId": v.profession_id,
         "displayName": v.display_name,
+        "professionCode": v.profession_code,
+        "shortName": v.short_name,
         "code": v.code,
         "description": v.description,
     })
@@ -292,10 +294,15 @@ fn profession_summary_to_json(v: ProfessionSummary) -> Value {
 
 fn module_visibility_to_json(v: ProfessionModuleVisibility) -> Value {
     json!({
-        "professions": v.professions,
+        "primaryProfession": v.primary_profession,
+        "allProfessions": v.all_professions,
         "experience": v.experience,
-        "contributions": v.contributions,
-        "activity": v.activity,
+        "rarity": v.rarity,
+        "majorContributions": v.major_contributions,
+        "contributionStats": v.contribution_stats,
+        "activityFeed": v.activity_feed,
+        "levelHistory": v.level_history,
+        "rewards": v.rewards,
         "ranking": v.ranking,
     })
 }
@@ -336,10 +343,12 @@ fn profession_rarity_to_json(v: fishpi_sdk::domain::profession::ProfessionRarity
 
 fn profession_contribution_to_json(v: ProfessionContribution) -> Value {
     json!({
+        "professionId": v.profession_id,
         "actionCode": v.action_code,
         "sourceLabel": v.source_label,
         "eventCount": v.event_count,
         "experienceSum": v.experience_sum,
+        "lastOccurredAt": v.last_occurred_at,
     })
 }
 
@@ -384,6 +393,7 @@ fn public_profession_profile_to_json(v: PublicProfessionProfile) -> Value {
 
 fn profession_activity_to_json(v: ProfessionActivity) -> Value {
     json!({
+        "professionId": v.profession_id,
         "actionCode": v.action_code,
         "sourceLabel": v.source_label,
         "experienceDelta": v.experience_delta,
@@ -425,6 +435,8 @@ fn profession_ranking_entry_to_json(v: ProfessionRankingEntry) -> Value {
         "professionId": v.profession_id,
         "professionName": v.profession_name,
         "levelName": v.level_name,
+        "primaryColor": v.primary_color,
+        "iconUrl": v.icon_url,
         "totalExperience": v.total_experience,
         "surpassedPercent": v.surpassed_percent,
     })

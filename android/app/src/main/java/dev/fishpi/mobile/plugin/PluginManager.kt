@@ -178,11 +178,7 @@ class PluginManager private constructor(context: Context) {
         "updateProfessionPrivacy" to listOf(
             "apiKey",
             "preset",
-            "professions",
-            "experience",
-            "contributions",
-            "activity",
-            "ranking",
+            "moduleVisibility",
         ),
         "getUserProfession" to listOf("apiKey", "userName", "position", "dark"),
         "getProfessionRanking" to listOf("apiKey", "professionId", "dark"),

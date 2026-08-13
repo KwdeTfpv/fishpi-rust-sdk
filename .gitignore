@@ -40,3 +40,5 @@ android/native/*
 !android/native/src/
 !android/native/src/**
 !android/version.properties
+android/app/src/main/assets/plugins/*
+!android/app/src/main/assets/plugins/tail.js

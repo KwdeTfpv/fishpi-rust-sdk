@@ -91,6 +91,7 @@ object PluginUiMapper {
                 label = raw.optString("label").ifBlank { raw.optString("name").ifBlank { "选择" } },
                 value = raw.optString("value"),
                 options = options(raw.optJSONArray("options")),
+                actionId = raw.optString("actionId"),
             )
             "chips" -> PluginUiNode.Chips(
                 id = id,

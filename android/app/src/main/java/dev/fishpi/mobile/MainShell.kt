@@ -439,8 +439,7 @@ internal fun MainShell(
         }
     }
 
-    FishPiNotificationHost()
-
+    FishPiOverlayWindow {
     AnimalIslandBackground {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -680,6 +679,7 @@ internal fun MainShell(
                 )
             }
         }
+    }
     }
 
     PluginUiRoute()

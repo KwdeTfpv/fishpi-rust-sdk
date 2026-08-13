@@ -95,6 +95,7 @@ sealed interface PluginUiNode {
         val label: String,
         val value: String = "",
         val options: List<PluginUiOption> = emptyList(),
+        val actionId: String = "",
     ) : PluginUiNode
 
     data class Chips(

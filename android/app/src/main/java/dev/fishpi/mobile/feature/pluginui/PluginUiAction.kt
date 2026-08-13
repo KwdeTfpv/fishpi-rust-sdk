@@ -21,7 +21,11 @@ sealed interface PluginUiAction {
         val finalText: String? = null,
     ) : PluginUiAction
 
-    data class TriggerAction(val actionId: String, val nodeId: String = "") : PluginUiAction
+    data class TriggerAction(
+        val actionId: String,
+        val nodeId: String = "",
+        val values: Map<String, PluginFormValue> = emptyMap(),
+    ) : PluginUiAction
     data class ChangeText(val name: String, val value: String) : PluginUiAction
     data class ChangeNumber(val name: String, val value: Double) : PluginUiAction
     data class ChangeBool(val name: String, val value: Boolean) : PluginUiAction

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use reqwest::{Client, Method, Proxy, Response, StatusCode};
+use reqwest::{Client, Method, Proxy, Response, StatusCode, redirect::Policy};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -19,6 +19,7 @@ struct Inner {
     http: Client,
     config: Config,
     api_key: ApiKey,
+    page_auth: tokio::sync::OnceCell<PageAuth>,
 }
 
 /// 摸鱼派客户端，可 `Clone`。
@@ -60,6 +61,7 @@ impl FishPi {
                 http: self.inner.http.clone(),
                 config: self.inner.config.clone(),
                 api_key: api_key.into(),
+                page_auth: tokio::sync::OnceCell::new(),
             }),
         }
     }
@@ -73,6 +75,7 @@ impl FishPi {
                 http: self.inner.http.clone(),
                 config,
                 api_key: self.inner.api_key.clone(),
+                page_auth: tokio::sync::OnceCell::new(),
             }),
         }
     }
@@ -161,6 +164,7 @@ impl FishPiBuilder {
                 http,
                 config,
                 api_key: self.api_key.unwrap_or_else(|| ApiKey::new("")),
+                page_auth: tokio::sync::OnceCell::new(),
             }),
         })
     }
@@ -173,6 +177,18 @@ impl FishPiBuilder {
 
 fn build_http_client(config: &Config) -> Result<Client, Error> {
     let builder = Client::builder();
+    build_http_client_from_builder(config, builder)
+}
+
+fn build_http_client_without_redirects(config: &Config) -> Result<Client, Error> {
+    let builder = Client::builder().redirect(Policy::none());
+    build_http_client_from_builder(config, builder)
+}
+
+fn build_http_client_from_builder(
+    config: &Config,
+    builder: reqwest::ClientBuilder,
+) -> Result<Client, Error> {
     let builder = match config.proxy.mode {
         crate::utils::HttpProxyMode::NoProxy => builder.no_proxy(),
         crate::utils::HttpProxyMode::System => builder,
@@ -342,7 +358,33 @@ impl FishPi {
         let value = check_envelope(value)?;
         take_data(value)
     }
-
+    /// POST 页面态请求，保持调用方提供的 JSON body，并使用网页登录态的 sym-ce 与 csrfToken。
+    pub(crate) async fn post_page_data<T: DeserializeOwned, B: Serialize>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T, Error> {
+        let body = serde_json::to_value(body).map_err(|e| Error::decode(e.to_string()))?;
+        let url = self.full_url(path);
+        let page_auth = self.page_auth().await?;
+        let resp = self
+            .inner
+            .http
+            .post(&url)
+            .header("User-Agent", USER_AGENT)
+            .header(
+                "Referer",
+                format!("https://{}/settings/profession", self.inner.config.domain),
+            )
+            .header("Cookie", page_auth.cookie_header())
+            .header("csrfToken", page_auth.csrf_token)
+            .json(&body)
+            .send()
+            .await?;
+        let value = parse_json_response(resp).await?;
+        let value = check_envelope(value)?;
+        take_data(value)
+    }
     /// GET 请求，校验信封后返回整个响应 `Value`。
     pub(crate) async fn get_raw(&self, path: &str) -> Result<Value, Error> {
         let value = self.send_raw(Method::GET, path, None).await?;
@@ -383,15 +425,25 @@ impl FishPi {
 
     /// GET 请求，返回响应正文纯文本（HTML 等非 JSON 内容）。
     pub(crate) async fn get_text(&self, path: &str) -> Result<String, Error> {
+        self.get_text_with_cookie(path, None).await
+    }
+
+    async fn get_text_with_cookie(
+        &self,
+        path: &str,
+        cookie: Option<String>,
+    ) -> Result<String, Error> {
         let url = self.full_url(path);
-        let resp = self
+        let mut req = self
             .inner
             .http
             .get(&url)
             .header("User-Agent", USER_AGENT)
-            .header("Referer", format!("https://{}/", self.inner.config.domain))
-            .send()
-            .await?;
+            .header("Referer", format!("https://{}/", self.inner.config.domain));
+        if let Some(cookie) = cookie {
+            req = req.header("Cookie", cookie);
+        }
+        let resp = req.send().await?;
         let status = resp.status();
         if !status.is_success() {
             return Err(Error::decode(format!("HTTP error: {}", status)));
@@ -412,6 +464,50 @@ impl FishPi {
                 Value::String(self.inner.api_key.to_string()),
             );
         }
+    }
+
+    async fn page_auth(&self) -> Result<PageAuth, Error> {
+        let page_auth = self
+            .inner
+            .page_auth
+            .get_or_try_init(|| async {
+                let sym_ce = self.exchange_page_token().await?;
+                if sym_ce.is_empty() {
+                    return Err(Error::Unauthorized);
+                }
+                let html = self
+                    .get_text_with_cookie("settings/profession", Some(format!("sym-ce={sym_ce}")))
+                    .await?;
+                let csrf_token = extract_csrf_token(&html)
+                    .filter(|token| !token.trim().is_empty())
+                    .ok_or_else(|| Error::decode("cannot parse csrfToken from settings page"))?;
+                Ok(PageAuth { sym_ce, csrf_token })
+            })
+            .await?;
+        Ok(page_auth.clone())
+    }
+
+    async fn exchange_page_token(&self) -> Result<String, Error> {
+        if self.inner.api_key.is_empty() {
+            return Err(Error::Unauthorized);
+        }
+        let path = build_http_path(
+            "loginWebInApiKey",
+            &[("apiKey", self.inner.api_key.to_string())],
+        );
+        let url = self.full_url(&path);
+        let http = build_http_client_without_redirects(&self.inner.config)?;
+        let resp = http
+            .get(&url)
+            .header("User-Agent", USER_AGENT)
+            .header(
+                "Referer",
+                format!("https://{}/login", self.inner.config.domain),
+            )
+            .send()
+            .await?;
+        response_cookie_value(&resp, "sym-ce")
+            .ok_or_else(|| Error::decode("cannot exchange apiKey for page sym-ce cookie"))
     }
 }
 
@@ -470,6 +566,55 @@ fn is_html_response(content_type: &str, body: &str) -> bool {
             .starts_with("<!doctype html")
 }
 
+#[derive(Clone)]
+struct PageAuth {
+    sym_ce: String,
+    csrf_token: String,
+}
+
+impl PageAuth {
+    fn cookie_header(&self) -> String {
+        format!("sym-ce={}", self.sym_ce)
+    }
+}
+
+fn extract_csrf_token(html: &str) -> Option<String> {
+    let key = html.find("csrfToken")?;
+    let rest = &html[key..];
+    let colon = rest.find(':')?;
+    let mut value = rest[colon + 1..].trim_start();
+    let first = value.chars().next()?;
+    if first == '\'' || first == '"' {
+        value = &value[first.len_utf8()..];
+        let end = value.find(first)?;
+        Some(value[..end].to_string())
+    } else {
+        let end = value
+            .find(|c: char| c.is_whitespace() || c == ',' || c == ';' || c == '}')
+            .unwrap_or(value.len());
+        Some(
+            value[..end]
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_string(),
+        )
+    }
+}
+
+fn response_cookie_value(resp: &Response, name: &str) -> Option<String> {
+    let prefix = format!("{name}=");
+    resp.headers()
+        .get_all(reqwest::header::SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .find_map(|cookie| {
+            cookie
+                .split(';')
+                .map(str::trim)
+                .find_map(|part| part.strip_prefix(&prefix).map(str::to_string))
+        })
+}
+
 impl FishPi {
     /// 登录，返回持有 api_key 的新客户端。
     pub async fn login(&self, data: &LoginData) -> Result<FishPi, Error> {
@@ -478,12 +623,12 @@ impl FishPi {
             .send_raw(Method::POST, "api/getKey", Some(&body))
             .await?;
         let rsp = check_envelope(rsp)?;
-        let token = rsp
+        let api_key = rsp
             .get("Key")
             .and_then(Value::as_str)
             .unwrap_or("")
             .trim()
             .to_string();
-        Ok(self.with_api_key(token))
+        Ok(self.with_api_key(api_key))
     }
 }

@@ -1128,6 +1128,7 @@ private fun DefaultChatUiContent(
                 decorFitsSystemWindows = false,
             ),
         ) {
+            FishPiOverlayWindow {
             DefaultRedPacketSendUi(
                 form = RedPacketFormState(
                     type = redPacketType,
@@ -1159,6 +1160,7 @@ private fun DefaultChatUiContent(
                 },
             )
             }
+            }
         }
 
         gestureRedPacket?.let { message ->
@@ -1189,20 +1191,22 @@ private fun DefaultChatUiContent(
                 decorFitsSystemWindows = false,
             ),
         ) {
-            DefaultRedPacketResultUi(
-                state = result.toRedPacketResultUiModel(
-                    senderName = redPacketResultSource?.userName.orEmpty(),
-                    senderAvatar = redPacketResultSource?.userAvatarURL.orEmpty(),
-                    packetMessage = redPacketResultSource?.redPacket?.message.orEmpty(),
-                    selfUsername = session.user.userName,
-                    finished = redPacketResultSource?.redPacket?.finished == true || result.count > 0L && result.got >= result.count,
-                ),
-                dispatch = { action ->
-                    if (action is RedPacketAction.DismissResult) {
-                        dispatch(ChatAction.ClearRedPacketResult)
-                    }
-                },
-            )
+            FishPiOverlayWindow {
+                DefaultRedPacketResultUi(
+                    state = result.toRedPacketResultUiModel(
+                        senderName = redPacketResultSource?.userName.orEmpty(),
+                        senderAvatar = redPacketResultSource?.userAvatarURL.orEmpty(),
+                        packetMessage = redPacketResultSource?.redPacket?.message.orEmpty(),
+                        selfUsername = session.user.userName,
+                        finished = redPacketResultSource?.redPacket?.finished == true || result.count > 0L && result.got >= result.count,
+                    ),
+                    dispatch = { action ->
+                        if (action is RedPacketAction.DismissResult) {
+                            dispatch(ChatAction.ClearRedPacketResult)
+                        }
+                    },
+                )
+            }
             }
         }
 

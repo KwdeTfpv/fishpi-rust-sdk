@@ -1214,19 +1214,36 @@ fishpi.call('sendRedPacket', {
 }
 ```
 
-`ProfessionRanking.entries[]`：
+`ProfessionRanking`：
 
 ```json
 {
-  "rank": 1,
-  "userName": "adlered",
-  "userNickname": "阿达",
-  "userAvatarURL48": "https://...",
-  "professionName": "著述家",
-  "levelName": "成章",
-  "totalExperience": 101
+  "selectedProfession": {
+    "professionId": "1760000000000000000",
+    "displayName": "著述家",
+    "code": "writer",
+    "description": "连载长篇，持续更新"
+  },
+  "professions": [
+    { "professionId": "1760000000000000000", "displayName": "著述家", "code": "writer", "description": "" }
+  ],
+  "entries": [
+    {
+      "rank": 1,
+      "userName": "adlered",
+      "userNickname": "阿达",
+      "userAvatarURL48": "https://...",
+      "professionId": "1760000000000000000",
+      "professionName": "著述家",
+      "levelName": "成章",
+      "totalExperience": 101,
+      "surpassedPercent": 99.5
+    }
+  ]
 }
 ```
+
+`totalExperience` 在隐私遮蔽时可能不返回，读取时需判空。
 
 ### 私聊
 

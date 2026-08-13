@@ -31,7 +31,7 @@ class PluginUiController private constructor() : UiController<PluginUiState, Plu
                 is PluginUiAction.Clear -> clearInternal(action.pluginId)
                 is PluginUiAction.StreamPush -> streamPushInternal(action.pluginId, action.streamId, action.delta, action.replace)
                 is PluginUiAction.StreamEnd -> streamEndInternal(action.pluginId, action.streamId, action.finalText)
-                is PluginUiAction.TriggerAction -> trigger(action.actionId, action.nodeId)
+                is PluginUiAction.TriggerAction -> trigger(action.actionId, action.nodeId, action.values)
                 is PluginUiAction.ChangeText -> changeForm(action.name, PluginFormValue.Text(action.value))
                 is PluginUiAction.ChangeNumber -> changeForm(action.name, PluginFormValue.Number(action.value))
                 is PluginUiAction.ChangeBool -> changeForm(action.name, PluginFormValue.Bool(action.value))
@@ -173,10 +173,19 @@ class PluginUiController private constructor() : UiController<PluginUiState, Plu
         }
     }
 
-    private fun trigger(actionId: String, nodeId: String) {
+    private fun trigger(
+        actionId: String,
+        nodeId: String,
+        values: Map<String, PluginFormValue> = emptyMap(),
+    ) {
         val current = _state.value.current ?: return
         if (actionId.isBlank()) return
-        actionHandler?.invoke(current.pluginId, actionId, formValuesJson(_state.value.form, nodeId))
+        val form = if (values.isEmpty()) {
+            _state.value.form
+        } else {
+            _state.value.form.copy(values = _state.value.form.values + values)
+        }
+        actionHandler?.invoke(current.pluginId, actionId, formValuesJson(form, nodeId))
     }
 
     private fun changeForm(name: String, value: PluginFormValue) {
@@ -202,7 +211,8 @@ class PluginUiController private constructor() : UiController<PluginUiState, Plu
 
     private fun mergeForm(current: PluginFormState, document: PluginUiDocument): PluginFormState {
         val defaults = initialForm(document)
-        return defaults.copy(values = defaults.values + current.values)
+        val preserved = current.values.filterKeys { it in defaults.values }
+        return defaults.copy(values = defaults.values + preserved)
     }
 
     private fun formValuesJson(form: PluginFormState, nodeId: String): JSONObject {

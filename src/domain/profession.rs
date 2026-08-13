@@ -5,9 +5,8 @@ use std::collections::BTreeMap;
 use crate::ids::{ProfessionId, UserName};
 use crate::wire::profession::{
     WireProfessionActivity, WireProfessionContribution, WireProfessionDetail,
-    WireProfessionDisplay, WireProfessionLevel, WireProfessionLevelHistory,
-    WireProfessionModuleVisibility, WireProfessionProgress, WireProfessionRanking,
-    WireProfessionRankingEntry, WireProfessionRarity, WireProfessionRecord,
+    WireProfessionDisplay, WireProfessionLevel, WireProfessionLevelHistory, WireProfessionProgress,
+    WireProfessionRanking, WireProfessionRankingEntry, WireProfessionRarity, WireProfessionRecord,
     WireProfessionRecordsCursor, WireProfessionRecordsPage, WireProfessionReward,
     WireProfessionSettings, WireProfessionSummary, WirePublicProfessionProfile,
 };
@@ -94,6 +93,8 @@ pub struct ProfessionSettings {
 
 impl From<WireProfessionSettings> for ProfessionSettings {
     fn from(w: WireProfessionSettings) -> Self {
+        let module_visibility = ProfessionModuleVisibility::from_json(&w.module_visibility_json);
+
         Self {
             primary_profession_id: w.primary_profession_id.into(),
             progress: w.progress.into_iter().map(Into::into).collect(),
@@ -104,7 +105,7 @@ impl From<WireProfessionSettings> for ProfessionSettings {
                 .collect(),
             growth_guides: w.growth_guides,
             privacy_preset: ProfessionPrivacyPreset::from(w.privacy_preset.as_str()),
-            module_visibility: w.module_visibility.into(),
+            module_visibility,
         }
     }
 }
@@ -113,6 +114,14 @@ impl From<WireProfessionSettings> for ProfessionSettings {
 #[non_exhaustive]
 pub struct ProfessionProgress {
     pub profession_id: ProfessionId,
+    pub display_name: String,
+    pub profession_code: String,
+    pub short_name: String,
+    pub description: String,
+    pub level_code: String,
+    pub level_name: String,
+    pub level_description: String,
+    pub required_experience: i64,
     pub total_experience: i64,
 }
 
@@ -120,6 +129,14 @@ impl From<WireProfessionProgress> for ProfessionProgress {
     fn from(w: WireProfessionProgress) -> Self {
         Self {
             profession_id: w.profession_id.into(),
+            display_name: w.display_name,
+            profession_code: w.profession_code,
+            short_name: w.short_name,
+            description: w.description,
+            level_code: w.level_code,
+            level_name: w.level_name,
+            level_description: w.level_description,
+            required_experience: w.required_experience,
             total_experience: w.total_experience,
         }
     }
@@ -130,6 +147,8 @@ impl From<WireProfessionProgress> for ProfessionProgress {
 pub struct ProfessionSummary {
     pub profession_id: ProfessionId,
     pub display_name: String,
+    pub profession_code: String,
+    pub short_name: String,
     pub code: String,
     pub description: String,
 }
@@ -139,6 +158,8 @@ impl From<WireProfessionSummary> for ProfessionSummary {
         Self {
             profession_id: w.profession_id.into(),
             display_name: w.display_name,
+            profession_code: w.profession_code,
+            short_name: w.short_name,
             code: w.code,
             description: w.description,
         }
@@ -148,40 +169,53 @@ impl From<WireProfessionSummary> for ProfessionSummary {
 #[derive(Clone, Debug, Default)]
 #[non_exhaustive]
 pub struct ProfessionModuleVisibility {
-    pub professions: bool,
-    pub experience: bool,
-    pub contributions: bool,
-    pub activity: bool,
-    pub ranking: bool,
+    pub primary_profession: String,
+    pub all_professions: String,
+    pub experience: String,
+    pub rarity: String,
+    pub major_contributions: String,
+    pub contribution_stats: String,
+    pub activity_feed: String,
+    pub level_history: String,
+    pub rewards: String,
+    pub ranking: String,
 }
 
 impl ProfessionModuleVisibility {
-    pub fn new(
-        professions: bool,
-        experience: bool,
-        contributions: bool,
-        activity: bool,
-        ranking: bool,
-    ) -> Self {
+    pub fn all(level: impl Into<String>) -> Self {
+        let level = level.into();
         Self {
-            professions,
-            experience,
-            contributions,
-            activity,
-            ranking,
+            primary_profession: level.clone(),
+            all_professions: level.clone(),
+            experience: level.clone(),
+            rarity: level.clone(),
+            major_contributions: level.clone(),
+            contribution_stats: level.clone(),
+            activity_feed: level.clone(),
+            level_history: level.clone(),
+            rewards: level.clone(),
+            ranking: level,
         }
     }
-}
 
-impl From<WireProfessionModuleVisibility> for ProfessionModuleVisibility {
-    fn from(w: WireProfessionModuleVisibility) -> Self {
-        Self {
-            professions: w.professions,
-            experience: w.experience,
-            contributions: w.contributions,
-            activity: w.activity,
-            ranking: w.ranking,
-        }
+    pub fn from_json(json: &str) -> Self {
+        serde_json::from_str::<std::collections::HashMap<String, String>>(json)
+            .map(|map| {
+                let get = |k: &str| map.get(k).cloned().unwrap_or_default();
+                Self {
+                    primary_profession: get("primaryProfession"),
+                    all_professions: get("allProfessions"),
+                    experience: get("experience"),
+                    rarity: get("rarity"),
+                    major_contributions: get("majorContributions"),
+                    contribution_stats: get("contributionStats"),
+                    activity_feed: get("activityFeed"),
+                    level_history: get("levelHistory"),
+                    rewards: get("rewards"),
+                    ranking: get("ranking"),
+                }
+            })
+            .unwrap_or_default()
     }
 }
 
@@ -264,19 +298,23 @@ impl From<WireProfessionRarity> for ProfessionRarity {
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct ProfessionContribution {
+    pub profession_id: ProfessionId,
     pub action_code: String,
     pub source_label: String,
     pub event_count: u32,
     pub experience_sum: i64,
+    pub last_occurred_at: i64,
 }
 
 impl From<WireProfessionContribution> for ProfessionContribution {
     fn from(w: WireProfessionContribution) -> Self {
         Self {
+            profession_id: w.profession_id.into(),
             action_code: w.action_code,
             source_label: w.source_label,
             event_count: w.event_count,
             experience_sum: w.experience_sum,
+            last_occurred_at: w.last_occurred_at,
         }
     }
 }
@@ -370,6 +408,7 @@ impl From<WirePublicProfessionProfile> for PublicProfessionProfile {
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct ProfessionActivity {
+    pub profession_id: ProfessionId,
     pub action_code: String,
     pub source_label: String,
     pub experience_delta: i64,
@@ -379,6 +418,7 @@ pub struct ProfessionActivity {
 impl From<WireProfessionActivity> for ProfessionActivity {
     fn from(w: WireProfessionActivity) -> Self {
         Self {
+            profession_id: w.profession_id.into(),
             action_code: w.action_code,
             source_label: w.source_label,
             experience_delta: w.experience_delta,
@@ -453,6 +493,8 @@ pub struct ProfessionRankingEntry {
     pub profession_id: ProfessionId,
     pub profession_name: String,
     pub level_name: String,
+    pub primary_color: String,
+    pub icon_url: String,
     pub total_experience: Option<i64>,
     pub surpassed_percent: f64,
 }
@@ -467,6 +509,8 @@ impl From<WireProfessionRankingEntry> for ProfessionRankingEntry {
             profession_id: w.profession_id.into(),
             profession_name: w.profession_name,
             level_name: w.level_name,
+            primary_color: w.primary_color,
+            icon_url: w.icon_url,
             total_experience: w.total_experience,
             surpassed_percent: w.surpassed_percent,
         }
