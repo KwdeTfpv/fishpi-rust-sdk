@@ -26,8 +26,6 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.InsertEmoticon
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +55,9 @@ import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.data.UploadedChatFile
 import dev.fishpi.mobile.plugin.PluginToolbarEntry
 import dev.fishpi.mobile.shared.message.ChatQuote
+import dev.fishpi.mobile.ui.glass.FishPiGlassRole
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.utils.appendDraftBlock
 
 @Composable
@@ -240,12 +241,19 @@ internal fun ChatInputBar(
             candidates = atCandidates,
             onPick = { candidate -> onPickAtUser(candidate.username) },
         )
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(composerRadius()),
-            color = composerContainerColor(),
-            border = androidx.compose.foundation.BorderStroke(FishPiTheme.borderWidth, composerBorderColor()),
-            shadowElevation = 0.dp,
+        val composerShape = RoundedCornerShape(composerRadius())
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fishPiGlassSurface(
+                    backdrop = LocalFishPiGlassBackdrop.current,
+                    shape = composerShape,
+                    containerColor = composerContainerColor().copy(alpha = FishPiTheme.glass.floatingAlpha),
+                    borderColor = composerBorderColor().copy(alpha = 0.72f),
+                    borderWidth = FishPiTheme.borderWidth,
+                    depthEffect = true,
+                    role = FishPiGlassRole.Floating,
+                ),
         ) {
             Row(
                 modifier = Modifier

@@ -3,6 +3,9 @@ package dev.fishpi.mobile.feature.home
 import dev.fishpi.mobile.ui.components.FishPiPillButton
 import dev.fishpi.mobile.ui.components.ControlSurface
 import dev.fishpi.mobile.ui.components.uiPageBrush
+import dev.fishpi.mobile.ui.glass.FishPiGlassRole
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -300,7 +303,14 @@ private fun HomeSoftStatusPill(
             .fillMaxWidth()
             .clip(RoundedCornerShape(FishPiTheme.radiusField))
             .clickable(onClick = onClick)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.48f))
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = RoundedCornerShape(FishPiTheme.radiusField),
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.10f),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Control,
+            )
             .padding(horizontal = 9.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -373,11 +383,13 @@ private fun HomePrimaryEntry(
             .fillMaxWidth()
             .height(66.dp)
             .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 22.dp, bottomEnd = 12.dp, bottomStart = 22.dp))
-            .background(homeSoftContainerColor(alpha = 0.94f))
-            .border(
-                1.dp,
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.13f),
-                RoundedCornerShape(topStart = 12.dp, topEnd = 22.dp, bottomEnd = 12.dp, bottomStart = 22.dp),
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = RoundedCornerShape(topStart = 12.dp, topEnd = 22.dp, bottomEnd = 12.dp, bottomStart = 22.dp),
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.13f),
+                borderWidth = 1.dp,
+                role = FishPiGlassRole.Content,
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 15.dp),
@@ -423,8 +435,14 @@ private fun HomeSoftMiniAction(
             .width(116.dp)
             .height(56.dp)
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.88f))
-            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f), shape)
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = shape,
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.18f),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Control,
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -452,8 +470,14 @@ private fun HomeSoftCommunityRail(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-            .background(homeSoftContainerColor(alpha = 0.90f))
-            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(FishPiTheme.radiusBox))
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = RoundedCornerShape(FishPiTheme.radiusBox),
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.12f),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Content,
+            )
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -595,8 +619,14 @@ private fun HomeDatePill(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-            .background(homeSoftContainerColor(alpha = 0.88f))
-            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(FishPiTheme.radiusBox))
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = RoundedCornerShape(FishPiTheme.radiusBox),
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.12f),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Control,
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

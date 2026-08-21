@@ -1,6 +1,8 @@
 package dev.fishpi.mobile.ui.components
 
 import dev.fishpi.mobile.*
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.ui.motion.fishClickable
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -68,8 +70,13 @@ internal fun PlaceholderScreen(title: String, subtitle: String) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.58f))
-                .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f + FishPiTheme.depth * 0.10f), RoundedCornerShape(FishPiTheme.radiusBox))
+                .fishPiGlassSurface(
+                    backdrop = LocalFishPiGlassBackdrop.current,
+                    shape = RoundedCornerShape(FishPiTheme.radiusBox),
+                    containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
+                    borderColor = FishPiTheme.outline.copy(alpha = 0.08f + FishPiTheme.depth * 0.10f),
+                    borderWidth = FishPiTheme.borderWidth,
+                )
                 .padding(FishPiTheme.spacingSection),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
@@ -94,8 +101,13 @@ internal fun FishPiListCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.62f))
-            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f + FishPiTheme.depth * 0.08f), shape)
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = shape,
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.10f + FishPiTheme.depth * 0.08f),
+                borderWidth = FishPiTheme.borderWidth,
+            )
             .padding(FishPiTheme.spacingSection),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -149,11 +161,12 @@ internal fun FishPiPillButton(
     Box(
         modifier = modifier
             .clip(buttonShape)
-            .background(if (enabled) targetContainer else MaterialTheme.colorScheme.surfaceContainerHigh)
-            .border(
-                FishPiTheme.borderWidth,
-                if (enabled) MaterialTheme.colorScheme.outline.copy(alpha = 0.18f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
-                buttonShape,
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = buttonShape,
+                containerColor = if (enabled) targetContainer.copy(alpha = 0.72f) else FishPiTheme.surfaceContainer.copy(alpha = 0.42f),
+                borderColor = if (enabled) FishPiTheme.outline.copy(alpha = 0.18f) else FishPiTheme.outline.copy(alpha = 0.12f),
+                borderWidth = FishPiTheme.borderWidth,
             )
             .fishClickable(enabled = enabled, onClick = onClick)
             .padding(
@@ -188,8 +201,13 @@ internal fun FishPiIconButton(
         modifier = modifier
             .size(sizeDp.dp)
             .clip(shape)
-            .background(if (enabled) background else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.58f))
-            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f + FishPiTheme.depth * 0.08f), shape)
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = shape,
+                containerColor = if (enabled) background.copy(alpha = FishPiTheme.glass.surfaceAlpha) else FishPiTheme.surfaceContainer.copy(alpha = 0.42f),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.16f + FishPiTheme.depth * 0.08f),
+                borderWidth = FishPiTheme.borderWidth,
+            )
             .fishClickable(enabled = enabled, rippleBounded = false, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -274,11 +292,12 @@ internal fun TextField(
     Column(
         modifier = modifier
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.62f))
-            .border(
-                width = FishPiTheme.borderWidth,
-                color = if (isError) MaterialTheme.colorScheme.error.copy(alpha = 0.62f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
                 shape = shape,
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
+                borderColor = if (isError) FishPiTheme.error.copy(alpha = 0.62f) else FishPiTheme.outline.copy(alpha = 0.12f),
+                borderWidth = FishPiTheme.borderWidth,
             )
             .padding(horizontal = FishPiTheme.spacingControl + 2.dp, vertical = FishPiTheme.spacingControl),
         verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem / 2),
@@ -355,11 +374,12 @@ internal fun TextField(
     Column(
         modifier = modifier
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.62f))
-            .border(
-                width = FishPiTheme.borderWidth,
-                color = if (isError) MaterialTheme.colorScheme.error.copy(alpha = 0.62f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
                 shape = shape,
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
+                borderColor = if (isError) FishPiTheme.error.copy(alpha = 0.62f) else FishPiTheme.outline.copy(alpha = 0.12f),
+                borderWidth = FishPiTheme.borderWidth,
             )
             .padding(horizontal = FishPiTheme.spacingControl + 2.dp, vertical = FishPiTheme.spacingControl),
         verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem / 2),
@@ -451,8 +471,13 @@ internal fun FishPiBrandLoadingLogo() {
         modifier = Modifier
             .size(76.dp)
             .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f))
-            .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f + FishPiTheme.depth * 0.08f), RoundedCornerShape(FishPiTheme.radiusBox)),
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = RoundedCornerShape(FishPiTheme.radiusBox),
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.10f + FishPiTheme.depth * 0.08f),
+                borderWidth = FishPiTheme.borderWidth,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Image(
@@ -515,8 +540,13 @@ internal fun ErrorState(message: String, onRetry: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(FishPiTheme.radiusBox + 10.dp))
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f))
-                .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.error.copy(alpha = 0.16f + FishPiTheme.depth * 0.08f), RoundedCornerShape(FishPiTheme.radiusBox + 10.dp))
+                .fishPiGlassSurface(
+                    backdrop = LocalFishPiGlassBackdrop.current,
+                    shape = RoundedCornerShape(FishPiTheme.radiusBox + 10.dp),
+                    containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
+                    borderColor = FishPiTheme.error.copy(alpha = 0.16f + FishPiTheme.depth * 0.08f),
+                    borderWidth = FishPiTheme.borderWidth,
+                )
                 .padding(FishPiTheme.spacingSection),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),

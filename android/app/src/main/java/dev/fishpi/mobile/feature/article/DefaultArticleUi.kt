@@ -18,6 +18,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.ui.zIndex
 import dev.fishpi.mobile.ui.motion.FishPiMotion
 import dev.fishpi.mobile.ui.overlay.LocalImageViewer
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,7 +56,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -125,6 +125,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.toArgb
@@ -132,6 +133,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil3.compose.SubcomposeAsyncImage
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.InnerShadow
+import com.kyant.backdrop.shadow.Shadow
 import dev.fishpi.mobile.chatui.ChatMarkdownRenderCache
 import dev.fishpi.mobile.chatui.MarkwonContentRenderer
 import dev.fishpi.mobile.chatui.MarkwonContentStyle
@@ -481,16 +489,46 @@ private fun ArticleListPage(
             }
         }
         if (!listState.isScrollInProgress) {
-            FloatingActionButton(
-                onClick = onCreateArticle,
+            val buttonShape = RoundedCornerShape(20.dp)
+            val buttonBackdrop = LocalFishPiGlassBackdrop.current
+            val buttonTint = FishPiTheme.accent
+            Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 18.dp, bottom = 24.dp),
-                shape = RoundedCornerShape(20.dp),
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
+                    .padding(end = 18.dp, bottom = 108.dp)
+                    .size(56.dp)
+                    .then(
+                        if (buttonBackdrop == null) {
+                            Modifier.background(buttonTint.copy(alpha = 0.82f), buttonShape)
+                        } else {
+                            Modifier.drawBackdrop(
+                                backdrop = buttonBackdrop,
+                                shape = { buttonShape },
+                                effects = {
+                                    vibrancy()
+                                    blur(4.dp.toPx())
+                                    lens(16.dp.toPx(), 32.dp.toPx(), chromaticAberration = false)
+                                },
+                                highlight = { Highlight.Plain },
+                                shadow = { Shadow(alpha = 0.22f) },
+                                innerShadow = { InnerShadow(radius = 7.dp, alpha = 0.14f) },
+                                onDrawSurface = {
+                                    drawRect(buttonTint, blendMode = BlendMode.Hue)
+                                    drawRect(buttonTint.copy(alpha = 0.72f))
+                                },
+                            )
+                        },
+                    )
+                    .border(1.dp, Color.White.copy(alpha = 0.34f), buttonShape)
+                    .clip(buttonShape)
+                    .clickable(onClick = onCreateArticle),
+                contentAlignment = Alignment.Center,
             ) {
-                Icon(imageVector = Icons.Rounded.Add, contentDescription = "发布帖子")
+                Icon(
+                    imageVector = Icons.Rounded.Add,
+                    contentDescription = "发布帖子",
+                    tint = Color.White,
+                )
             }
         }
     }
@@ -711,6 +749,8 @@ internal fun DefaultArticlePublishUi(
         val previewSource = if (state.previewTarget == ArticlePublishEditorTarget.Reward) state.rewardContent else state.content
         AlertDialog(
             onDismissRequest = { dispatch(ArticlePublishAction.DismissPreview) },
+            containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
+            tonalElevation = 0.dp,
             title = { Text(if (state.previewTarget == ArticlePublishEditorTarget.Reward) "打赏区预览" else "正文预览") },
             text = {
                 LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
@@ -748,6 +788,8 @@ private fun GoodArticleConfirmDialog(
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
+        tonalElevation = 0.dp,
         title = { Text("是否申请好帖奖励？") },
         text = {
             LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
@@ -897,6 +939,8 @@ private fun ArticleDraftDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
+        tonalElevation = 0.dp,
         title = { Text("草稿") },
         text = {
             if (drafts.isEmpty()) {
@@ -1759,6 +1803,8 @@ private fun ArticleRewardCard(
     if (rewardConfirmOpen) {
         AlertDialog(
             onDismissRequest = onDismissRewardConfirm,
+            containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
+            tonalElevation = 0.dp,
             title = { Text("确认打赏？") },
             text = {
                 Text(

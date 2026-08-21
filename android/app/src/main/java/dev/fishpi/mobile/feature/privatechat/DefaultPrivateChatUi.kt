@@ -49,7 +49,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +60,7 @@ import coil3.compose.SubcomposeAsyncImage
 import dev.fishpi.mobile.AppSession
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.ui.components.ChatInputBar
+import dev.fishpi.mobile.ui.components.uiPageBrush
 import dev.fishpi.mobile.shared.message.ChatListItem
 import dev.fishpi.mobile.shared.message.ChatQuote
 import dev.fishpi.mobile.ui.components.PlainBackButton
@@ -85,6 +85,9 @@ import dev.fishpi.mobile.shared.message.messageTimeSeparator
 import dev.fishpi.mobile.ui.media.rememberChatAttachmentPicker
 import dev.fishpi.mobile.rememberFishPiImageLoader
 import dev.fishpi.mobile.ui.components.silentTap
+import dev.fishpi.mobile.ui.glass.FishPiGlassRole
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.shared.message.toRenderHints
 import kotlinx.coroutines.delay
 
@@ -274,15 +277,7 @@ private fun PrivateSessionList(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                        MaterialTheme.colorScheme.surface,
-                    ),
-                ),
-            ),
+            .background(uiPageBrush()),
     ) {
         listHeader?.invoke(this)
         error?.let {
@@ -329,8 +324,13 @@ private fun PrivateSessionRow(
             .clip(
                 RoundedCornerShape(FishPiTheme.radiusBox),
             )
-            .background(
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = RoundedCornerShape(FishPiTheme.radiusBox),
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.12f),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Content,
             )
             .clickable(onClick = onClick)
             .padding(
@@ -492,14 +492,14 @@ private fun PrivateConversation(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FishPiTheme.chatBackground)
+            .background(uiPageBrush())
             .windowInsetsPadding(WindowInsets.imeAnimationTarget.union(WindowInsets.navigationBars)),
     ) {
         TopAppBar(
             modifier = Modifier
                 .fillMaxWidth(),
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = FishPiTheme.surface.copy(alpha = 0.96f),
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
                 titleContentColor = FishPiTheme.onSurface,
                 navigationIconContentColor = FishPiTheme.onSurface,
             ),

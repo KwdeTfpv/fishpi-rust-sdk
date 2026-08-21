@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,16 +9,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.feature.chat.model.ChatMentionCandidateUiModel
+import dev.fishpi.mobile.ui.glass.FishPiGlassRole
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 
 /**
  * @ 提及候选人弹窗：竖向列表，每行圆头像 + 用户名。
@@ -31,12 +35,19 @@ internal fun MentionCandidatePopup(
     if (candidates.isEmpty()) {
         return
     }
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(FishPiTheme.radiusField),
-        color = FishPiTheme.surfaceContainer,
-        border = androidx.compose.foundation.BorderStroke(FishPiTheme.borderWidth, FishPiTheme.outline),
-        shadowElevation = 0.dp,
+    val shape = RoundedCornerShape(FishPiTheme.radiusField)
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = shape,
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.18f),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Floating,
+            ),
     ) {
         Column {
             candidates.forEach { candidate ->

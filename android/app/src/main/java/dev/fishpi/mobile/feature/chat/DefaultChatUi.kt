@@ -64,6 +64,7 @@ import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Tag
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.automirrored.rounded.Send
@@ -157,6 +158,9 @@ import dev.fishpi.mobile.feature.redpacket.toRedPacketResultUiModel
 import dev.fishpi.mobile.ui.components.ChatToolAction
 import dev.fishpi.mobile.ui.animal.AnimalPanel
 import dev.fishpi.mobile.ui.animal.AnimalStatusPill
+import dev.fishpi.mobile.ui.glass.FishPiGlassRole
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.plugin.PluginToolbarAction
 import dev.fishpi.mobile.plugin.PluginToolbarEntry
 import dev.fishpi.mobile.plugin.PluginMenuAction
@@ -366,6 +370,7 @@ private fun DefaultChatUiContent(
     var previewVideoUrl by remember { mutableStateOf<String?>(null) }
     var onlineUsersOpen by remember { mutableStateOf(false) }
     var chatActionsOpen by remember { mutableStateOf(false) }
+    var qrScannerOpen by remember { mutableStateOf(false) }
     var topicEditorOpen by remember { mutableStateOf(false) }
     var topicDraft by remember { mutableStateOf("") }
     val pluginFloatPrefs = remember(context) {
@@ -529,6 +534,21 @@ private fun DefaultChatUiContent(
             onClick = {
                 bridge.closeAttachmentPanel()
                 attachmentPicker.openFile()
+            },
+        ),
+        ChatToolAction(
+            id = "qr-scan",
+            label = "扫码",
+            icon = Icons.Rounded.QrCodeScanner,
+            enabled = !isUploadingAttachment,
+            iconTint = FishPiTheme.accent,
+            iconBackground = FishPiTheme.accent.copy(alpha = 0.10f),
+            onClick = {
+                bridge.closeAttachmentPanel()
+                dispatch(ChatAction.CloseEmojiPanel)
+                focusManager.clearFocus(force = true)
+                keyboardController?.hide()
+                qrScannerOpen = true
             },
         ),
         ChatToolAction(
@@ -1019,6 +1039,27 @@ private fun DefaultChatUiContent(
                 },
             )
         }
+        if (qrScannerOpen) {
+            Dialog(
+                onDismissRequest = { qrScannerOpen = false },
+                properties = DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    decorFitsSystemWindows = false,
+                ),
+            ) {
+                QrScannerScreen(
+                    onResult = { raw ->
+                        val scannedText = raw.trim()
+                        qrScannerOpen = false
+                        if (scannedText.isNotBlank()) {
+                            val nextInput = appendDraftBlock(input, scannedText)
+                            bridge.replaceDraft(nextInput, requestFocus = true, resetInput = true)
+                        }
+                    },
+                    onClose = { qrScannerOpen = false },
+                )
+            }
+        }
         previewLinkUrl?.let { linkUrl ->
             LinkPreviewOverlay(url = linkUrl, apiKey = session.apiKey, onDismiss = { bridge.dismissLinkPreview() })
         }
@@ -1290,6 +1331,14 @@ private fun DefaultChatUiContent(
         topicEditorOpen = false
     }
 
+    BackHandler(enabled = active && chatActionsOpen) {
+        chatActionsOpen = false
+    }
+
+    BackHandler(enabled = active && qrScannerOpen) {
+        qrScannerOpen = false
+    }
+
     BackHandler(enabled = active && redPacketComposerOpen && !isSendingRedPacket) {
         dispatch(ChatAction.DismissRedPacketComposer)
     }
@@ -1452,7 +1501,7 @@ internal fun ChatFilterSettingsOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(FishPiTheme.background),
+            .background(uiPageBrush()),
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -1704,7 +1753,7 @@ private fun CapsuleSwitch(checked: Boolean) {
                 .padding(horizontal = 4.dp)
                 .size(24.dp)
                 .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
-                .background(FishPiTheme.background),
+                .background(uiPageBrush()),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -1809,7 +1858,7 @@ private fun BlockedMessagesOverlay(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FishPiTheme.background)
+            .background(uiPageBrush())
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
@@ -2067,7 +2116,7 @@ private fun BlockedMessageClientBadge(client: String) {
         fontSize = 9.sp,
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
-            .background(FishPiTheme.background)
+            .background(uiPageBrush())
             .padding(horizontal = 5.dp, vertical = 1.dp),
     )
 }
@@ -2085,7 +2134,7 @@ internal fun ChatUserProfileOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(FishPiTheme.background),
+            .background(uiPageBrush()),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
@@ -2223,8 +2272,9 @@ private fun IslandChatContextBar(
     val density = LocalDensity.current
     var titleWidthPx by remember(nodeTitle) { mutableStateOf(0) }
     val statusDotOffset = with(density) { (titleWidthPx / 2).toDp() + 4.dp }
+    val headerSurfaceModifier = Modifier.background(palette.surface)
     Column(
-        modifier = modifier.background(palette.surface),
+        modifier = modifier.then(headerSurfaceModifier),
     ) {
         Spacer(modifier = Modifier.statusBarsPadding())
         Box(
@@ -2298,7 +2348,7 @@ private fun ChatOnlineUsersPage(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(FishPiTheme.background)
+                .background(uiPageBrush())
                 .navigationBarsPadding(),
         ) {
             TopAppBar(
@@ -2660,11 +2710,20 @@ private fun ChatPluginFloatingPanel(
         modifier = modifier
             .onSizeChanged { parentSize = it },
     ) {
-        Surface(
+        val panelShape = RoundedCornerShape(FishPiTheme.radiusBox + 4.dp)
+        Box(
             modifier = Modifier
                 .offset { clampedOffset }
                 .onSizeChanged { panelSize = it }
                 .widthIn(min = 116.dp, max = 260.dp)
+                .fishPiGlassSurface(
+                    backdrop = LocalFishPiGlassBackdrop.current,
+                    shape = panelShape,
+                    containerColor = palette.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
+                    borderColor = palette.outline.copy(alpha = 0.18f),
+                    borderWidth = FishPiTheme.borderWidth,
+                    role = FishPiGlassRole.Floating,
+                )
                 .pointerInput(parentSize, panelSize) {
                     var dragOffset = IntOffset.Zero
                     detectDragGestures(
@@ -2707,12 +2766,8 @@ private fun ChatPluginFloatingPanel(
                             )
                         )
                     }
-                },
-            shape = RoundedCornerShape(FishPiTheme.radiusBox + 4.dp),
-            color = palette.surface.copy(alpha = 0.96f),
-            border = BorderStroke(FishPiTheme.borderWidth, palette.outline.copy(alpha = 0.14f)),
-            shadowElevation = 0.dp,
-            tonalElevation = 0.dp,
+                }
+                .consumeTaps(),
         ) {
             PluginFloatingContent(
                 groups = groups,
@@ -2845,19 +2900,17 @@ private fun PluginFloatingChip(
     Row(
         modifier = modifier
             .clip(shape)
-            .background(
-                when {
-                    selected -> palette.accent.copy(alpha = 0.12f)
-                    else -> palette.surfaceContainer.copy(alpha = 0.72f)
-                }
-            )
-            .border(
-                FishPiTheme.borderWidth,
-                when {
-                    selected -> palette.accent.copy(alpha = 0.26f)
-                    else -> palette.outline.copy(alpha = 0.13f)
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = shape,
+                containerColor = if (selected) {
+                    palette.accent.copy(alpha = 0.20f)
+                } else {
+                    palette.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha)
                 },
-                shape,
+                borderColor = if (selected) palette.accent.copy(alpha = 0.26f) else palette.outline.copy(alpha = 0.13f),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Control,
             )
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 9.dp, vertical = 5.dp),
@@ -2971,33 +3024,34 @@ private fun ChatActionsSheet(
     onTogglePluginFloat: () -> Unit,
 ) {
     val palette = LocalFishPiPalette.current
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+    val sheetShape = RoundedCornerShape(topStart = 18.dp, topEnd = 8.dp, bottomStart = 18.dp, bottomEnd = 18.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(palette.onSurface.copy(alpha = 0.04f))
+            .silentTap(onDismiss),
+        contentAlignment = Alignment.TopEnd,
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(palette.onSurface.copy(alpha = 0.045f))
-                .silentTap(onDismiss),
-            contentAlignment = Alignment.TopEnd,
+                .statusBarsPadding()
+                .padding(top = 60.dp, end = 10.dp, start = 18.dp)
+                .widthIn(max = 286.dp)
+                .fishPiGlassSurface(
+                    backdrop = LocalFishPiGlassBackdrop.current,
+                    shape = sheetShape,
+                    containerColor = palette.surface.copy(alpha = 0.42f),
+                    borderColor = palette.outline.copy(alpha = 0.30f),
+                    borderWidth = FishPiTheme.borderWidth,
+                    role = FishPiGlassRole.Floating,
+                )
+                .consumeTaps(),
         ) {
-            Surface(
+            Column(
                 modifier = Modifier
-                    .statusBarsPadding()
-                    .padding(top = 60.dp, end = 10.dp, start = 18.dp)
-                    .widthIn(max = 286.dp)
-                    .consumeTaps(),
-                shape = RoundedCornerShape(topStart = 18.dp, topEnd = 8.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
-                color = palette.surface,
-                shadowElevation = 0.dp,
-                border = BorderStroke(FishPiTheme.borderWidth, palette.outline.copy(alpha = 0.18f)),
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Column(
-                    modifier = Modifier
-                        .padding(horizontal = 10.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -3078,7 +3132,6 @@ private fun ChatActionsSheet(
                             modifier = Modifier.weight(1f),
                         )
                     }
-                }
             }
         }
     }
@@ -3092,15 +3145,19 @@ private fun ChatActionSheetMiniItem(
     modifier: Modifier = Modifier,
 ) {
     val palette = LocalFishPiPalette.current
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(13.dp),
-        color = palette.background.copy(alpha = 0.58f),
-        contentColor = palette.onSurface,
-        shadowElevation = 0.dp,
-        tonalElevation = 0.dp,
-        border = BorderStroke(FishPiTheme.borderWidth, palette.outline.copy(alpha = 0.10f)),
+    val shape = RoundedCornerShape(13.dp)
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = shape,
+                containerColor = palette.surface.copy(alpha = 0.34f),
+                borderColor = palette.outline.copy(alpha = 0.22f),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Floating,
+            )
+            .clickable(onClick = onClick),
     ) {
         Column(
             modifier = Modifier
@@ -3136,15 +3193,19 @@ private fun ChatActionSheetItem(
     badgeText: String? = null,
 ) {
     val palette = LocalFishPiPalette.current
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(FishPiTheme.radiusBox),
-        color = palette.background.copy(alpha = 0.72f),
-        contentColor = palette.onSurface,
-        shadowElevation = 0.dp,
-        tonalElevation = 0.dp,
-        border = BorderStroke(FishPiTheme.borderWidth, palette.outline.copy(alpha = 0.13f)),
+    val shape = RoundedCornerShape(FishPiTheme.radiusBox)
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = shape,
+                containerColor = palette.surface.copy(alpha = 0.36f),
+                borderColor = palette.outline.copy(alpha = 0.24f),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Floating,
+            )
+            .clickable(onClick = onClick),
     ) {
         Row(
         modifier = Modifier

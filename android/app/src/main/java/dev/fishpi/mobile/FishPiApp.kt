@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
 fun FishPiApp() {
     val context = LocalContext.current
     val store = remember { SessionStore(context.applicationContext) }
-    val fallbackTheme = FishPiThemePreset.DeepBlueNeon
+    val fallbackTheme = FishPiThemePreset.Island
     val builtinOptions = remember { builtinThemeOptions() }
     var importedThemes by remember {
         mutableStateOf(store.getImportedThemeJsons().mapNotNull { raw ->
@@ -108,7 +108,7 @@ fun FishPiApp() {
         return true
     }
     val activeWallpaperUri = chatWallpaperUri.ifBlank { activeTheme.palette.wallpaperImageUri.orEmpty() }
-    val palette = activeTheme.tokens.toPalette(activeWallpaperUri.ifBlank { null })
+    val palette = activeTheme.palette.copy(wallpaperImageUri = activeWallpaperUri.ifBlank { null })
     fun applyChatWallpaper(uri: String) {
         chatWallpaperUri = uri
         store.saveChatWallpaperUri(uri)
@@ -121,7 +121,7 @@ fun FishPiApp() {
             applyThemeKey(resolvedKey)
         }
     }
-    FishPiM3BridgedTheme(palette = palette, tokens = activeTheme.tokens, uiStyle = activeTheme.uiStyle) {
+    FishPiM3BridgedTheme(palette = palette, tokens = activeTheme.tokens) {
         val api = remember { FishPiApiClient.shared }
         val scope = rememberCoroutineScope()
         var session by remember { mutableStateOf<AppSession?>(null) }

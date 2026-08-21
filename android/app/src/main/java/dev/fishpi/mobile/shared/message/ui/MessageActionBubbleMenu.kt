@@ -4,9 +4,7 @@ import dev.fishpi.mobile.*
 import dev.fishpi.mobile.shared.message.*
 import dev.fishpi.mobile.ui.components.consumeTaps
 import dev.fishpi.mobile.ui.components.silentTap
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -41,8 +39,14 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import dev.fishpi.mobile.shared.message.native.MessageActionAnchor
 import dev.fishpi.mobile.data.ChatRoomMessage
+import dev.fishpi.mobile.ui.blur.FishPiBlurOverlay
+import dev.fishpi.mobile.ui.glass.FishPiGlassRole
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import kotlin.math.roundToInt
 
 private enum class MessageActionSubmenu {
@@ -72,7 +76,7 @@ internal fun MessageActionBubbleMenu(
     var submenu by remember(anchor.message.oId) { mutableStateOf(MessageActionSubmenu.Main) }
     val density = LocalDensity.current
     val palette = LocalFishPiPalette.current
-    val menuBackground = palette.surfaceElevated.copy(alpha = 0.98f)
+    val menuBackground = palette.surface.copy(alpha = FishPiTheme.glass.floatingAlpha)
     val menuBorder = palette.outline.copy(alpha = 0.18f)
     val contentColor = palette.onSurface
     val disabledColor = palette.weakText.copy(alpha = 0.44f)
@@ -101,85 +105,101 @@ internal fun MessageActionBubbleMenu(
     val localLeft = anchor.rectInWindow.left - rootOffsetInWindow.x
     val localRight = anchor.rectInWindow.right - rootOffsetInWindow.x
     val localTop = anchor.rectInWindow.top - rootOffsetInWindow.y
+    val menuShape = RoundedCornerShape(FishPiTheme.radiusBox)
     val alignedX = if (anchor.isMine) localRight - menuWidthPx else localLeft.toFloat()
     val maxX = (rootSize.width - menuWidthPx - horizontalPaddingPx).coerceAtLeast(horizontalPaddingPx)
     val x = alignedX.coerceIn(horizontalPaddingPx, maxX).roundToInt()
     val y = (localTop - menuHeightPx - gapPx).coerceAtLeast(topPaddingPx).roundToInt()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .silentTap(onDismiss),
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
     ) {
-        Box(
+        FishPiBlurOverlay(
             modifier = Modifier
-                .padding(start = with(density) { x.toDp() }, top = with(density) { y.toDp() })
-                .width(menuWidth),
+                .fillMaxSize()
+                .silentTap(onDismiss),
+            overlayColor = Color.Black.copy(alpha = 0.10f),
+            blurRadius = 18f,
         ) {
-            Column(
-                modifier = Modifier
-                    .width(menuWidth)
-                    .shadow(4.dp, RoundedCornerShape(FishPiTheme.radiusBox), clip = false)
-                    .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-                    .background(menuBackground)
-                    .border(BorderStroke(FishPiTheme.borderWidth, menuBorder), RoundedCornerShape(FishPiTheme.radiusBox))
-                    .consumeTaps()
-                    .padding(
-                        horizontal = FishPiTheme.spacingControl * 0.45f,
-                        vertical = FishPiTheme.spacingControl * 0.36f,
-                    ),
-                verticalArrangement = Arrangement.Center,
-            ) {
-                when (submenu) {
-                    MessageActionSubmenu.Main -> MainActionRow(
-                        message = anchor.message,
-                        canRevoke = canRevoke,
-                        onCopyContent = { onCopyContent(); onDismiss() },
-                        onMentionUser = onMentionUser?.let { action -> { action(); onDismiss() } },
-                        onQuote = { onQuote(); onDismiss() },
-                        onRepeat = { onRepeat(); onDismiss() },
-                        onRevoke = { onRevoke(); onDismiss() },
-                        itemBackground = itemPressedBackground,
-                        contentColor = contentColor,
-                        disabledColor = disabledColor,
-                        onMore = { submenu = MessageActionSubmenu.More },
-                        onReactions = { submenu = MessageActionSubmenu.Reactions },
-                    )
-                    MessageActionSubmenu.More -> MoreActionRow(
-                        message = anchor.message,
-                        itemBackground = itemPressedBackground,
-                        contentColor = contentColor,
-                        disabledColor = disabledColor,
-                        onCopyUsername = { onCopyUsername(); onDismiss() },
-                        onCopyImageLinks = { onCopyImageLinks(); onDismiss() },
-                        onCopyLinks = { onCopyLinks(); onDismiss() },
-                        onBack = { submenu = MessageActionSubmenu.Main },
-                        extraActions = extraActions.map { action ->
-                            action.copy(onClick = { action.onClick(); onDismiss() })
-                        },
-                    )
-                    MessageActionSubmenu.Reactions -> ReactionActionRow(
-                        contentColor = contentColor,
-                        selectedBackground = selectedBackground,
-                        itemBackground = itemPressedBackground,
-                        selected = anchor.message.currentUserReaction,
-                        onReaction = { value -> onReaction(value); onDismiss() },
-                        onBack = { submenu = MessageActionSubmenu.Main },
-                    )
-                }
-            }
             Box(
                 modifier = Modifier
-                    .align(if (anchor.isMine) Alignment.BottomEnd else Alignment.BottomStart)
-                    .offset(
-                        x = if (anchor.isMine) (-20).dp else 20.dp,
-                        y = 4.dp,
-                    )
-                    .size(9.dp)
-                    .rotate(45f)
-                    .background(menuBackground)
-                    .border(FishPiTheme.borderWidth, menuBorder.copy(alpha = 0.72f)),
-            )
+                    .padding(start = with(density) { x.toDp() }, top = with(density) { y.toDp() })
+                    .width(menuWidth),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .width(menuWidth)
+                        .shadow(4.dp, menuShape, clip = false)
+                        .clip(menuShape)
+                        .fishPiGlassSurface(
+                            backdrop = LocalFishPiGlassBackdrop.current,
+                            shape = menuShape,
+                            containerColor = menuBackground,
+                            borderColor = menuBorder,
+                            borderWidth = FishPiTheme.borderWidth,
+                            role = FishPiGlassRole.Floating,
+                        )
+                        .consumeTaps()
+                        .padding(
+                            horizontal = FishPiTheme.spacingControl * 0.45f,
+                            vertical = FishPiTheme.spacingControl * 0.36f,
+                        ),
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    when (submenu) {
+                        MessageActionSubmenu.Main -> MainActionRow(
+                            message = anchor.message,
+                            canRevoke = canRevoke,
+                            onCopyContent = { onCopyContent(); onDismiss() },
+                            onMentionUser = onMentionUser?.let { action -> { action(); onDismiss() } },
+                            onQuote = { onQuote(); onDismiss() },
+                            onRepeat = { onRepeat(); onDismiss() },
+                            onRevoke = { onRevoke(); onDismiss() },
+                            itemBackground = itemPressedBackground,
+                            contentColor = contentColor,
+                            disabledColor = disabledColor,
+                            onMore = { submenu = MessageActionSubmenu.More },
+                            onReactions = { submenu = MessageActionSubmenu.Reactions },
+                        )
+                        MessageActionSubmenu.More -> MoreActionRow(
+                            message = anchor.message,
+                            itemBackground = itemPressedBackground,
+                            contentColor = contentColor,
+                            disabledColor = disabledColor,
+                            onCopyUsername = { onCopyUsername(); onDismiss() },
+                            onCopyImageLinks = { onCopyImageLinks(); onDismiss() },
+                            onCopyLinks = { onCopyLinks(); onDismiss() },
+                            onBack = { submenu = MessageActionSubmenu.Main },
+                            extraActions = extraActions.map { action ->
+                                action.copy(onClick = { action.onClick(); onDismiss() })
+                            },
+                        )
+                        MessageActionSubmenu.Reactions -> ReactionActionRow(
+                            contentColor = contentColor,
+                            selectedBackground = selectedBackground,
+                            itemBackground = itemPressedBackground,
+                            selected = anchor.message.currentUserReaction,
+                            onReaction = { value -> onReaction(value); onDismiss() },
+                            onBack = { submenu = MessageActionSubmenu.Main },
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .align(if (anchor.isMine) Alignment.BottomEnd else Alignment.BottomStart)
+                        .offset(
+                            x = if (anchor.isMine) (-20).dp else 20.dp,
+                            y = 4.dp,
+                        )
+                        .size(9.dp)
+                        .rotate(45f)
+                        .background(menuBackground),
+                )
+            }
         }
     }
 }

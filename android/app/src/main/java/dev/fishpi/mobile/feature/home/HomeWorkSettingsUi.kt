@@ -98,6 +98,8 @@ internal fun HomeWorkSettingsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
+        tonalElevation = 0.dp,
         title = { Text("首页时间设置") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -186,6 +188,8 @@ internal fun HomeWorkSettingsDialog(
         )
         AlertDialog(
             onDismissRequest = { pickingTime = null },
+            containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
+            tonalElevation = 0.dp,
             title = { Text(if (target == HomeTimeTarget.Start) "选择上班时间" else "选择下班时间") },
             text = {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {

@@ -50,6 +50,9 @@ import androidx.compose.ui.zIndex
 import dev.fishpi.mobile.ui.components.FishPiIconButton
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.LocalFishPiPalette
+import dev.fishpi.mobile.ui.glass.FishPiGlassRole
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.ui.components.silentTap
 
 internal data class ChatToolAction(
@@ -188,7 +191,14 @@ internal fun AppTaskPanel(
                 .widthIn(max = 520.dp)
                 .height(maxHeight * 0.86f)
                 .clip(RoundedCornerShape(FishPiTheme.radiusBox + 8.dp))
-                .background(FishPiTheme.surface)
+                .fishPiGlassSurface(
+                    backdrop = LocalFishPiGlassBackdrop.current,
+                    shape = RoundedCornerShape(FishPiTheme.radiusBox + 8.dp),
+                    containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
+                    borderColor = FishPiTheme.outline.copy(alpha = 0.14f),
+                    borderWidth = FishPiTheme.borderWidth,
+                    role = FishPiGlassRole.Floating,
+                )
                 .consumeTaps(),
             content = content,
         )
@@ -206,7 +216,7 @@ internal fun AppFullScreenWorkspace(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(FishPiTheme.background)
+            .background(uiPageBrush())
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
@@ -214,7 +224,7 @@ internal fun AppFullScreenWorkspace(
             modifier = Modifier
                 .fillMaxWidth()
                 .zIndex(1f)
-                .background(FishPiTheme.surface)
+                .background(FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha))
                 .padding(horizontal = FishPiTheme.spacingPage, vertical = FishPiTheme.spacingControl),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),

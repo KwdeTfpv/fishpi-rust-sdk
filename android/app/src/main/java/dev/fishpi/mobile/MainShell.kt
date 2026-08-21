@@ -12,13 +12,18 @@ import android.os.Looper
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -46,8 +51,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -58,16 +66,40 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.util.fastCoerceIn
+import androidx.compose.ui.util.fastRoundToInt
+import androidx.compose.ui.util.lerp
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.InnerShadow
+import com.kyant.backdrop.shadow.Shadow
+import com.kyant.shapes.Capsule
 import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.ChatRoomMessage
@@ -98,12 +130,22 @@ import dev.fishpi.mobile.feature.profile.ProfileRoute
 import dev.fishpi.mobile.ui.animal.AnimalChatGlyph
 import dev.fishpi.mobile.ui.animal.AnimalIslandBackground
 import dev.fishpi.mobile.ui.components.VisitorVerifyDialog
+import dev.fishpi.mobile.ui.components.uiPageBrush
 import dev.fishpi.mobile.ui.motion.FishPiMotion
 import dev.fishpi.mobile.ui.components.statusSuccessColor
+import dev.fishpi.mobile.ui.glass.LiquidDragAnimation
+import dev.fishpi.mobile.ui.glass.LiquidInteractiveHighlight
+import dev.fishpi.mobile.ui.glass.FishPiGlassRole
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
+import kotlin.math.sign
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -458,15 +500,31 @@ internal fun MainShell(
         }
     }
 
+    val shellBackdropBrush = uiPageBrush()
+    val shellBackdrop = rememberLayerBackdrop {
+        drawRect(brush = shellBackdropBrush)
+        drawContent()
+    }
+    val bottomBarBackdropBrush = uiPageBrush()
+    val bottomBarBackdrop = rememberLayerBackdrop {
+        drawRect(brush = bottomBarBackdropBrush)
+        drawContent()
+    }
+
     FishPiOverlayWindow {
-    AnimalIslandBackground {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-        ) {
+        CompositionLocalProvider(LocalFishPiGlassBackdrop provides shellBackdrop) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                AnimalIslandBackground(
+                    modifier = Modifier.layerBackdrop(shellBackdrop),
+                ) {}
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .layerBackdrop(bottomBarBackdrop),
+                ) {
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
+                    .fillMaxSize(),
             ) {
                 HorizontalPager(
                     state = pagerState,
@@ -575,7 +633,7 @@ internal fun MainShell(
                         ShellOverlay.ChatRoom -> Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
+                                .background(uiPageBrush())
                                 .pointerInput(Unit) {},
                         ) {
                             ChatRoute(
@@ -598,7 +656,7 @@ internal fun MainShell(
                         ShellOverlay.Notice -> Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
+                                .background(uiPageBrush())
                                 .pointerInput(Unit) {},
                         ) {
                             NoticeScreen(
@@ -619,7 +677,7 @@ internal fun MainShell(
                         is ShellOverlay.Profile -> Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
+                                .background(uiPageBrush())
                                 .pointerInput(Unit) {},
                         ) {
                             ProfileRoute(
@@ -655,7 +713,7 @@ internal fun MainShell(
                         is ShellOverlay.HomePane -> Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
+                                .background(uiPageBrush())
                                 .pointerInput(Unit) {},
                         ) {
                             when (overlay.pane) {
@@ -675,7 +733,7 @@ internal fun MainShell(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .statusBarsPadding()
-                                .background(MaterialTheme.colorScheme.background)
+                                .background(uiPageBrush())
                                 .pointerInput(Unit) {},
                         ) {
                             ArticleRoute(
@@ -691,14 +749,23 @@ internal fun MainShell(
                     }
                 }
             }
+                }
             if (!bottomNavHidden) {
-                NativeBottomNav(
-                    selected = navigator.selectedTab,
-                    onSelect = { goToTab(it) },
-                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.BottomCenter,
+                ) {
+                    NativeBottomNav(
+                        selected = navigator.selectedTab,
+                        onSelect = { goToTab(it) },
+                        backdrop = bottomBarBackdrop,
+                    )
+                }
+            }
             }
         }
-    }
     }
 
     PluginUiRoute()
@@ -722,6 +789,8 @@ internal fun MainShell(
             onDismissRequest = {
                 updateDismissed = true
             },
+            containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
+            tonalElevation = 0.dp,
             title = {
                 Text(text = "发现新版本 ${pendingUpdate.tagName}")
             },
@@ -806,8 +875,14 @@ private fun ChatRoomEntryCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.58f))
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = RoundedCornerShape(16.dp),
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.12f),
+                borderWidth = 1.dp,
+                role = FishPiGlassRole.Content,
+            )
             .clickable(onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -859,6 +934,7 @@ private fun ChatRoomEntryCard(
 private fun NativeBottomNav(
     selected: FishTab,
     onSelect: (FishTab) -> Unit,
+    backdrop: LayerBackdrop,
 ) {
     val tabs = listOf(
         FishTab.Home to Icons.Rounded.Home,
@@ -866,24 +942,234 @@ private fun NativeBottomNav(
         FishTab.Chat to Icons.AutoMirrored.Rounded.Chat,
         FishTab.Me to Icons.Rounded.Person,
     )
-    Row(
+    val selectedIndex = tabs.indexOfFirst { it.first == selected }.coerceAtLeast(0)
+    Box(
         modifier = Modifier
             .navigationBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 8.dp)
-            .height(54.dp)
             .fillMaxWidth()
-            .padding(horizontal = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 22.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        tabs.forEach { (tab, icon) ->
-            LiquidNavItem(
-                title = tab.title,
-                icon = icon,
-                selected = selected == tab,
-                onClick = { onSelect(tab) },
-                modifier = Modifier.weight(1f),
+        LiquidBottomNavTrack(
+            selectedTabIndex = { selectedIndex },
+            onTabSelected = { index -> onSelect(tabs[index].first) },
+            tabsCount = tabs.size,
+            backdrop = backdrop,
+            modifier = Modifier
+                .height(52.dp)
+                .fillMaxWidth(),
+        ) { scale ->
+            tabs.forEachIndexed { index, (tab, icon) ->
+                LiquidNavItem(
+                    title = tab.title,
+                    icon = icon,
+                    selected = selectedIndex == index,
+                    onClick = { onSelect(tab) },
+                    scale = scale,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiquidBottomNavTrack(
+    selectedTabIndex: () -> Int,
+    onTabSelected: (Int) -> Unit,
+    tabsCount: Int,
+    backdrop: Backdrop,
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.(scale: () -> Float) -> Unit,
+) {
+    BoxWithConstraints(
+        modifier = modifier,
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        val density = LocalDensity.current
+        val tabWidth = with(density) {
+            (constraints.maxWidth.toFloat() - 8.dp.toPx()) / tabsCount
+        }
+        val offsetAnimation = remember { Animatable(0f) }
+        val panelOffset by remember(density) {
+            derivedStateOf {
+                val fraction = (offsetAnimation.value / constraints.maxWidth).fastCoerceIn(-1f, 1f)
+                with(density) {
+                    4.dp.toPx() * fraction.sign * EaseOut.transform(abs(fraction))
+                }
+            }
+        }
+        val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
+        val animationScope = rememberCoroutineScope()
+        var currentIndex by remember(selectedTabIndex) {
+            mutableIntStateOf(selectedTabIndex())
+        }
+        val dragAnimation = remember(animationScope, tabsCount, tabWidth, isLtr) {
+            LiquidDragAnimation(
+                animationScope = animationScope,
+                initialValue = selectedTabIndex().toFloat(),
+                valueRange = 0f..(tabsCount - 1).toFloat(),
+                visibilityThreshold = 0.001f,
+                initialScale = 1f,
+                pressedScale = 1.055f,
+                onDragStopped = {
+                    val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
+                    currentIndex = targetIndex
+                    animateToValue(targetIndex.toFloat())
+                    animationScope.launch {
+                        offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))
+                    }
+                },
+                onDrag = { _, dragAmount ->
+                    updateValue(
+                        (targetValue + dragAmount.x / tabWidth * if (isLtr) 1f else -1f)
+                            .fastCoerceIn(0f, (tabsCount - 1).toFloat()),
+                    )
+                    animationScope.launch {
+                        offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x)
+                    }
+                },
             )
+        }
+        LaunchedEffect(selectedTabIndex) {
+            snapshotFlow { selectedTabIndex() }
+                .collectLatest { index ->
+                    currentIndex = index
+                    dragAnimation.animateToValue(index.toFloat())
+                }
+        }
+        LaunchedEffect(dragAnimation) {
+            snapshotFlow { currentIndex }
+                .drop(1)
+                .collectLatest { index ->
+                    dragAnimation.animateToValue(index.toFloat())
+                    onTabSelected(index)
+                }
+        }
+        val interactiveHighlight = remember(animationScope, isLtr, tabWidth) {
+            LiquidInteractiveHighlight(
+                animationScope = animationScope,
+                position = { size, _ ->
+                    Offset(
+                        x = if (isLtr) {
+                            (dragAnimation.value + 0.5f) * tabWidth + panelOffset
+                        } else {
+                            size.width - (dragAnimation.value + 0.5f) * tabWidth + panelOffset
+                        },
+                        y = size.height / 2f,
+                    )
+                },
+            )
+        }
+        val bottomBarSurfaceColor = if (FishPiTheme.background.luminance() < 0.5f) {
+            Color.Black.copy(alpha = FishPiTheme.glass.floatingAlpha)
+        } else {
+            Color.White.copy(alpha = FishPiTheme.glass.floatingAlpha)
+        }
+        val bottomBarBlurRadius = FishPiTheme.glass.blurRadius.dp
+        val bottomBarRefractionHeight = FishPiTheme.glass.refractionHeight.dp
+        val bottomBarRefractionAmount = FishPiTheme.glass.refractionAmount.dp
+        val selectedTabTint = MaterialTheme.colorScheme.primary
+        val selectedTabSurface = if (FishPiTheme.background.luminance() < 0.5f) {
+            Color.White.copy(alpha = 0.16f)
+        } else {
+            Color.White.copy(alpha = 0.34f)
+        }
+        val selectedTabTintAlpha = if (FishPiTheme.background.luminance() < 0.5f) 0.24f else 0.18f
+        val selectedTabBorder = if (FishPiTheme.background.luminance() < 0.5f) {
+            Color.White.copy(alpha = 0.22f)
+        } else {
+            selectedTabTint.copy(alpha = 0.22f)
+        }
+
+        Box(
+            modifier = Modifier
+                .graphicsLayer { translationX = panelOffset }
+                .drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { Capsule() },
+                    effects = {
+                        vibrancy()
+                        blur(bottomBarBlurRadius.toPx())
+                        lens(
+                            bottomBarRefractionHeight.toPx(),
+                            bottomBarRefractionAmount.toPx(),
+                            chromaticAberration = false,
+                        )
+                    },
+                    layerBlock = {
+                        val progress = dragAnimation.pressProgress
+                        val scale = lerp(1f, 1.01f, progress)
+                        scaleX = scale
+                        scaleY = scale
+                    },
+                    onDrawSurface = {
+                        drawRect(bottomBarSurfaceColor)
+                    },
+                )
+                .then(interactiveHighlight.modifier)
+                .height(52.dp)
+                .fillMaxWidth(),
+        )
+
+        Box(
+            modifier = Modifier
+                .padding(horizontal = 4.dp)
+                .graphicsLayer {
+                    translationX = if (isLtr) {
+                        dragAnimation.value * tabWidth + panelOffset
+                    } else {
+                        size.width - (dragAnimation.value + 1f) * tabWidth + panelOffset
+                    }
+                }
+                .drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { Capsule() },
+                    effects = {
+                        vibrancy()
+                        blur(bottomBarBlurRadius.toPx())
+                        lens(
+                            (bottomBarRefractionHeight * 0.92f).toPx(),
+                            (bottomBarRefractionAmount * 0.82f).toPx(),
+                            chromaticAberration = false,
+                        )
+                    },
+                    layerBlock = {
+                        val progress = dragAnimation.pressProgress
+                        val scale = lerp(1f, 1.025f, progress)
+                        scaleX = scale
+                        scaleY = lerp(1f, 0.985f, progress)
+                    },
+                    onDrawSurface = {
+                        drawRect(selectedTabTint, blendMode = BlendMode.Hue)
+                        drawRect(selectedTabTint.copy(alpha = selectedTabTintAlpha))
+                        drawRect(selectedTabSurface)
+                    },
+                )
+                .border(FishPiTheme.borderWidth, selectedTabBorder, Capsule())
+                .then(interactiveHighlight.gestureModifier)
+                .then(dragAnimation.modifier)
+                .graphicsLayer {
+                    scaleX = dragAnimation.scaleX
+                    scaleY = dragAnimation.scaleY
+                    val velocity = dragAnimation.velocity / 18f
+                    scaleX /= 1f - (velocity * 0.18f).fastCoerceIn(-0.035f, 0.035f)
+                    scaleY *= 1f - (velocity * 0.08f).fastCoerceIn(-0.025f, 0.025f)
+                }
+                .height(44.dp)
+                .fillMaxWidth(1f / tabsCount),
+        )
+
+        Row(
+            modifier = Modifier
+                .graphicsLayer { translationX = panelOffset }
+                .then(interactiveHighlight.modifier)
+                .height(52.dp)
+                .fillMaxWidth()
+                .padding(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            content { 1f }
         }
     }
 }
@@ -894,34 +1180,48 @@ private fun LiquidNavItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     selected: Boolean,
     onClick: () -> Unit,
+    scale: () -> Float,
     modifier: Modifier = Modifier,
-) {
+    ) {
+    val selectedContentColor = MaterialTheme.colorScheme.onSurface
+    val unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+    val contentColor = if (selected) selectedContentColor else unselectedContentColor
     Column(
         modifier = modifier
             .fillMaxHeight()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
+            .clip(Capsule())
+            .clickable(
+                interactionSource = null,
+                indication = null,
+                role = Role.Tab,
+                onClick = onClick,
+            )
+            .graphicsLayer {
+                val targetScale = scale()
+            scaleX = targetScale
+            scaleY = targetScale
+            }
+            .padding(vertical = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically),
     ) {
         Icon(
             icon,
             contentDescription = title,
-            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
+            tint = contentColor,
             modifier = Modifier.size(18.dp),
         )
         Text(
             text = title,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
-            fontSize = 10.sp,
+            color = contentColor,
+            fontSize = 9.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
         )
         Box(
             modifier = Modifier
-                .size(width = 18.dp, height = 3.dp)
+                .size(width = 14.dp, height = 2.dp)
                 .clip(RoundedCornerShape(99.dp))
-                .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent),
+                .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.72f) else Color.Transparent),
         )
     }
 }

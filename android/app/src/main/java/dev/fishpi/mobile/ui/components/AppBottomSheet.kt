@@ -1,9 +1,5 @@
 package dev.fishpi.mobile.ui.components
 
-import dev.fishpi.mobile.ui.components.silentTap
-
-import dev.fishpi.mobile.ui.components.consumeTaps
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,15 +22,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import dev.fishpi.mobile.FishPiErrorRed
 import dev.fishpi.mobile.FishPiTheme
-import dev.fishpi.mobile.ui.components.silentTap
+import dev.fishpi.mobile.ui.blur.FishPiBlurOverlay
+import dev.fishpi.mobile.ui.glass.FishPiGlassRole
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 
 @Composable
 internal fun AppBottomSheet(
@@ -42,41 +41,53 @@ internal fun AppBottomSheet(
     withNavigationBarPadding: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.18f))
-            .silentTap(onDismiss),
-        contentAlignment = Alignment.BottomCenter,
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
     ) {
-        val sheetShape = RoundedCornerShape(
-            topStart = FishPiTheme.radiusBox + 16.dp,
-            topEnd = FishPiTheme.radiusBox + 16.dp,
-        )
-        Column(
+        FishPiBlurOverlay(
             modifier = Modifier
-                .fillMaxWidth()
-                .imePadding()
-                .then(if (withNavigationBarPadding) Modifier.navigationBarsPadding() else Modifier)
-                .shadow((FishPiTheme.depth * 12).dp, sheetShape, clip = false)
-                .clip(sheetShape)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            FishPiTheme.surface.copy(alpha = 0.96f),
-                            FishPiTheme.surfaceContainer.copy(alpha = 0.92f),
-                        ),
-                    ),
+                .fillMaxSize()
+                .silentTap(onDismiss),
+            overlayColor = Color.Black.copy(alpha = 0.22f),
+            blurRadius = 24f,
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                val sheetShape = RoundedCornerShape(
+                    topStart = FishPiTheme.radiusBox + 16.dp,
+                    topEnd = FishPiTheme.radiusBox + 16.dp,
                 )
-                .border(FishPiTheme.borderWidth, FishPiTheme.outline.copy(alpha = 0.16f + FishPiTheme.depth * 0.10f), sheetShape)
-                .consumeTaps()
-                .padding(horizontal = FishPiTheme.spacingPage, vertical = FishPiTheme.spacingSection),
-            verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
-            content = {
-                AppSheetHandle()
-                content()
-            },
-        )
+                val backdrop = LocalFishPiGlassBackdrop.current
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding()
+                        .then(if (withNavigationBarPadding) Modifier.navigationBarsPadding() else Modifier)
+                        .fishPiGlassSurface(
+                            backdrop = backdrop,
+                            shape = sheetShape,
+                            containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
+                            borderColor = FishPiTheme.outline.copy(alpha = 0.18f + FishPiTheme.depth * 0.10f),
+                            borderWidth = FishPiTheme.borderWidth,
+                            depthEffect = true,
+                            role = FishPiGlassRole.Floating,
+                        )
+                        .consumeTaps()
+                        .padding(horizontal = FishPiTheme.spacingPage, vertical = FishPiTheme.spacingSection),
+                    verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
+                    content = {
+                        AppSheetHandle()
+                        content()
+                    },
+                )
+            }
+        }
     }
 }
 

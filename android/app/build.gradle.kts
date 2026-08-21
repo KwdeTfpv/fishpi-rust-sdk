@@ -35,7 +35,7 @@ val hasReleaseSigning = releaseStoreFile?.exists() == true &&
 
 android {
     namespace = "dev.fishpi.mobile"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "dev.fishpi.mobile"
@@ -156,6 +156,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-process:2.9.4")
     implementation("androidx.compose.material3:material3:1.3.2")
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
+    implementation("com.github.Dimezis:BlurView:version-3.2.0")
+    implementation("io.github.kyant0:backdrop-android:2.0.0")
+    implementation("io.github.kyant0:shapes-android:1.2.0")
     implementation("io.coil-kt.coil3:coil-compose:3.4.0")
     implementation("io.coil-kt.coil3:coil-gif:3.4.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")

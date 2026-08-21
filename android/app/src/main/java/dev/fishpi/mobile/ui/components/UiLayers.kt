@@ -32,6 +32,9 @@ import androidx.compose.ui.unit.sp
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.LocalFishPiPalette
 import dev.fishpi.mobile.LocalFishPiThemeTokens
+import dev.fishpi.mobile.ui.glass.FishPiGlassRole
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.ui.motion.fishClickable
 
 internal object UiLayerTokens {
@@ -46,6 +49,11 @@ internal object UiLayerTokens {
 @Composable
 internal fun uiPageBrush(): Brush {
     val palette = LocalFishPiPalette.current
+    if (palette.wallpaperColors.size >= 4) {
+        return Brush.linearGradient(
+            colors = palette.wallpaperColors,
+        )
+    }
     return Brush.verticalGradient(
         listOf(
             palette.background,
@@ -79,14 +87,17 @@ internal fun ControlSurface(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val palette = LocalFishPiPalette.current
-    Surface(
-        modifier = modifier,
-        shape = shape,
-        color = palette.surface.copy(alpha = 0.88f),
-        contentColor = palette.onSurface,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        border = BorderStroke(FishPiTheme.borderWidth, palette.accent.copy(alpha = 0.18f + FishPiTheme.depth * 0.12f)),
+    val backdrop = LocalFishPiGlassBackdrop.current
+    Box(
+        modifier = modifier
+            .fishPiGlassSurface(
+                backdrop = backdrop,
+                shape = shape,
+                containerColor = palette.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
+                borderColor = palette.accent.copy(alpha = 0.18f + FishPiTheme.depth * 0.12f),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Control,
+            ),
     ) {
         Box(Modifier.padding(contentPadding), content = content)
     }
@@ -101,33 +112,22 @@ internal fun ContentCardSurface(
 ) {
     val palette = LocalFishPiPalette.current
     val shape = RoundedCornerShape(FishPiTheme.radiusBox)
-    val color = palette.surface.copy(alpha = 0.78f)
-    val border = BorderStroke(FishPiTheme.borderWidth, palette.outline.copy(alpha = 0.12f + FishPiTheme.depth * 0.10f))
-    if (onClick == null) {
-        Surface(
-            modifier = modifier,
-            shape = shape,
-            color = color,
-            contentColor = palette.onSurface,
-            border = border,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-        ) {
-            Box(Modifier.padding(contentPadding), content = content)
-        }
-    } else {
-        Surface(
-            modifier = modifier,
-            shape = shape,
-            color = color,
-            contentColor = palette.onSurface,
-            border = border,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            onClick = onClick,
-        ) {
-            Box(Modifier.padding(contentPadding), content = content)
-        }
+    val clickableModifier = onClick?.let { Modifier.fishClickable(onClick = it) } ?: Modifier
+    Box(
+        modifier = modifier
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = shape,
+                containerColor = palette.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
+                borderColor = palette.outline.copy(
+                    alpha = 0.12f + FishPiTheme.depth * 0.10f,
+                ),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Content,
+            )
+            .then(clickableModifier),
+    ) {
+        Box(Modifier.padding(contentPadding), content = content)
     }
 }
 
@@ -144,9 +144,9 @@ internal fun ActionChipButton(
     val themeColors = LocalFishPiThemeTokens.current.colors
     val shape = RoundedCornerShape(FishPiTheme.radiusSelector)
     val bg = when {
-        selected -> palette.accent
-        enabled -> palette.surface.copy(alpha = 0.92f)
-        else -> palette.surfaceContainer.copy(alpha = 0.48f)
+        selected -> palette.accent.copy(alpha = 0.82f)
+        enabled -> palette.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha)
+        else -> palette.surfaceContainer.copy(alpha = 0.42f)
     }
     val fg = when {
         selected -> themeColors.primaryContent
@@ -156,11 +156,13 @@ internal fun ActionChipButton(
     Row(
         modifier = modifier
             .clip(shape)
-            .background(bg)
-            .border(
-                FishPiTheme.borderWidth,
-                if (selected) fg.copy(alpha = 0.28f) else palette.outline.copy(alpha = 0.18f),
-                shape,
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = shape,
+                containerColor = bg,
+                borderColor = if (selected) fg.copy(alpha = 0.28f) else palette.outline.copy(alpha = 0.18f),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Control,
             )
             .fishClickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = FishPiTheme.spacingControl, vertical = FishPiTheme.spacingControl * 0.45f),
@@ -196,11 +198,13 @@ internal fun IconActionButton(
         modifier = modifier
             .size(size)
             .clip(shape)
-            .background(if (selected) palette.accent.copy(alpha = 0.12f) else palette.surface.copy(alpha = 0.72f))
-            .border(
-                FishPiTheme.borderWidth,
-                if (selected) palette.accent.copy(alpha = 0.26f) else palette.outline.copy(alpha = 0.14f),
-                shape,
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = shape,
+                containerColor = if (selected) palette.accent.copy(alpha = 0.16f) else palette.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
+                borderColor = if (selected) palette.accent.copy(alpha = 0.26f) else palette.outline.copy(alpha = 0.14f),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Control,
             )
             .fishClickable(enabled = enabled, rippleBounded = false, onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -226,16 +230,20 @@ internal fun FloatingNoticePill(
     enabled: Boolean = true,
 ) {
     val palette = LocalFishPiPalette.current
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        enabled = enabled,
-        shape = RoundedCornerShape(FishPiTheme.radiusField),
-        color = palette.surface.copy(alpha = 0.96f),
-        contentColor = if (enabled) palette.accent else palette.weakText,
-        border = BorderStroke(FishPiTheme.borderWidth, palette.accent.copy(alpha = 0.18f + FishPiTheme.depth * 0.10f)),
-        shadowElevation = 0.dp,
-        tonalElevation = 0.dp,
+    val shape = RoundedCornerShape(FishPiTheme.radiusField)
+    Box(
+        modifier = modifier
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = shape,
+                containerColor = palette.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
+                borderColor = palette.outline.copy(
+                    alpha = 0.18f + FishPiTheme.depth * 0.10f,
+                ),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Floating,
+            )
+            .fishClickable(enabled = enabled, onClick = onClick),
     ) {
         Text(
             text = text,

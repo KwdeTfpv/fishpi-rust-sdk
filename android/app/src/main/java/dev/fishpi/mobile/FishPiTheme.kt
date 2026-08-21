@@ -31,10 +31,6 @@ internal enum class FishPiThemePreset(val label: String, val key: String) {
     }
 }
 
-internal enum class FishPiUiStyle {
-    Classic,
-}
-
 internal data class CustomFishPiTheme(
     val key: String,
     val label: String,
@@ -57,7 +53,6 @@ internal data class FishPiThemeOption(
     val description: String,
     val tokens: FishPiThemeTokens,
     val palette: FishPiPalette,
-    val uiStyle: FishPiUiStyle = FishPiUiStyle.Classic,
     val builtinPreset: FishPiThemePreset? = null,
     val rawJson: String? = null,
     val previewImageUris: Map<String, String> = emptyMap(),
@@ -138,6 +133,18 @@ internal data class FishPiDepthTokens(
     val level: Float,
 )
 
+internal data class FishPiGlassTokens(
+    val surfaceAlpha: Float,
+    val elevatedAlpha: Float,
+    val floatingAlpha: Float,
+    val blurRadius: Float,
+    val refractionHeight: Float,
+    val refractionAmount: Float,
+    val chromaticAberration: Boolean,
+    val shadowAlpha: Float,
+    val innerShadowRadius: Float,
+)
+
 internal data class FishPiThemeTokens(
     val colorScheme: FishPiThemeColorScheme,
     val colors: FishPiColorTokens,
@@ -206,9 +213,21 @@ internal val DeepBlueNeonFishPiThemeTokens = FishPiThemeTokens(
 internal val IslandFishPiPalette = IslandFishPiThemeTokens.toPalette()
 internal val DeepBlueNeonFishPiPalette = DeepBlueNeonFishPiThemeTokens.toPalette()
 
+internal val ClassicFishPiGlassTokens = FishPiGlassTokens(
+    surfaceAlpha = 0.56f,
+    elevatedAlpha = 0.64f,
+    floatingAlpha = 0.64f,
+    blurRadius = 10f,
+    refractionHeight = 18f,
+    refractionAmount = 34f,
+    chromaticAberration = false,
+    shadowAlpha = 0.24f,
+    innerShadowRadius = 7f,
+)
+
 internal val LocalFishPiPalette = compositionLocalOf { IslandFishPiPalette }
 internal val LocalFishPiThemeTokens = compositionLocalOf { IslandFishPiThemeTokens }
-internal val LocalFishPiUiStyle = compositionLocalOf { FishPiUiStyle.Classic }
+internal val LocalFishPiGlassTokens = compositionLocalOf { ClassicFishPiGlassTokens }
 
 internal object FishPiTheme {
     val background: Color @Composable get() = LocalFishPiPalette.current.background
@@ -236,7 +255,7 @@ internal object FishPiTheme {
     val spacingControl: Dp @Composable get() = LocalFishPiThemeTokens.current.spacing.control.dp
     val borderWidth: Dp @Composable get() = LocalFishPiThemeTokens.current.border.width.dp
     val depth: Float @Composable get() = LocalFishPiThemeTokens.current.depth.level
-    val uiStyle: FishPiUiStyle @Composable get() = LocalFishPiUiStyle.current
+    val glass: FishPiGlassTokens @Composable get() = LocalFishPiGlassTokens.current
 }
 
 internal fun FishPiThemeTokens.toPalette(wallpaperImageUri: String? = null): FishPiPalette {
@@ -280,8 +299,7 @@ internal fun builtinThemeOptions(): List<FishPiThemeOption> =
             label = preset.label,
             description = preset.themeDescription(),
             tokens = tokens,
-            palette = tokens.toPalette(),
-            uiStyle = preset.uiStyle(),
+            palette = preset.themePalette(),
             builtinPreset = preset,
         )
     }
@@ -308,11 +326,23 @@ internal fun FishPiThemePreset.themeTokens(): FishPiThemeTokens =
         FishPiThemePreset.DeepBlueNeon -> DeepBlueNeonFishPiThemeTokens
     }
 
-internal fun FishPiThemePreset.previewPalette(): FishPiPalette =
-    themeTokens().toPalette()
+internal fun FishPiThemePreset.themePalette(): FishPiPalette =
+    when (this) {
+        FishPiThemePreset.Island -> IslandFishPiPalette
+        FishPiThemePreset.DeepBlueNeon -> DeepBlueNeonFishPiPalette
+    }
 
-internal fun FishPiThemePreset.uiStyle(): FishPiUiStyle =
-    FishPiUiStyle.Classic
+internal fun FishPiThemePreset.glassTokens(): FishPiGlassTokens =
+    when (this) {
+        FishPiThemePreset.Island -> ClassicFishPiGlassTokens
+        FishPiThemePreset.DeepBlueNeon -> ClassicFishPiGlassTokens
+    }
+
+internal fun FishPiThemeTokens.glassTokens(): FishPiGlassTokens =
+    ClassicFishPiGlassTokens
+
+internal fun FishPiThemePreset.previewPalette(): FishPiPalette =
+    themePalette()
 
 internal fun FishPiThemePreset.themeDescription(): String =
     when (this) {
@@ -723,7 +753,6 @@ internal fun FishPiPalette.toM3ColorScheme(): androidx.compose.material3.ColorSc
 internal fun FishPiM3BridgedTheme(
     palette: FishPiPalette,
     tokens: FishPiThemeTokens = IslandFishPiThemeTokens,
-    uiStyle: FishPiUiStyle = FishPiUiStyle.Classic,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
@@ -741,7 +770,7 @@ internal fun FishPiM3BridgedTheme(
     androidx.compose.runtime.CompositionLocalProvider(
         LocalFishPiPalette provides palette,
         LocalFishPiThemeTokens provides tokens,
-        LocalFishPiUiStyle provides uiStyle,
+        LocalFishPiGlassTokens provides tokens.glassTokens(),
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

@@ -2,7 +2,6 @@ package dev.fishpi.mobile.shared.message.ui
 
 import dev.fishpi.mobile.*
 import dev.fishpi.mobile.shared.message.*
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +22,9 @@ import dev.fishpi.mobile.ui.components.AppBottomSheet
 import dev.fishpi.mobile.ui.components.AppSheetActionRow
 import dev.fishpi.mobile.ui.components.AppSheetTitle
 import androidx.compose.material3.Text
+import dev.fishpi.mobile.ui.glass.FishPiGlassRole
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 
 @Composable
 internal fun MessageActionSheet(
@@ -54,15 +56,22 @@ internal fun MessageActionSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     QuickReactionOptions.forEach { option ->
+                        val selected = message.currentUserReaction == option.value
+                        val shape = RoundedCornerShape(FishPiTheme.radiusField)
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(FishPiTheme.radiusField))
-                                .background(
-                                    if (message.currentUserReaction == option.value) {
-                                        FishPiTheme.accent.copy(alpha = 0.12f)
+                                .clip(shape)
+                                .fishPiGlassSurface(
+                                    backdrop = LocalFishPiGlassBackdrop.current,
+                                    shape = shape,
+                                    containerColor = if (selected) {
+                                        FishPiTheme.accent.copy(alpha = 0.18f)
                                     } else {
-                                        FishPiTheme.surfaceContainer
+                                        FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha)
                                     },
+                                    borderColor = FishPiTheme.outline.copy(alpha = 0.12f),
+                                    borderWidth = FishPiTheme.borderWidth,
+                                    role = FishPiGlassRole.Control,
                                 )
                                 .clickable {
                                     onReaction(option.value)

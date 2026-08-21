@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import dev.fishpi.mobile.data.FishPiUser
 import dev.fishpi.mobile.data.MedalView
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.utils.toFishPiGeneratedBadgeOrNull
 
 internal enum class FishPiAvatarFallback {
@@ -106,7 +108,13 @@ internal fun FishPiUserSummaryCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-            .background(FishPiTheme.surfaceContainer)
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = RoundedCornerShape(FishPiTheme.radiusBox),
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.14f),
+                borderWidth = FishPiTheme.borderWidth,
+            )
             .padding(FishPiTheme.spacingSection),
         verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
     ) {
@@ -183,7 +191,13 @@ internal fun FishPiMedalWall(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-            .background(FishPiTheme.surface.copy(alpha = 0.84f))
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = RoundedCornerShape(FishPiTheme.radiusBox),
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.12f),
+                borderWidth = FishPiTheme.borderWidth,
+            )
             .padding(FishPiTheme.spacingSection),
         verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
     ) {
@@ -363,7 +377,13 @@ internal fun FishPiProfileStatChip(label: String, value: String) {
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-            .background(FishPiTheme.surface)
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = RoundedCornerShape(FishPiTheme.radiusBox),
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.10f),
+                borderWidth = FishPiTheme.borderWidth,
+            )
             .padding(
                 horizontal = FishPiTheme.spacingControl,
                 vertical = FishPiTheme.spacingControl * 0.75f,

@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.fishpi.mobile.FishPiTheme
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import kotlin.math.roundToInt
 
 private enum class LivenessDockSide {
@@ -84,7 +86,13 @@ internal fun ChatLivenessFloatingOrb(
                 .size(58.dp)
                 .offsetPx(x, y)
                 .clip(CircleShape)
-                .background(FishPiTheme.surface.copy(alpha = 0.74f))
+                .fishPiGlassSurface(
+                    backdrop = LocalFishPiGlassBackdrop.current,
+                    shape = CircleShape,
+                    containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
+                    borderColor = FishPiTheme.outline.copy(alpha = 0.16f),
+                    borderWidth = 1.dp,
+                )
                 .clickable(enabled = hidden) {
                     dockSide = LivenessDockSide.None
                     x = when {

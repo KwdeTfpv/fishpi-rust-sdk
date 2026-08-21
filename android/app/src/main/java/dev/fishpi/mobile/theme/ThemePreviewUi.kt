@@ -42,7 +42,6 @@ import dev.fishpi.mobile.FishPiPalette
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.FishPiThemeOption
 import dev.fishpi.mobile.FishPiThemeTokens
-import dev.fishpi.mobile.FishPiUiStyle
 import dev.fishpi.mobile.FishPiM3BridgedTheme
 import dev.fishpi.mobile.rememberFishPiImageLoader
 import dev.fishpi.mobile.shared.message.native.NativeMessageTheme
@@ -73,7 +72,7 @@ internal fun ThemePreviewDeck(
 ) {
     var page by remember(tokens) { mutableStateOf(ThemePreviewPage.Chat) }
     val palette = tokens.toPalette()
-    FishPiM3BridgedTheme(palette = palette, tokens = tokens, uiStyle = FishPiUiStyle.Classic) {
+    FishPiM3BridgedTheme(palette = palette, tokens = tokens) {
         Column(
             modifier = modifier
                 .fillMaxWidth()

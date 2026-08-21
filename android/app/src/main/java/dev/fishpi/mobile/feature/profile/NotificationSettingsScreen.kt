@@ -41,6 +41,7 @@ import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.ui.components.FishPiIconButton
 import dev.fishpi.mobile.ui.components.FishPiSettingsRow
 import dev.fishpi.mobile.ui.components.FishPiSettingsSection
+import dev.fishpi.mobile.ui.components.uiPageBrush
 
 @Composable
 internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
@@ -79,7 +80,7 @@ internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FishPiTheme.background),
+            .background(uiPageBrush()),
     ) {
         Row(
             modifier = Modifier

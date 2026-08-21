@@ -34,6 +34,9 @@ import coil3.compose.SubcomposeAsyncImage
 import dev.fishpi.mobile.data.EmojiGroupView
 import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.data.FishPiApiClient
+import dev.fishpi.mobile.ui.glass.FishPiGlassRole
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.utils.launchIoCatching
 import kotlinx.coroutines.CoroutineScope
 
@@ -155,7 +158,14 @@ internal fun EmojiPackPanel(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-            .background(FishPiTheme.surface.copy(alpha = 0.96f))
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = RoundedCornerShape(FishPiTheme.radiusBox),
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.14f),
+                borderWidth = FishPiTheme.borderWidth,
+                role = FishPiGlassRole.Floating,
+            )
             .padding(
                 horizontal = FishPiTheme.spacingItem,
                 vertical = FishPiTheme.spacingItem * 0.75f,
@@ -193,7 +203,7 @@ internal fun EmojiPackPanel(
                                         .weight(1f)
                                         .aspectRatio(1f)
                                         .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-                                        .background(FishPiTheme.surfaceContainer)
+                                        .background(FishPiTheme.surfaceContainer.copy(alpha = 0.42f))
                                         .clickable { onPickEmoji(item) },
                                     contentAlignment = Alignment.Center,
                                 ) {
@@ -236,7 +246,7 @@ private fun EmojiGroupChip(
             .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.66f))
             .background(
                 if (selected) FishPiTheme.accent.copy(alpha = 0.14f)
-                else FishPiTheme.surfaceContainer,
+                else FishPiTheme.surfaceContainer.copy(alpha = 0.42f),
             )
             .clickable(onClick = onClick)
             .padding(

@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.fishpi.mobile.FishPiTheme
+import dev.fishpi.mobile.LocalFishPiPalette
 
 internal object AnimalIslandTokens {
     val PagePadding = 14.dp
@@ -55,7 +56,13 @@ private fun themedSurfaceColor(base: Color): Color =
 
 @Composable
 private fun themedBorderColor(baseAlpha: Float = 0.16f): Color =
-    MaterialTheme.colorScheme.outline.copy(alpha = baseAlpha.coerceAtMost(0.16f))
+    MaterialTheme.colorScheme.outline.copy(
+        alpha = baseAlpha.coerceAtMost(0.16f),
+    )
+
+@Composable
+private fun themedContentBorder(baseAlpha: Float = 0.16f): BorderStroke? =
+    BorderStroke(1.dp, themedBorderColor(baseAlpha))
 
 @Composable
 internal fun AnimalCard(
@@ -67,7 +74,6 @@ internal fun AnimalCard(
 ) {
     val shape = RoundedCornerShape(themedRadius(AnimalIslandTokens.CardRadius))
     val color = themedSurfaceColor(containerColor)
-    val borderColor = themedBorderColor(0.18f)
     if (onClick == null) {
         Surface(
             modifier = modifier,
@@ -76,7 +82,7 @@ internal fun AnimalCard(
             contentColor = contentColor,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
-            border = BorderStroke(1.dp, borderColor),
+            border = themedContentBorder(0.18f),
         ) {
             Box(Modifier.padding(AnimalIslandTokens.CardPadding)) {
                 content()
@@ -90,7 +96,7 @@ internal fun AnimalCard(
             contentColor = contentColor,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
-            border = BorderStroke(1.dp, borderColor),
+            border = themedContentBorder(0.18f),
             onClick = onClick,
         ) {
             Box(Modifier.padding(AnimalIslandTokens.CardPadding)) {
@@ -105,16 +111,22 @@ internal fun AnimalIslandBackground(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val palette = LocalFishPiPalette.current
+    val colors = if (palette.wallpaperColors.size >= 4) {
+        palette.wallpaperColors
+    } else {
+        listOf(
+            MaterialTheme.colorScheme.background,
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+            MaterialTheme.colorScheme.background,
+        )
+    }
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                        MaterialTheme.colorScheme.background,
-                    ),
+                Brush.linearGradient(
+                    colors,
                 ),
             ),
     ) {
@@ -134,7 +146,7 @@ internal fun AnimalPanel(
         color = themedSurfaceColor(containerColor),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, themedBorderColor(0.08f)),
+        border = themedContentBorder(0.08f),
     ) {
         Box(Modifier.padding(AnimalIslandTokens.CardPadding)) {
             content()

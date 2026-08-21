@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.fishpi.mobile.FishPiErrorRed
 import dev.fishpi.mobile.FishPiTheme
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.ui.theme.FishPiType
 
 /**
@@ -46,11 +48,18 @@ internal fun FishPiSettingsSection(
     verticalArrangement: Arrangement.Vertical = Arrangement.Top,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val shape = RoundedCornerShape(FishPiTheme.radiusBox + 4.dp)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(FishPiTheme.radiusBox + 4.dp))
-            .background(FishPiTheme.surfaceContainer)
+            .clip(shape)
+            .fishPiGlassSurface(
+                backdrop = LocalFishPiGlassBackdrop.current,
+                shape = shape,
+                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
+                borderColor = FishPiTheme.outline.copy(alpha = 0.12f),
+                borderWidth = FishPiTheme.borderWidth,
+            )
             .padding(contentPadding),
         verticalArrangement = verticalArrangement,
     ) {
