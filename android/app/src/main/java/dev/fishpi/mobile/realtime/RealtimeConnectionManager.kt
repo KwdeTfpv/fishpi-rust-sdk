@@ -8,7 +8,14 @@ import dev.fishpi.mobile.data.NoticeRealtimeClient
 import dev.fishpi.mobile.data.PrivateChatNotice
 import dev.fishpi.mobile.data.PrivateChatRealtimeClient
 import dev.fishpi.mobile.data.RedPacketStatusUpdate
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,9 +38,13 @@ data class RealtimeSession(val apiKey: String, val username: String)
 
 // 进程级单例：三条实时连接的唯一持有者，事件通过 SharedFlow 扇出
 object RealtimeConnectionManager {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val chatRoom = ChatRoomRealtimeClient()
     private val privateOverview = PrivateChatRealtimeClient()
     private val notice = NoticeRealtimeClient()
+
+    @Volatile
+    private var noticeReconnectJob: Job? = null
 
     private val _chatEvents = MutableSharedFlow<ChatRoomEvent>(
         replay = 0,
@@ -96,10 +107,25 @@ object RealtimeConnectionManager {
             apiKey = next.apiKey,
             onNotice = { _noticeEvents.tryEmit(Unit) },
         )
+
+        noticeReconnectJob?.cancel()
+        noticeReconnectJob = scope.launch {
+            while (true) {
+                delay(15 * 60 * 1000L)
+                val current = session ?: break
+                notice.disconnect()
+                notice.connect(
+                    apiKey = current.apiKey,
+                    onNotice = { _noticeEvents.tryEmit(Unit) },
+                )
+            }
+        }
     }
 
     @Synchronized
     fun stop() {
+        noticeReconnectJob?.cancel()
+        noticeReconnectJob = null
         started = false
         session = null
         _connected.value = false
