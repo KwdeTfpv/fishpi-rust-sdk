@@ -392,9 +392,22 @@ private fun NoticeCard(
     onJumpToArticle: (String) -> Unit,
 ) {
     val raw = item.raw
+    val destination = raw.noticePrimaryDestination()
+    val jumpAction: (() -> Unit)? = when (destination) {
+        NoticeDestination.ChatRoom -> {
+            { onJumpToChatRoom(raw.jumpId.ifBlank { null }) }
+        }
+        NoticeDestination.Article -> {
+            raw.jumpId.takeIf { it.isNotBlank() }?.let { articleId ->
+                { onJumpToArticle(articleId) }
+            }
+        }
+        NoticeDestination.None -> null
+    }
 
     ContentCardSurface(
         modifier = Modifier.fillMaxWidth(),
+        onClick = jumpAction,
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -448,19 +461,18 @@ private fun NoticeCard(
                     )
                 }
                 Spacer(Modifier.weight(1f))
-                val destination = raw.noticePrimaryDestination()
                 when (destination) {
                     NoticeDestination.ChatRoom -> NoticeActionChip(
                         icon = Icons.Rounded.ChatBubble,
                         text = "去聊天室",
-                        onClick = { onJumpToChatRoom(raw.jumpId.ifBlank { null }) },
+                        onClick = jumpAction ?: {},
                     )
                     NoticeDestination.Article -> {
-                        if (raw.jumpId.isNotBlank()) {
+                        if (jumpAction != null) {
                             NoticeActionChip(
                                 icon = Icons.AutoMirrored.Rounded.Article,
                                 text = "帖子 #${raw.jumpId}",
-                                onClick = { onJumpToArticle(raw.jumpId) },
+                                onClick = jumpAction,
                             )
                         }
                     }
