@@ -37,31 +37,48 @@ class RealtimeNotificationDispatcher(
         RealtimeConnectionManager.privateNotices
             .onEach { onPrivateNotice(it) }
             .launchIn(scope)
+
+        RealtimeConnectionManager.noticeEvents
+            .onEach { onNoticeEvent() }
+            .launchIn(scope)
     }
 
     private fun onChatMessage(message: ChatRoomMessage) {
         // 聊天室可见时不打扰
-        if (chatRoomVisible && appInForeground) return
-        if (message.type == "system" || message.userName.isBlank()) return
+        if (chatRoomVisible && appInForeground) {
+            return
+        }
+        if (message.type == "system" || message.userName.isBlank()) {
+            return
+        }
         val prefs = store.getNotificationPrefs()
         val self = RealtimeConnectionManager.currentSession()?.username.orEmpty()
-        if (message.userName.equals(self, ignoreCase = true)) return
+        if (message.userName.equals(self, ignoreCase = true)) {
+            return
+        }
 
         val raw = message.content
+        val rawWithoutQuote = raw.substringBefore("##### 引用").ifBlank { raw }
         val quotedSelf = self.isNotBlank() && raw.contains("引用 @$self")
-        val plain = raw.substringBefore("##### 引用").ifBlank { raw }.toNotificationText()
+        val plain = rawWithoutQuote.toNotificationText()
         val mentioned = self.isNotBlank() && (
             raw.contains("/member/$self", ignoreCase = true) ||
                 plain.contains("@$self", ignoreCase = true)
             )
-        val hitKeyword = if (prefs.chatKeywordsOnly) prefs.matchedChatKeyword(plain) else null
+        val hitKeyword = if (prefs.chatKeywordsOnly) {
+            prefs.matchedChatKeyword(plain) ?: prefs.matchedChatKeyword(rawWithoutQuote)
+        } else {
+            null
+        }
 
         val shouldNotify = when {
             quotedSelf || mentioned -> prefs.chatMentions
             prefs.chatKeywordsOnly -> hitKeyword != null
             else -> false
         }
-        if (!shouldNotify) return
+        if (!shouldNotify) {
+            return
+        }
 
         val sender = message.userNickname.ifBlank { message.userName }
         RealtimeNotifier.notify(
@@ -78,15 +95,36 @@ class RealtimeNotificationDispatcher(
     }
 
     private fun onPrivateNotice(notice: PrivateChatNotice) {
-        if (appInForeground) return
+        if (appInForeground) {
+            return
+        }
         val prefs = store.getNotificationPrefs()
-        if (!prefs.privateMessages) return
+        if (!prefs.privateMessages) {
+            return
+        }
         RealtimeNotifier.notify(
             context = appContext,
             id = privateNotificationId(notice.peer),
             title = notice.peer,
             body = notice.preview.toNotificationText().take(120).ifBlank { "[新消息]" },
             target = RealtimeNavTarget.PrivateChat(notice.peer),
+        )
+    }
+
+    private fun onNoticeEvent() {
+        if (appInForeground) {
+            return
+        }
+        val prefs = store.getNotificationPrefs()
+        if (!prefs.notices) {
+            return
+        }
+        RealtimeNotifier.notify(
+            context = appContext,
+            id = 4001,
+            title = "摸鱼派",
+            body = "你有一条新的系统通知",
+            target = RealtimeNavTarget.Notice,
         )
     }
 

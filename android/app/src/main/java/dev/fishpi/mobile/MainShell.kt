@@ -104,6 +104,7 @@ import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.FishPiApiClient
+import dev.fishpi.mobile.data.PrivateChatNotice
 import dev.fishpi.mobile.realtime.PendingRealtimeNavigation
 import dev.fishpi.mobile.realtime.RealtimeConnectionManager
 import dev.fishpi.mobile.realtime.RealtimeLifecycleController
@@ -214,6 +215,8 @@ internal fun MainShell(
     var lastBackPressedAt by remember { mutableStateOf(0L) }
     var privatePeerJump by remember { mutableStateOf<String?>(null) }
     var privatePeerJumpRequest by remember { mutableStateOf(0) }
+    var pendingPrivateNotice by remember { mutableStateOf<PrivateChatNotice?>(null) }
+    var pendingPrivateNoticeVersion by remember { mutableStateOf(0) }
     var noticeRefreshInFlight by remember { mutableStateOf(false) }
     var lastNoticeRefreshAt by remember { mutableStateOf(0L) }
     var updateInfo by remember { mutableStateOf<ReleaseUpdateInfo?>(null) }
@@ -459,6 +462,8 @@ internal fun MainShell(
     LaunchedEffect(session.apiKey) {
         RealtimeConnectionManager.privateNotices.collect {
             privateUnread += 1
+            pendingPrivateNotice = it
+            pendingPrivateNoticeVersion += 1
         }
     }
 
@@ -560,6 +565,9 @@ internal fun MainShell(
                                 active = settledTab == FishTab.Chat,
                                 jumpPeer = privatePeerJump,
                                 jumpRequest = privatePeerJumpRequest,
+                                externalNotice = pendingPrivateNotice,
+                                externalNoticeVersion = pendingPrivateNoticeVersion,
+                                onNoticeHandled = { pendingPrivateNotice = null },
                                 onJumpHandled = { privatePeerJump = null },
                                 onDetailActiveChange = { privateChatDetailActive = it },
                                 onUnreadChange = { privateUnread = it },

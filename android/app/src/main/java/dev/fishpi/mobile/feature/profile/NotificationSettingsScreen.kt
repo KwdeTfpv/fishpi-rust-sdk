@@ -1,8 +1,13 @@
 package dev.fishpi.mobile.feature.profile
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -37,6 +42,8 @@ import androidx.compose.ui.unit.sp
 import dev.fishpi.mobile.data.NotificationPrefs
 import dev.fishpi.mobile.data.SessionStore
 import dev.fishpi.mobile.realtime.RealtimeLifecycleController
+import dev.fishpi.mobile.realtime.RealtimeNotifier
+import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.ui.components.FishPiIconButton
 import dev.fishpi.mobile.ui.components.FishPiSettingsRow
@@ -120,6 +127,44 @@ internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
                             else update(prefs.copy(keepAlive = false), keepAliveChanged = true)
                         },
                     )
+                    FishPiSettingsRow(
+                        icon = { Icon(imageVector = Icons.Rounded.Notifications, contentDescription = null, tint = FishPiTheme.accent) },
+                        title = "忽略电池优化",
+                        summary = "允许后台常驻，避免系统休眠时收不到消息",
+                        onClick = { context.requestIgnoreBatteryOptimizations() },
+                    )
+                }
+            }
+            item {
+                FishPiSettingsSection(title = "系统通知设置") {
+                    FishPiSettingsRow(
+                        icon = { Icon(imageVector = Icons.Rounded.Notifications, contentDescription = null, tint = FishPiTheme.accent) },
+                        title = "打开系统消息通知设置",
+                        summary = "检查消息通知的声音、震动、横幅或悬浮通知",
+                        onClick = {
+                            RealtimeNotifier.ensureChannels(context)
+                            context.openMessageNotificationSettings()
+                        },
+                    )
+                    FishPiSettingsRow(
+                        icon = { Icon(imageVector = Icons.Rounded.Notifications, contentDescription = null, tint = FishPiTheme.accent) },
+                        title = "打开后台保活通知设置",
+                        summary = "检查常驻通知是否被设成高优先级或非静默",
+                        onClick = {
+                            RealtimeNotifier.ensureChannels(context)
+                            context.openKeepAliveNotificationSettings()
+                        },
+                    )
+                    FishPiSettingsRow(
+                        icon = { Icon(imageVector = Icons.Rounded.Notifications, contentDescription = null, tint = FishPiTheme.accent) },
+                        title = "修复通知渠道",
+                        summary = "重建消息和保活渠道，恢复默认提醒方式",
+                        onClick = {
+                            RealtimeNotifier.resetChannels(context)
+                            RealtimeLifecycleController.onKeepAlivePrefChanged()
+                            FishPiNotifier.success("已修复通知渠道")
+                        },
+                    )
                 }
             }
             item {
@@ -177,6 +222,68 @@ private fun ToggleRow(
         summary = summary,
         trailing = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
     )
+}
+
+private fun Context.openMessageNotificationSettings() {
+    openNotificationChannelSettings(RealtimeNotifier.CHANNEL_MESSAGES)
+}
+
+private fun Context.isIgnoringBatteryOptimizations(): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+    val power = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
+    return power.isIgnoringBatteryOptimizations(packageName)
+}
+
+private fun Context.requestIgnoreBatteryOptimizations() {
+    val appContext = applicationContext
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !isIgnoringBatteryOptimizations()) {
+        val prompt = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            .setData(Uri.fromParts("package", packageName, null))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (runCatching { appContext.startActivity(prompt) }.isSuccess) {
+            return
+        }
+    }
+    runCatching {
+        appContext.startActivity(
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }.onFailure {
+        appContext.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(Uri.fromParts("package", packageName, null))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+}
+
+private fun Context.openKeepAliveNotificationSettings() {
+    openNotificationChannelSettings(RealtimeNotifier.CHANNEL_KEEPALIVE)
+}
+
+private fun Context.openNotificationChannelSettings(channelId: String) {
+    val appContext = applicationContext
+    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+            putExtra(Settings.EXTRA_CHANNEL_ID, channelId)
+        }
+    } else {
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", packageName, null)
+        }
+    }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    runCatching {
+        appContext.startActivity(intent)
+    }.onFailure {
+        appContext.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(Uri.fromParts("package", packageName, null))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
 }
 
 @Composable

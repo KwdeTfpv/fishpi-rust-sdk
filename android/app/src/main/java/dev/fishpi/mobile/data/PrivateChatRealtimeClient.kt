@@ -58,6 +58,8 @@ internal class PrivateChatRealtimeClient : NativeRealtimeClient() {
         return FishPiNative.reconnectPrivateChat(handle)
     }
 
+    fun hasActiveHandle(): Boolean = currentHandle() != 0L
+
     override fun disconnectNative(handle: Long) {
         FishPiNative.disconnectPrivateChat(handle)
     }

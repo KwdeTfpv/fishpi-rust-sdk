@@ -58,12 +58,12 @@ object RealtimeLifecycleController {
         val context = appContext ?: return
         val shouldRun = session != null && keepAliveEnabled()
         if (shouldRun == serviceRunning) return
-        if (shouldRun) {
+        serviceRunning = if (shouldRun) {
             RealtimeKeepAliveService.start(context)
         } else {
             RealtimeKeepAliveService.stop(context)
+            false
         }
-        serviceRunning = shouldRun
     }
 
     private fun stopEverything() {

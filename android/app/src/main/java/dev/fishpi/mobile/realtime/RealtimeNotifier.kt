@@ -18,6 +18,7 @@ object RealtimeNotifier {
     const val CHANNEL_MESSAGES = "fishpi.messages"
     const val KEEPALIVE_NOTIFICATION_ID = 1001
 
+    private const val GROUP_SUMMARY_NOTIFICATION_ID = 1002
     private const val GROUP_MESSAGES = "fishpi.messages.group"
 
     fun ensureChannels(context: Context) {
@@ -47,6 +48,14 @@ object RealtimeNotifier {
         manager.createNotificationChannel(messages)
     }
 
+    fun resetChannels(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        manager.deleteNotificationChannel(CHANNEL_MESSAGES)
+        manager.deleteNotificationChannel(CHANNEL_KEEPALIVE)
+        ensureChannels(context)
+    }
+
     fun buildKeepAliveNotification(context: Context): Notification {
         ensureChannels(context)
         return NotificationCompat.Builder(context, CHANNEL_KEEPALIVE)
@@ -67,9 +76,11 @@ object RealtimeNotifier {
         title: String,
         body: String,
         target: RealtimeNavTarget,
-    ) {
+    ): Boolean {
         ensureChannels(context)
-        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            return false
+        }
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
             .setContentTitle(title)
             .setContentText(body)
@@ -77,14 +88,40 @@ object RealtimeNotifier {
             .setSmallIcon(R.drawable.ic_client_chat)
             .setLargeIcon(appLogoBitmap(context))
             .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setGroup(GROUP_MESSAGES)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setContentIntent(contentIntent(context, target, id))
             .build()
-        runCatching {
-            NotificationManagerCompat.from(context).notify(id, notification)
+        return runCatching {
+            val manager = NotificationManagerCompat.from(context)
+            manager.notify(id, notification)
+            manager.notify(GROUP_SUMMARY_NOTIFICATION_ID, buildMessageGroupSummary(context))
+            true
+        }.getOrElse {
+            false
         }
     }
+
+    private fun buildMessageGroupSummary(context: Context): Notification =
+        NotificationCompat.Builder(context, CHANNEL_MESSAGES)
+            .setContentTitle("摸鱼派")
+            .setContentText("有新的消息")
+            .setSmallIcon(R.drawable.ic_client_chat)
+            .setLargeIcon(appLogoBitmap(context))
+            .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setOnlyAlertOnce(true)
+            .setGroup(GROUP_MESSAGES)
+            .setGroupSummary(true)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setContentIntent(contentIntent(context, RealtimeNavTarget.Notice, GROUP_SUMMARY_NOTIFICATION_ID))
+            .build()
 
     private fun appLogoBitmap(context: Context): android.graphics.Bitmap? = runCatching {
         val drawable = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_fishpi_logo)

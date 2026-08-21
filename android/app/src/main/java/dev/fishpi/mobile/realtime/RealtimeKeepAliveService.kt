@@ -14,14 +14,20 @@ class RealtimeKeepAliveService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = RealtimeNotifier.buildKeepAliveNotification(this)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                RealtimeNotifier.KEEPALIVE_NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
-            )
-        } else {
-            startForeground(RealtimeNotifier.KEEPALIVE_NOTIFICATION_ID, notification)
+        val started = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    RealtimeNotifier.KEEPALIVE_NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                )
+            } else {
+                startForeground(RealtimeNotifier.KEEPALIVE_NOTIFICATION_ID, notification)
+            }
+        }.isSuccess
+        if (!started) {
+            stopSelf(startId)
+            return START_NOT_STICKY
         }
 
         val current = RealtimeConnectionManager.currentSession()
@@ -51,13 +57,16 @@ class RealtimeKeepAliveService : Service() {
     }
 
     companion object {
-        fun start(context: Context) {
+        fun start(context: Context): Boolean {
             val intent = Intent(context, RealtimeKeepAliveService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            return runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+                true
+            }.getOrDefault(false)
         }
 
         fun stop(context: Context) {

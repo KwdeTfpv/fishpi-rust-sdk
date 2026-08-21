@@ -46,6 +46,9 @@ object RealtimeConnectionManager {
     @Volatile
     private var noticeReconnectJob: Job? = null
 
+    @Volatile
+    private var privateOverviewReconnectJob: Job? = null
+
     private val _chatEvents = MutableSharedFlow<ChatRoomEvent>(
         replay = 0,
         extraBufferCapacity = 128,
@@ -97,12 +100,7 @@ object RealtimeConnectionManager {
                 emitChat(ChatRoomEvent.Status(it))
             },
         )
-        privateOverview.connectOverview(
-            apiKey = next.apiKey,
-            selfUsername = next.username,
-            onNotice = { _privateNotices.tryEmit(it) },
-            onStatus = {},
-        )
+        connectPrivateOverview(next)
         notice.connect(
             apiKey = next.apiKey,
             onNotice = { _noticeEvents.tryEmit(Unit) },
@@ -120,12 +118,22 @@ object RealtimeConnectionManager {
                 )
             }
         }
+        privateOverviewReconnectJob?.cancel()
+        privateOverviewReconnectJob = scope.launch {
+            while (true) {
+                delay(15 * 60 * 1000L)
+                val current = session ?: break
+                connectPrivateOverview(current)
+            }
+        }
     }
 
     @Synchronized
     fun stop() {
         noticeReconnectJob?.cancel()
         noticeReconnectJob = null
+        privateOverviewReconnectJob?.cancel()
+        privateOverviewReconnectJob = null
         started = false
         session = null
         _connected.value = false
@@ -153,6 +161,17 @@ object RealtimeConnectionManager {
     fun resumeChatEvents() = chatRoom.resumeEvents()
 
     fun hasActiveChatHandle(): Boolean = chatRoom.hasActiveHandle()
+
+    fun hasActivePrivateOverviewHandle(): Boolean = privateOverview.hasActiveHandle()
+
+    private fun connectPrivateOverview(current: RealtimeSession) {
+        privateOverview.connectOverview(
+            apiKey = current.apiKey,
+            selfUsername = current.username,
+            onNotice = { notice -> _privateNotices.tryEmit(notice) },
+            onStatus = {},
+        )
+    }
 
     private fun emitChat(event: ChatRoomEvent) {
         _chatEvents.tryEmit(event)
