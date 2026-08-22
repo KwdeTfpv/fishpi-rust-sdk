@@ -25,6 +25,11 @@ sealed interface RealtimeNavTarget {
                 else -> null
             }
         }
+
+        fun clear(intent: Intent?) {
+            intent?.removeExtra(EXTRA_NAV_TYPE)
+            intent?.removeExtra(EXTRA_NAV_ARG)
+        }
     }
 
     fun writeTo(intent: Intent) {

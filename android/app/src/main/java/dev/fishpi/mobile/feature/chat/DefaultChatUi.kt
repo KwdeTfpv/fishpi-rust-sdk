@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.feature.chat
 
 import dev.fishpi.mobile.ui.components.*
+import dev.fishpi.mobile.ui.bottomBarContentPadding
 import dev.fishpi.mobile.feature.chat.ui.ChatLivenessFloatingOrb
 
 import android.content.Context
@@ -251,6 +252,8 @@ internal interface DefaultChatUiBridge {
     val error: String?
     val unreadNewMessages: Int
     val redPacketJumpTargetId: String?
+    val locateMessageId: String?
+    val locateMessageRequest: Int
     val previewLinkUrl: String?
     val actionMessage: ChatRoomMessage?
     val quote: ChatQuote?
@@ -365,6 +368,8 @@ private fun DefaultChatUiContent(
 
     val unreadNewMessages = bridge.unreadNewMessages
     val redPacketJumpTargetId = bridge.redPacketJumpTargetId
+    val locateMessageId = bridge.locateMessageId
+    val locateMessageRequest = bridge.locateMessageRequest
     val imageViewer = LocalImageViewer.current
     val previewLinkUrl = bridge.previewLinkUrl
     var previewVideoUrl by remember { mutableStateOf<String?>(null) }
@@ -763,6 +768,8 @@ private fun DefaultChatUiContent(
                         scrollToBottomRequest = scrollToBottomRequest,
                         allowScrollToBottom = actionAnchor == null,
                         redPacketJumpTargetId = redPacketJumpTargetId,
+                        locateMessageId = locateMessageId,
+                        locateMessageRequest = locateMessageRequest,
                         active = active,
                         contentTopPaddingDp = 0,
                         drawBackground = false,
@@ -1505,7 +1512,12 @@ internal fun ChatFilterSettingsOverlay(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(FishPiTheme.spacingPage),
+            contentPadding = PaddingValues(
+                start = FishPiTheme.spacingPage,
+                end = FishPiTheme.spacingPage,
+                top = FishPiTheme.spacingPage,
+                bottom = bottomBarContentPadding(extra = FishPiTheme.spacingPage),
+            ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {

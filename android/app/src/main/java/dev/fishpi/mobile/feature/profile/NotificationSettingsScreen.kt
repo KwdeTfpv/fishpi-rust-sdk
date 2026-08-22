@@ -49,6 +49,7 @@ import dev.fishpi.mobile.ui.components.FishPiIconButton
 import dev.fishpi.mobile.ui.components.FishPiSettingsRow
 import dev.fishpi.mobile.ui.components.FishPiSettingsSection
 import dev.fishpi.mobile.ui.components.uiPageBrush
+import dev.fishpi.mobile.ui.bottomBarContentPadding
 
 @Composable
 internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
@@ -113,7 +114,12 @@ internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(
+                start = 12.dp,
+                end = 12.dp,
+                top = 8.dp,
+                bottom = bottomBarContentPadding(),
+            ),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -61,6 +62,7 @@ import dev.fishpi.mobile.AppSession
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.ui.components.ChatInputBar
 import dev.fishpi.mobile.ui.components.uiPageBrush
+import dev.fishpi.mobile.ui.bottomBarContentPadding
 import dev.fishpi.mobile.shared.message.ChatListItem
 import dev.fishpi.mobile.shared.message.ChatQuote
 import dev.fishpi.mobile.ui.components.PlainBackButton
@@ -294,7 +296,7 @@ private fun PrivateSessionList(
                     start = FishPiTheme.spacingPage,
                     top = 0.dp,
                     end = FishPiTheme.spacingPage,
-                    bottom = FishPiTheme.spacingSection,
+                    bottom = bottomBarContentPadding(),
                 ),
                 verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
             ) {

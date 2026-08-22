@@ -397,6 +397,16 @@ internal class ChatController(
         refreshRenderModel()
     }
 
+    fun locateMessage(oId: String) {
+        val target = oId.trim()
+        if (target.isBlank()) return
+        if (rawMessages.value.any { it.oId == target }) {
+            _state.update {
+                it.copy(locateMessageId = target, locateMessageRequest = it.locateMessageRequest + 1)
+            }
+        }
+    }
+
     fun refreshHistory(
         skipIfLoaded: Boolean = false,
         onSuccess: (List<ChatRoomMessage>) -> Unit = {},

@@ -85,6 +85,8 @@ internal fun ChatRoute(
                 override val error get() = routeError ?: controllerState.error ?: legacyComposerState.error
                 override val unreadNewMessages get() = controllerState.unreadNewMessages
                 override val redPacketJumpTargetId get() = controllerState.redPacketJumpTargetId
+                override val locateMessageId get() = controllerState.locateMessageId
+                override val locateMessageRequest get() = controllerState.locateMessageRequest
                 override val previewLinkUrl get() = previewLinkUrl
                 override val actionMessage get() = actionMessage
                 override val quote get() = legacyComposerState.quote

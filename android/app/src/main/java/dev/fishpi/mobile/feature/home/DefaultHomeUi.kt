@@ -3,6 +3,7 @@ package dev.fishpi.mobile.feature.home
 import dev.fishpi.mobile.ui.components.FishPiPillButton
 import dev.fishpi.mobile.ui.components.ControlSurface
 import dev.fishpi.mobile.ui.components.uiPageBrush
+import dev.fishpi.mobile.ui.bottomBarContentPadding
 import dev.fishpi.mobile.ui.glass.FishPiGlassRole
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
@@ -96,7 +97,7 @@ private fun HomeSoftDefaultUi(
             .fillMaxSize()
             .background(uiPageBrush())
             .statusBarsPadding(),
-        contentPadding = PaddingValues(start = FishPiTheme.spacingPage, top = FishPiTheme.spacingControl, end = FishPiTheme.spacingPage, bottom = 92.dp),
+        contentPadding = PaddingValues(start = FishPiTheme.spacingPage, top = FishPiTheme.spacingControl, end = FishPiTheme.spacingPage, bottom = bottomBarContentPadding()),
         verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
     ) {
         item {

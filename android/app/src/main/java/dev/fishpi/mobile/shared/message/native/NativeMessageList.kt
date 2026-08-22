@@ -40,6 +40,8 @@ internal fun NativeMessageList(
     scrollToBottomRequest: Int,
     allowScrollToBottom: Boolean = true,
     redPacketJumpTargetId: String?,
+    locateMessageId: String? = null,
+    locateMessageRequest: Int = 0,
     active: Boolean = true,
     contentTopPaddingDp: Int = 0,
     drawBackground: Boolean = true,
@@ -215,6 +217,12 @@ internal fun NativeMessageList(
     LaunchedEffect(active, redPacketJumpTargetId) {
         if (active) {
             redPacketJumpTargetId?.let(controller::scrollToMessage)
+        }
+    }
+
+    LaunchedEffect(active, locateMessageRequest) {
+        if (active && locateMessageRequest > 0) {
+            locateMessageId?.let(controller::scrollToMessage)
         }
     }
 

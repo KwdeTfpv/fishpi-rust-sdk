@@ -129,6 +129,8 @@ import dev.fishpi.mobile.feature.pluginui.PluginUiRoute
 import dev.fishpi.mobile.feature.privatechat.PrivateChatRoute
 import dev.fishpi.mobile.feature.profile.ProfileRoute
 import dev.fishpi.mobile.ui.animal.AnimalChatGlyph
+import dev.fishpi.mobile.ui.FloatingBottomBarClearance
+import dev.fishpi.mobile.ui.LocalBottomBarClearance
 import dev.fishpi.mobile.ui.animal.AnimalIslandBackground
 import dev.fishpi.mobile.ui.components.VisitorVerifyDialog
 import dev.fishpi.mobile.ui.components.uiPageBrush
@@ -313,14 +315,22 @@ internal fun MainShell(
         FishPiNotifier.success("访客验证已完成")
     }
 
-    fun openChatRoomDetail() {
+    fun openChatRoomDetail(targetOId: String? = null) {
         focusManager.clearFocus(force = true)
         keyboardController?.hide()
         if (!chatRoomOpen) {
             navigator.push(ShellOverlay.ChatRoom)
         }
         chatController.clearSynthesizedMessages()
-        refreshChatRoomHistory(force = true)
+        val locate = targetOId?.takeIf { it.isNotBlank() }
+        if (locate != null) {
+            chatController.refreshHistory(
+                skipIfLoaded = false,
+                onSuccess = { chatController.locateMessage(locate) },
+            )
+        } else {
+            refreshChatRoomHistory(force = true)
+        }
     }
 
     LaunchedEffect(session.apiKey) {
@@ -444,7 +454,7 @@ internal fun MainShell(
         PendingRealtimeNavigation.target.collect { target ->
             if (target == null) return@collect
             when (target) {
-                is RealtimeNavTarget.ChatRoom -> openChatRoomDetail()
+                is RealtimeNavTarget.ChatRoom -> openChatRoomDetail(target.messageId)
                 is RealtimeNavTarget.Article -> openArticleDetail(target.articleId)
                 is RealtimeNavTarget.PrivateChat -> openPrivateChat(target.peer)
                 RealtimeNavTarget.Notice -> openNotice()
@@ -517,7 +527,10 @@ internal fun MainShell(
     }
 
     FishPiOverlayWindow {
-        CompositionLocalProvider(LocalFishPiGlassBackdrop provides shellBackdrop) {
+        CompositionLocalProvider(
+            LocalFishPiGlassBackdrop provides shellBackdrop,
+            LocalBottomBarClearance provides if (bottomNavHidden) 0.dp else FloatingBottomBarClearance,
+        ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 AnimalIslandBackground(
                     modifier = Modifier.layerBackdrop(shellBackdrop),
@@ -628,13 +641,15 @@ internal fun MainShell(
                 }
 
                 AnimatedContent(
-                    targetState = navigator.topOverlay,
+                    targetState = navigator.topOverlay to navigator.overlays.size,
                     transitionSpec = {
-                        FishPiMotion.pushTransform(targetState != null)
+                        val entering = targetState.second > initialState.second
+                        FishPiMotion.pushTransform(entering)
                             .using(SizeTransform(clip = false))
                     },
+                    contentKey = { it.first },
                     label = "shellOverlay",
-                ) { overlay ->
+                ) { (overlay, _) ->
                     when (overlay) {
                         null -> Box(modifier = Modifier.fillMaxSize())
 

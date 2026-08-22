@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleNavIntent(intent: Intent?) {
         val target = RealtimeNavTarget.fromIntent(intent) ?: return
+        RealtimeNavTarget.clear(intent)
         PendingRealtimeNavigation.submit(target)
     }
 

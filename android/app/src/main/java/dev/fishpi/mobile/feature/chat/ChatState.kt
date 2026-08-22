@@ -23,6 +23,8 @@ data class ChatState(
     val scrollToBottomRequest: Int = 0,
     val keepPositionAfterPrependCount: Int = 0,
     val redPacketJumpTargetId: String? = null,
+    val locateMessageId: String? = null,
+    val locateMessageRequest: Int = 0,
     val composer: ChatComposerState = ChatComposerState(),
     val redPacket: RedPacketState = RedPacketState(),
     val overlay: ChatOverlayState = ChatOverlayState.None,

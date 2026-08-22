@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.feature.profile
 
 import dev.fishpi.mobile.ui.components.*
+import dev.fishpi.mobile.ui.bottomBarContentPadding
 import dev.fishpi.mobile.ui.animal.AnimalIconButton
 
 import androidx.activity.compose.BackHandler
@@ -194,7 +195,12 @@ internal fun DefaultProfileUi(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(uiPageBrush()),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(
+                    start = 12.dp,
+                    end = 12.dp,
+                    top = 10.dp,
+                    bottom = bottomBarContentPadding(),
+                ),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 item(key = "articles_header", contentType = "articles_header") {
@@ -224,7 +230,7 @@ internal fun DefaultProfileUi(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(uiPageBrush()),
-                contentPadding = PaddingValues(bottom = 92.dp),
+                contentPadding = PaddingValues(bottom = bottomBarContentPadding()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 item(key = "overview", contentType = "overview") {
@@ -431,7 +437,12 @@ private fun ProfileSettingsOverlay(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+            contentPadding = PaddingValues(
+                start = 12.dp,
+                end = 12.dp,
+                top = 12.dp,
+                bottom = bottomBarContentPadding(extra = 12.dp),
+            ),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
