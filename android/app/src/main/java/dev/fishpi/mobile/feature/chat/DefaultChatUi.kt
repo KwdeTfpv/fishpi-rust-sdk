@@ -300,6 +300,7 @@ internal interface DefaultChatUiBridge {
     fun loadMoreHistory(onSuccess: (page: Int, older: List<ChatRoomMessage>, addedCount: Int) -> Unit = { _, _, _ -> }, onFailure: (String) -> Unit = {}, onFinally: () -> Unit = {})
     fun finishInitialLoading()
     fun requestJumpToLatest()
+    fun onLocateMessageHandled()
     fun showBlockedMessages()
     fun clearKeepPositionAfterPrependCount()
     fun onNearBottomChanged(nearBottom: Boolean)
@@ -770,6 +771,7 @@ private fun DefaultChatUiContent(
                         redPacketJumpTargetId = redPacketJumpTargetId,
                         locateMessageId = locateMessageId,
                         locateMessageRequest = locateMessageRequest,
+                        onLocateMessageHandled = { bridge.onLocateMessageHandled() },
                         active = active,
                         contentTopPaddingDp = 0,
                         drawBackground = false,

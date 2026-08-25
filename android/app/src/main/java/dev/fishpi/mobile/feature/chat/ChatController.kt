@@ -407,6 +407,12 @@ internal class ChatController(
         }
     }
 
+    fun clearLocateMessage() {
+        if (_state.value.locateMessageId != null) {
+            _state.update { it.copy(locateMessageId = null) }
+        }
+    }
+
     fun refreshHistory(
         skipIfLoaded: Boolean = false,
         onSuccess: (List<ChatRoomMessage>) -> Unit = {},

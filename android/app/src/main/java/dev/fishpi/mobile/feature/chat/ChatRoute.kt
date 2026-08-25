@@ -148,6 +148,9 @@ internal fun ChatRoute(
                 override fun requestJumpToLatest() {
                     chatController.dispatch(ChatAction.JumpToBottom)
                 }
+                override fun onLocateMessageHandled() {
+                    chatController.clearLocateMessage()
+                }
                 override fun showBlockedMessages() {
                     blockedMessagesOpen = true
                 }

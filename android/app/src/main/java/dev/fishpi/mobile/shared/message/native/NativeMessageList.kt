@@ -42,6 +42,7 @@ internal fun NativeMessageList(
     redPacketJumpTargetId: String?,
     locateMessageId: String? = null,
     locateMessageRequest: Int = 0,
+    onLocateMessageHandled: () -> Unit = {},
     active: Boolean = true,
     contentTopPaddingDp: Int = 0,
     drawBackground: Boolean = true,
@@ -220,9 +221,11 @@ internal fun NativeMessageList(
         }
     }
 
-    LaunchedEffect(active, locateMessageRequest) {
+    LaunchedEffect(active, locateMessageRequest, locateMessageId) {
         if (active && locateMessageRequest > 0) {
-            locateMessageId?.let(controller::scrollToMessage)
+            val target = locateMessageId ?: return@LaunchedEffect
+            controller.scrollToMessage(target)
+            onLocateMessageHandled()
         }
     }
 
