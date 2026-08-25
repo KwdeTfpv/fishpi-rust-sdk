@@ -51,6 +51,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleNavIntent(intent: Intent?) {
+        if (intent != null && intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) {
+            RealtimeNavTarget.clear(intent)
+            return
+        }
         val target = RealtimeNavTarget.fromIntent(intent) ?: return
         RealtimeNavTarget.clear(intent)
         PendingRealtimeNavigation.submit(target)
