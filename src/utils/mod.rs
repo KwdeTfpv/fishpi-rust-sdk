@@ -140,8 +140,45 @@ pub async fn delete(url: &str, data: Option<Value>) -> Result<Value, Error> {
     request("DELETE", url, None, data).await
 }
 
-pub async fn upload_files(url: &str, files: Vec<String>, api_key: &str) -> Result<Value, Error> {
-    let full_url = format!("https://{}/{}", DOMAIN, url.trim_start_matches('/'));
+pub struct UploadTicket {
+    /// 一次性上传票据（JWT）。
+    pub ticket: String,
+    /// 上传地址。
+    pub upload_url: String,
+}
+
+/// 一次性上传票据。
+pub async fn request_upload_ticket(api_key: &str) -> Result<UploadTicket, Error> {
+    let url = build_http_path(
+        "api/rhypic/upload-ticket",
+        &[("apiKey", api_key.to_string())],
+    );
+    let rsp = post(&url, None).await?;
+    if rsp.get("code").and_then(Value::as_i64).unwrap_or(-1) != 0 {
+        return Err(Error::Api(
+            rsp["msg"].as_str().unwrap_or("获取上传票据失败").to_string(),
+        ));
+    }
+    let ticket = rsp["data"]["ticket"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| Error::Api("上传票据响应缺少 ticket".to_string()))?
+        .to_string();
+    let upload_url = rsp["data"]["uploadURL"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| Error::Api("上传票据响应缺少 uploadURL".to_string()))?
+        .to_string();
+    Ok(UploadTicket { ticket, upload_url })
+}
+
+/// 携带票据直传图床， `{code, msg, data}` 响应。
+pub async fn upload_files(
+    upload_url: &str,
+    files: Vec<String>,
+    ticket: &str,
+) -> Result<Value, Error> {
+    let full_url = format!("{}/api/v1/files", upload_url.trim_end_matches('/'));
     let mut form = multipart::Form::new();
 
     for file_path in files {
@@ -169,7 +206,7 @@ pub async fn upload_files(url: &str, files: Vec<String>, api_key: &str) -> Resul
             .unwrap_or("file")
             .to_string();
         form = form.part(
-            "file[]",
+            "file",
             multipart::Part::stream(file_content)
                 .file_name(file_name)
                 .mime_str(upload_mime_from_path(path))
@@ -177,15 +214,13 @@ pub async fn upload_files(url: &str, files: Vec<String>, api_key: &str) -> Resul
         );
     }
 
-    form = form.text("apiKey", api_key.to_string());
-
     let response = http_client()
         .post(&full_url)
         .header(
             "User-Agent",
             "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36",
         )
-        .header("Referer", &format!("https://{}/", DOMAIN))
+        .header("Authorization", format!("Bearer {}", ticket))
         .multipart(form)
         .send()
         .await

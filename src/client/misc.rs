@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use crate::client::core::FishPi;
 use crate::model::misc::{Log, PreRegisterInfo, RegisterInfo, Report, UploadResult};
 use crate::utils::error::Error;
-use crate::utils::{build_http_path, upload_files};
+use crate::utils::{build_http_path, request_upload_ticket, upload_files};
 
 impl FishPi {
     /// 预注册（发送手机验证码等）。
@@ -67,12 +67,22 @@ impl FishPi {
                 return Err(Error::decode(format!("File not exist: {}", file)));
             }
         }
-        let rsp = upload_files("upload", files, self.api_key().as_str()).await?;
-        if rsp.get("code").and_then(Value::as_i64).unwrap_or(-1) != 0 {
-            return Err(Error::decode(
-                rsp["msg"].as_str().unwrap_or("API error").to_string(),
-            ));
+
+        let api_key = self.api_key().as_str().to_string();
+        let mut last_err = None;
+        for _ in 0..2 {
+            let ticket = request_upload_ticket(&api_key).await?;
+            let rsp = upload_files(&ticket.upload_url, files.clone(), &ticket.ticket).await?;
+            if rsp.get("code").and_then(Value::as_i64).unwrap_or(-1) != 0 {
+                let msg = rsp["msg"].as_str().unwrap_or("API error").to_string();
+                if msg.contains("票据已过期") || msg.contains("票据已被使用") {
+                    last_err = Some(Error::decode(msg));
+                    continue;
+                }
+                return Err(Error::decode(msg));
+            }
+            return UploadResult::from_value(&rsp["data"]);
         }
-        UploadResult::from_value(&rsp["data"])
+        Err(last_err.unwrap_or_else(|| Error::decode("上传失败".to_string())))
     }
 }
