@@ -109,7 +109,7 @@ internal class MarkwonRendererCore(
         configureTextView(textView)
 
         cache.get(renderKey)?.let { cached ->
-            textView.text = cached
+            markwon.setParsedMarkdown(textView, cached)
             return null
         }
 
@@ -119,7 +119,7 @@ internal class MarkwonRendererCore(
             cache.put(renderKey, rendered, source.length)
             withContext(Dispatchers.Main.immediate) {
                 if (textView.tag == renderKey) {
-                    textView.text = rendered
+                    markwon.setParsedMarkdown(textView, rendered)
                 }
             }
         }
@@ -140,16 +140,8 @@ internal class MarkwonRendererCore(
 
     private suspend fun renderMarkdown(source: String): Spanned {
         val markdown = source.renderFishPiEmojiShortcodes()
-        val chunks = ChatMarkdownChunker.split(markdown)
-        if (chunks.size == 1) {
-            return applyMentionAndWebUrlSpans(markwon.toMarkdown(markdown.trimEnd()))
-        }
-        val builder = SpannableStringBuilder()
-        chunks.forEach { chunk ->
-            kotlinx.coroutines.currentCoroutineContext().ensureActive()
-            builder.append(markwon.toMarkdown(chunk))
-        }
-        return applyMentionAndWebUrlSpans(trimTrailingWhitespace(builder))
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        return applyMentionAndWebUrlSpans(markwon.toMarkdown(markdown.trimEnd()))
     }
 
     private fun applyMentionAndWebUrlSpans(source: Spanned): Spanned {
@@ -235,11 +227,18 @@ internal class MarkwonRendererCore(
         while (end > 0 && source[end - 1].isWhitespace()) {
             end--
         }
-        return if (end == source.length) {
-            SpannableStringBuilder(source)
-        } else {
-            SpannableStringBuilder(source.subSequence(0, end))
+
+        val spanned = source as? Spanned
+        if (spanned != null) {
+            val maxSpanEnd = spanned.getSpans(0, source.length, Any::class.java)
+                .maxOfOrNull { spanned.getSpanEnd(it) } ?: 0
+            if (end < maxSpanEnd) end = maxSpanEnd
         }
+        val builder = SpannableStringBuilder(source)
+        if (end < builder.length) {
+            builder.delete(end, builder.length)
+        }
+        return builder
     }
 
     private fun cacheKey(key: String, source: String): String =

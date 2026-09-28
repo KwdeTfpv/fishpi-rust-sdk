@@ -168,6 +168,7 @@ import dev.fishpi.mobile.utils.isAbsoluteWebUrl
 import dev.fishpi.mobile.utils.isDirectVideoUrl
 import dev.fishpi.mobile.utils.MarkdownMediaType
 import dev.fishpi.mobile.utils.normalizeWebUrl
+import dev.fishpi.mobile.utils.structuralMarkdownRanges
 import dev.fishpi.mobile.utils.trimUrlPunctuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -2842,7 +2843,7 @@ private fun String.articleContentTokens(
     imageUrls: List<String>,
 ): List<ArticleContentToken> {
     if (isBlank()) return emptyList()
-    val protectedRanges = fencedCodeRanges()
+    val protectedRanges = structuralMarkdownRanges()
     val imageTokens = articleImageRangeTokens(protectedRanges)
     val videoTokens = articleVideoRangeTokens(protectedRanges)
     val renderedImages = imageTokens.mapNotNull { (it.token as? ArticleContentToken.Image)?.url }
@@ -2939,26 +2940,6 @@ private fun String.articlePreviewRangeTokens(
         if (url in remaining) add(url, match.range.last + 1)
     }
     return tokens.sortedBy { it.start }
-}
-
-private fun String.fencedCodeRanges(): List<IntRange> {
-    val ranges = mutableListOf<IntRange>()
-    var fenceStart: Int? = null
-    var lineStart = 0
-    lineSequence().forEach { line ->
-        if (line.trimStart().startsWith("```")) {
-            val start = fenceStart
-            if (start == null) {
-                fenceStart = lineStart
-            } else {
-                ranges += start..(lineStart + line.length)
-                fenceStart = null
-            }
-        }
-        lineStart += line.length + 1
-    }
-    fenceStart?.let { ranges += it until length }
-    return ranges
 }
 
 private operator fun List<IntRange>.contains(index: Int): Boolean = any { index in it }
