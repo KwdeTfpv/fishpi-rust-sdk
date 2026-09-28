@@ -99,6 +99,8 @@ jobs:
       - name: Set up Android SDK
         if: steps.release-gate.outputs.should_release == 'true'
         uses: android-actions/setup-android@v3
+        with:
+          packages: ''
 
       - name: Install Android SDK packages
         if: steps.release-gate.outputs.should_release == 'true'
