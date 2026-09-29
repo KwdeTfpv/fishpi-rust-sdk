@@ -12,7 +12,7 @@
 
 ```toml
 [dependencies]
-fishpi-sdk = "1.0.0"
+fishpi-sdk = "1.1.1"
 tokio = { version = "1", features = ["full"] }
 ```
 
