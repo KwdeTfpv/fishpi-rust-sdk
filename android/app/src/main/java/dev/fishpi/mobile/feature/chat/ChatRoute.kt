@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import dev.fishpi.mobile.FishPiNotifier
+import dev.fishpi.mobile.LocalAppSession
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.feature.chat.model.ChatMentionCandidateUiModel
 import dev.fishpi.mobile.shared.message.ChatQuote
@@ -46,6 +47,8 @@ internal fun ChatRoute(
     var actionMessage by remember { mutableStateOf<ChatRoomMessage?>(null) }
     var blockedMessagesOpen by remember { mutableStateOf(false) }
     var pluginManagerOpen by remember { mutableStateOf(false) }
+    var emojiManagerOpen by remember { mutableStateOf(false) }
+    val appSession = LocalAppSession.current
     var routeError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(chatController) {
@@ -169,6 +172,12 @@ internal fun ChatRoute(
                 override fun openPluginManager() {
                     pluginManagerOpen = true
                 }
+                override fun openEmojiManager() {
+                    emojiManagerOpen = true
+                }
+                override fun favoriteEmoji(url: String) {
+                    chatController.favoriteEmoji(url)
+                }
                 override fun emitPluginToolbarAction(entry: PluginToolbarEntry, actionId: String) = chatController.emitPluginToolbarAction(entry, actionId)
                 override fun emitPluginMenuAction(action: PluginMenuAction, message: ChatRoomMessage) = chatController.emitPluginMenuAction(action, message)
                 override fun dismissLinkPreview() {
@@ -203,6 +212,13 @@ internal fun ChatRoute(
         }
         dev.fishpi.mobile.plugin.PluginListSheet(
             onDismiss = { pluginManagerOpen = false },
+        )
+    }
+
+    if (emojiManagerOpen) {
+        dev.fishpi.mobile.feature.emoji.EmojiManagerScreen(
+            apiKey = appSession.apiKey,
+            onDismiss = { emojiManagerOpen = false },
         )
     }
 }

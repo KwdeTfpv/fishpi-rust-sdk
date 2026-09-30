@@ -1,6 +1,8 @@
 package dev.fishpi.mobile.ui.components
 
 import dev.fishpi.mobile.*
+import androidx.compose.animation.core.animateDpAsState
+import dev.fishpi.mobile.ui.motion.FishPiMotion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,10 +15,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -153,7 +160,15 @@ internal fun EmojiPackPanel(
     onPickEmoji: (EmojiItemView) -> Unit,
     modifier: Modifier = Modifier,
     maxHeight: Dp = 206.dp,
+    expandedMaxHeight: Dp = 420.dp,
+    onManage: (() -> Unit)? = null,
 ) {
+    var expanded by remember(selectedGroupId) { mutableStateOf(false) }
+    val listMaxHeight by animateDpAsState(
+        targetValue = if (expanded) expandedMaxHeight else maxHeight,
+        animationSpec = FishPiMotion.tweenMedium(),
+        label = "emojiPanelHeight",
+    )
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -172,13 +187,51 @@ internal fun EmojiPackPanel(
             ),
         verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem * 0.75f),
     ) {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem * 0.64f)) {
-            items(groups, key = { it.id }) { group ->
-                EmojiGroupChip(
-                    group = group,
-                    selected = group.id == selectedGroupId,
-                    onClick = { onPickGroup(group.id) },
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem * 0.64f),
+        ) {
+            LazyRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem * 0.64f),
+            ) {
+                items(groups, key = { it.id }) { group ->
+                    EmojiGroupChip(
+                        group = group,
+                        selected = group.id == selectedGroupId,
+                        onClick = { onPickGroup(group.id) },
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.66f))
+                    .clickable { expanded = !expanded }
+                    .padding(
+                        horizontal = FishPiTheme.spacingItem * 0.5f,
+                        vertical = FishPiTheme.spacingItem * 0.38f,
+                    ),
+            ) {
+                Icon(
+                    imageVector = if (expanded) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess,
+                    contentDescription = if (expanded) "收起表情面板" else "展开表情面板",
+                    tint = FishPiTheme.weakText,
+                    modifier = Modifier.size(18.dp),
                 )
+            }
+            onManage?.let { manage ->
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.66f))
+                        .clickable(onClick = manage)
+                        .padding(
+                            horizontal = FishPiTheme.spacingItem * 0.5f,
+                            vertical = FishPiTheme.spacingItem * 0.38f,
+                        ),
+                ) {
+                    Text(text = "管理", color = FishPiTheme.accent, fontSize = 12.sp)
+                }
             }
         }
         when {
@@ -189,7 +242,7 @@ internal fun EmojiPackPanel(
             else -> {
                 val rows = remember(emojiItems) { emojiItems.asReversed().chunked(5) }
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = maxHeight),
+                    modifier = Modifier.heightIn(max = listMaxHeight),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(rows) { row ->

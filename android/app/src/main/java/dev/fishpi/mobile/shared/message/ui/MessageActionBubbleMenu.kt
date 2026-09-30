@@ -67,6 +67,7 @@ internal fun MessageActionBubbleMenu(
     onReaction: (String) -> Unit,
     onRepeat: () -> Unit,
     onRevoke: () -> Unit,
+    onFavoriteEmoji: (() -> Unit)? = null,
     extraActions: List<MessageActionSpec> = emptyList(),
 ) {
     var submenu by remember(anchor.message.oId) { mutableStateOf(MessageActionSubmenu.Main) }
@@ -88,6 +89,7 @@ internal fun MessageActionBubbleMenu(
         onRepeat = { onRepeat(); onDismiss() },
         onRevoke = { onRevoke(); onDismiss() },
         onReactions = { submenu = MessageActionSubmenu.Reactions },
+        onFavoriteEmoji = onFavoriteEmoji?.let { action -> { action(); onDismiss() } },
         extraActions = extraActions.map { action ->
             action.copy(onClick = { action.onClick(); onDismiss() })
         },

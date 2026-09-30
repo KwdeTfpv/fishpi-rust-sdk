@@ -394,6 +394,38 @@ class FishPiApiClient private constructor() {
             .sortedWith(compareBy<EmojiItemView> { it.sort }.thenBy { it.name })
     }
 
+    fun uploadEmojiUrl(apiKey: String, url: String) {
+        FishPiNative.uploadEmojiUrl(apiKey, url).unwrapApiResult()
+    }
+
+    fun createEmojiGroup(apiKey: String, name: String, sort: Long = 0L) {
+        FishPiNative.createEmojiGroup(apiKey, name, sort).unwrapApiResult()
+    }
+
+    fun updateEmojiGroup(apiKey: String, groupId: String, name: String, sort: Long = 0L) {
+        FishPiNative.updateEmojiGroup(apiKey, groupId, name, sort).unwrapApiResult()
+    }
+
+    fun deleteEmojiGroup(apiKey: String, groupId: String) {
+        FishPiNative.deleteEmojiGroup(apiKey, groupId).unwrapApiResult()
+    }
+
+    fun addEmojiToGroup(apiKey: String, groupId: String, emojiId: String, sort: Long = 0L, name: String = "") {
+        FishPiNative.addEmojiToGroup(apiKey, groupId, emojiId, sort, name).unwrapApiResult()
+    }
+
+    fun addEmojiUrlToGroup(apiKey: String, groupId: String, url: String, sort: Long = 0L, name: String = "") {
+        FishPiNative.addEmojiUrlToGroup(apiKey, groupId, url, sort, name).unwrapApiResult()
+    }
+
+    fun removeEmojiFromGroup(apiKey: String, groupId: String, emojiId: String) {
+        FishPiNative.removeEmojiFromGroup(apiKey, groupId, emojiId).unwrapApiResult()
+    }
+
+    fun updateEmojiItem(apiKey: String, oId: String, groupId: String, name: String, sort: Long = 0L) {
+        FishPiNative.updateEmojiItem(apiKey, oId, groupId, name, sort).unwrapApiResult()
+    }
+
     fun sendArticleComment(apiKey: String, articleId: String, content: String, replyId: String = "") {
         FishPiNative.sendArticleComment(apiKey, articleId, content, replyId).unwrapApiResult()
     }

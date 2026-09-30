@@ -95,6 +95,7 @@ internal fun ChatInputBar(
     onPickEmojiGroup: (String) -> Unit,
     onPickEmoji: (EmojiItemView) -> Unit,
     onPickAtUser: (String) -> Unit,
+    onManageEmoji: (() -> Unit)? = null,
     onCursorPositionChange: (Int) -> Unit = {},
     inputCursorPositionRequest: Int? = null,
     onInputCursorPositionRequestHandled: () -> Unit = {},
@@ -338,6 +339,7 @@ internal fun ChatInputBar(
                 error = emojiPackError,
                 onDismiss = onDismissEmojiPanel,
                 onPickGroup = onPickEmojiGroup,
+                onManage = onManageEmoji,
                 onPickEmoji = { item ->
                     val label = item.name.ifBlank { "表情" }
                     val nextText = appendDraftBlock(textValue.text, "![$label](${item.url})")

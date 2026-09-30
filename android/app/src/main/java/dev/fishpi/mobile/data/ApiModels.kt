@@ -358,7 +358,6 @@ data class ArticleCommentView(
 data class EmojiGroupView(
     val id: String,
     val name: String,
-    val count: Long,
     val isDefault: Boolean,
     val sort: Long = Long.MAX_VALUE,
 )
@@ -419,6 +418,7 @@ data class ArticleDraftPayload(
 
 data class EmojiItemView(
     val id: String,
+    val emojiId: String,
     val groupId: String,
     val name: String,
     val url: String,

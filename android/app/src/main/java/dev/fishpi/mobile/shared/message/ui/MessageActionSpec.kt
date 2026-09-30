@@ -9,6 +9,7 @@ import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.SentimentSatisfied
+import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.ui.graphics.vector.ImageVector
 import dev.fishpi.mobile.data.ChatRoomMessage
 
@@ -31,6 +32,7 @@ internal fun bubbleMessageActionSpecs(
     onRepeat: () -> Unit,
     onRevoke: () -> Unit,
     onReactions: () -> Unit,
+    onFavoriteEmoji: (() -> Unit)? = null,
     extraActions: List<MessageActionSpec> = emptyList(),
 ): List<MessageActionSpec> = buildList {
     add(
@@ -81,6 +83,16 @@ internal fun bubbleMessageActionSpecs(
                 enabled = true,
                 danger = true,
                 onClick = onRevoke,
+            ),
+        )
+    }
+    if (onFavoriteEmoji != null && message.imageUrls.isNotEmpty()) {
+        add(
+            MessageActionSpec(
+                label = "收藏",
+                icon = Icons.Rounded.StarOutline,
+                enabled = true,
+                onClick = onFavoriteEmoji,
             ),
         )
     }

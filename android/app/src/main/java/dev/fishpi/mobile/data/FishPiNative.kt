@@ -144,6 +144,22 @@ object FishPiNative {
 
     external fun getEmojiGroupItems(apiKey: String, groupId: String): String
 
+    external fun uploadEmojiUrl(apiKey: String, url: String): String
+
+    external fun createEmojiGroup(apiKey: String, name: String, sort: Long): String
+
+    external fun updateEmojiGroup(apiKey: String, groupId: String, name: String, sort: Long): String
+
+    external fun deleteEmojiGroup(apiKey: String, groupId: String): String
+
+    external fun addEmojiToGroup(apiKey: String, groupId: String, emojiId: String, sort: Long, name: String): String
+
+    external fun addEmojiUrlToGroup(apiKey: String, groupId: String, url: String, sort: Long, name: String): String
+
+    external fun removeEmojiFromGroup(apiKey: String, groupId: String, emojiId: String): String
+
+    external fun updateEmojiItem(apiKey: String, oId: String, groupId: String, name: String, sort: Long): String
+
     external fun sendArticleComment(apiKey: String, articleId: String, content: String, replyId: String): String
 
     external fun voteArticle(apiKey: String, articleId: String, like: Boolean): String

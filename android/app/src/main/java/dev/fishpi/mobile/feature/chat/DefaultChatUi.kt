@@ -312,6 +312,8 @@ internal interface DefaultChatUiBridge {
     fun clearFocusInputRequest()
     fun openAttachmentPanel()
     fun openPluginManager()
+    fun openEmojiManager()
+    fun favoriteEmoji(url: String)
     fun emitPluginToolbarAction(entry: PluginToolbarEntry, actionId: String)
     fun emitPluginMenuAction(action: PluginMenuAction, message: ChatRoomMessage)
     fun dismissLinkPreview()
@@ -977,6 +979,7 @@ private fun DefaultChatUiContent(
             onPickAtUser = { username ->
                 dispatch(ChatAction.PickMention(username))
             },
+            onManageEmoji = { bridge.openEmojiManager() },
             onCursorPositionChange = {
                 inputCursorPosition = it
                 dispatch(ChatAction.ChangeCursor(it))
@@ -1119,6 +1122,9 @@ private fun DefaultChatUiContent(
             },
             onRevoke = {
                 dispatch(ChatAction.RevokeMessage(anchor.message))
+            },
+            onFavoriteEmoji = anchor.message.imageUrls.firstOrNull()?.let { url ->
+                { bridge.favoriteEmoji(url) }
             },
             extraActions = pluginMessageActions,
             )

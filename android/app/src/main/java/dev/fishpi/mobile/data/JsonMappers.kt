@@ -62,7 +62,6 @@ internal fun JSONObject.toEmojiGroupView(): EmojiGroupView {
     return EmojiGroupView(
         id = optString("id"),
         name = optString("name"),
-        count = optLong("count"),
         isDefault = optBoolean("isDefault", false),
         sort = optLong("sort", Long.MAX_VALUE),
     )
@@ -71,6 +70,7 @@ internal fun JSONObject.toEmojiGroupView(): EmojiGroupView {
 internal fun JSONObject.toEmojiItemView(): EmojiItemView {
     return EmojiItemView(
         id = optString("id"),
+        emojiId = optString("emojiId"),
         groupId = optString("groupId"),
         name = optString("name"),
         url = optString("url"),

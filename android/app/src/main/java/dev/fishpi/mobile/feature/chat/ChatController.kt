@@ -357,6 +357,20 @@ internal class ChatController(
         }
     }
 
+    fun favoriteEmoji(url: String) {
+        val link = url.trim()
+        if (link.isBlank()) return
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { api.uploadEmojiUrl(apiKey, link) }
+            }.onSuccess {
+                emitEffect(ChatEffect.ShowMessage("已收藏到表情包"))
+            }.onFailure { throwable ->
+                emitEffect(ChatEffect.ShowError(throwable.message ?: "收藏表情失败"))
+            }
+        }
+    }
+
     fun changeCursor(position: Int) {
         _legacyComposerState.update { it.copy(cursorPosition = position) }
     }
