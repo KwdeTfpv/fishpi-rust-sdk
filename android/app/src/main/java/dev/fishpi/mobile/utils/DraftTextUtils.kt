@@ -6,14 +6,6 @@ internal fun appendDraftBlock(current: String, addition: String): String {
     return if (current.isBlank()) text else current.trimEnd() + "\n" + text
 }
 
-internal fun removeDraftBlock(current: String, target: String): String =
-    current
-        .replace(target, "")
-        .lines()
-        .map(String::trim)
-        .filter(String::isNotBlank)
-        .joinToString("\n")
-
 internal fun appendMentionDraft(current: String, username: String): String {
     val user = username.trim()
     if (user.isBlank()) return current

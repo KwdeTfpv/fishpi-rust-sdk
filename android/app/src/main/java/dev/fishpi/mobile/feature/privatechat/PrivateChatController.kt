@@ -1,13 +1,16 @@
 package dev.fishpi.mobile.feature.privatechat
 
 import dev.fishpi.mobile.core.ui.UiController
+import android.content.Context
+import dev.fishpi.mobile.data.AttachmentUpload
+import dev.fishpi.mobile.data.AttachmentUploadQueue
 import dev.fishpi.mobile.data.ChatRoomMessage
+import dev.fishpi.mobile.data.ComposerAttachments
 import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.data.FishPiApiClient
 import dev.fishpi.mobile.data.PrivateChatNotice
 import dev.fishpi.mobile.data.PrivateChatRealtimeClient
 import dev.fishpi.mobile.data.PrivateChatSession
-import dev.fishpi.mobile.data.UploadedChatFile
 import dev.fishpi.mobile.feature.privatechat.mapper.sortedByLatest
 import dev.fishpi.mobile.feature.privatechat.mapper.toPrivateSessionUiModel
 import dev.fishpi.mobile.feature.privatechat.mapper.withFileTransferSession
@@ -30,6 +33,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 internal class PrivateChatController(
+    context: Context,
     private val apiKey: String,
     private val selfUsername: String,
     private val api: FishPiApiClient = FishPiApiClient.shared,
@@ -43,6 +47,12 @@ internal class PrivateChatController(
     private val _effects = MutableSharedFlow<PrivateChatEffect>(extraBufferCapacity = 16)
     val effects: SharedFlow<PrivateChatEffect> = _effects.asSharedFlow()
 
+    private val uploadQueue = AttachmentUploadQueue.shared(context)
+
+    init {
+        observeAttachmentUploads()
+    }
+
     override fun dispatch(action: PrivateChatAction) {
         when (action) {
             PrivateChatAction.RefreshSessions -> refreshSessions()
@@ -51,9 +61,15 @@ internal class PrivateChatController(
             PrivateChatAction.CloseConversation -> closeConversation()
             PrivateChatAction.LoadMoreHistory -> loadMoreHistory()
             is PrivateChatAction.ApplyNotice -> applyNotice(action.notice, notify = action.notify)
-            is PrivateChatAction.ChangeInput -> updateConversation { it.copy(input = action.value) }
+            is PrivateChatAction.ChangeInput -> updateConversation {
+                it.copy(input = action.value, attachments = it.attachments.syncReferences(action.value))
+            }
+            is PrivateChatAction.ChangeCursor -> updateConversation { it.copy(cursorPosition = action.position) }
+            PrivateChatAction.ClearCursorRequest -> updateConversation { it.copy(cursorRequest = null) }
             PrivateChatAction.SendText -> sendText()
-            is PrivateChatAction.UploadAttachment -> uploadAttachment(action.path)
+            is PrivateChatAction.PickAttachment -> pickAttachment(action.uri, action.isVideo)
+            is PrivateChatAction.RemoveAttachment -> removeAttachment(action.index)
+            is PrivateChatAction.RetryAttachment -> retryAttachment(action.index)
             PrivateChatAction.ToggleEmoji -> toggleEmoji()
             PrivateChatAction.CloseEmoji -> updateConversation { it.copy(emojiPanelOpen = false) }
             is PrivateChatAction.SelectEmojiGroup -> loadEmojiGroup(action.groupId)
@@ -285,14 +301,32 @@ internal class PrivateChatController(
         val snapshot = _state.value.conversation
         val content = snapshot.input.trim()
         val peer = snapshot.selectedPeer.orEmpty()
-        if (content.isBlank() || peer.isBlank() || snapshot.isSending) return
-        val sendContent = snapshot.quote?.appendTo(
-            text = content,
-            targetUrl = "https://fishpi.cn/chat#${snapshot.quote.messageId}",
-            title = "私聊引用",
-        ) ?: content
+        val attachments = snapshot.attachments.syncReferences(snapshot.input)
+        if (peer.isBlank() || snapshot.isSending) return
+        if (content.isBlank() && !attachments.hasSendableAttachment) return
         updateConversation { it.copy(isSending = true) }
         scope.launch {
+            uploadQueue.awaitSettled(attachments.pendingUploadIds)
+            val settled = attachments.syncFrom(uploadQueue.uploads.value)
+            val resolved = settled.resolve(snapshot.input).trim()
+            if (resolved.isBlank()) {
+                val reason = settled.items.firstOrNull { it.error != null }?.error
+                    ?: "没有可发送的内容"
+                updateConversation { it.copy(attachments = settled, isSending = false) }
+                setError(reason)
+                return@launch
+            }
+            val failed = settled.items.filter {
+                it.referenced && it.status == AttachmentUpload.Status.Failed
+            }
+            if (failed.isNotEmpty()) {
+                showTransientError("图${failed.joinToString("、") { it.index.toString() }} 上传失败，已跳过")
+            }
+            val sendContent = snapshot.quote?.appendTo(
+                text = resolved,
+                targetUrl = "https://fishpi.cn/chat#${snapshot.quote.messageId}",
+                title = "私聊引用",
+            ) ?: resolved
             runCatching {
                 withContext(Dispatchers.IO) {
                     val sentViaRealtime = runCatching { conversationRealtime.send(sendContent) }.getOrDefault(false)
@@ -303,10 +337,13 @@ internal class PrivateChatController(
                     }
                 }
             }.onSuccess {
-                updateSessionPreview(peer, content, unread = 0)
+                uploadQueue.remove(settled.allUploadIds)
+                updateSessionPreview(peer, resolved, unread = 0)
                 updateConversation {
                     it.copy(
                         input = "",
+                        cursorPosition = 0,
+                        attachments = ComposerAttachments(),
                         inputResetKey = it.inputResetKey + 1,
                         quote = null,
                         emojiPanelOpen = false,
@@ -320,28 +357,56 @@ internal class PrivateChatController(
         }
     }
 
-    private fun uploadAttachment(path: String) {
-        if (_state.value.conversation.isUploadingAttachment) return
-        updateConversation { it.copy(isUploadingAttachment = true) }
-        scope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) { api.uploadChatFile(apiKey, path) }
-            }.onSuccess { file ->
-                appendUploadedFile(file)
-            }.onFailure {
-                showTransientError(it.message ?: "上传媒体失败")
-                updateConversation { state -> state.copy(isUploadingAttachment = false) }
-            }
+    private fun pickAttachment(uri: android.net.Uri, isVideo: Boolean) {
+        val current = _state.value.conversation
+        val uploadId = uploadQueue.enqueue(apiKey, uri, isVideo)
+        val (nextAttachments, nextInput, nextCursor) = current.attachments.append(
+            text = current.input,
+            cursor = current.cursorPosition,
+            uploadId = uploadId,
+            previewUri = uri,
+            isVideo = isVideo,
+        )
+        updateConversation {
+            it.copy(
+                input = nextInput,
+                cursorPosition = nextCursor,
+                cursorRequest = nextCursor,
+                attachments = nextAttachments,
+                inputResetKey = it.inputResetKey + 1,
+            )
         }
     }
 
-    private fun appendUploadedFile(file: UploadedChatFile) {
+    private fun removeAttachment(index: Int) {
+        val current = _state.value.conversation
+        val removed = current.attachments.items.firstOrNull { it.index == index } ?: return
+        val (nextAttachments, nextInput) = current.attachments.removeAt(current.input, index)
+        uploadQueue.remove(removed.uploadId)
         updateConversation {
             it.copy(
-                input = appendDraftBlock(it.input, file.markdown),
+                input = nextInput,
+                attachments = nextAttachments,
                 inputResetKey = it.inputResetKey + 1,
-                isUploadingAttachment = false,
             )
+        }
+    }
+
+    private fun retryAttachment(index: Int) {
+        val target = _state.value.conversation.attachments.items
+            .firstOrNull { it.index == index } ?: return
+        uploadQueue.retry(apiKey, target.uploadId)
+    }
+
+    private fun observeAttachmentUploads() {
+        scope.launch {
+            uploadQueue.uploads.collect { uploads ->
+                val current = _state.value.conversation.attachments
+                if (current.isEmpty) return@collect
+                val synced = current.syncFrom(uploads)
+                if (synced == current) return@collect
+                updateConversation { it.copy(attachments = synced) }
+            }
         }
     }
 

@@ -15,7 +15,9 @@ sealed interface ChatAction {
     data class ChangeCursor(val position: Int) : ChatAction
     data class SendText(val content: String) : ChatAction
     data class SetTopic(val topic: String) : ChatAction
-    data class UploadAttachment(val path: String) : ChatAction
+    data class PickAttachment(val uri: android.net.Uri, val isVideo: Boolean) : ChatAction
+    data class RemoveAttachment(val index: Int) : ChatAction
+    data class RetryAttachment(val index: Int) : ChatAction
 
     data class OpenUserProfile(val username: String) : ChatAction
     data class OpenImagePreview(val url: String) : ChatAction

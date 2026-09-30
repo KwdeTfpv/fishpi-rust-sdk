@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.feature.breezemoon
 
 import dev.fishpi.mobile.data.BreezemoonView
+import dev.fishpi.mobile.data.ComposerAttachments
 import dev.fishpi.mobile.data.EmojiGroupView
 import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.data.FishPiUser
@@ -12,7 +13,7 @@ internal data class BreezemoonState(
     val hasMore: Boolean = true,
     val isLoading: Boolean = false,
     val isSending: Boolean = false,
-    val isUploadingAttachment: Boolean = false,
+    val attachments: ComposerAttachments = ComposerAttachments(),
     val attachmentPanelOpen: Boolean = false,
     val composeInput: String = "",
     val error: String? = null,

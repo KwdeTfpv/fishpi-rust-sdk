@@ -1,5 +1,7 @@
 package dev.fishpi.mobile.feature.chat.model
 
+import dev.fishpi.mobile.data.ComposerAttachment
+
 data class ChatComposerState(
     val input: String = "",
     val cursorPosition: Int = 0,
@@ -10,17 +12,11 @@ data class ChatComposerState(
     val isLoadingEmojiPack: Boolean = false,
     val emojiPackError: String? = null,
     val quote: ChatQuoteUiModel? = null,
-    val pendingAttachments: List<ChatPendingAttachmentUiModel> = emptyList(),
+    val attachments: List<ComposerAttachment> = emptyList(),
     val mentionCandidates: List<ChatMentionCandidateUiModel> = emptyList(),
     val mentionAnchor: Int? = null,
     val mentionQuery: String? = null,
     val selectedEmojiGroupId: String = "",
-)
-
-data class ChatPendingAttachmentUiModel(
-    val url: String,
-    val markdown: String,
-    val type: String,
 )
 
 data class ChatMentionCandidateUiModel(

@@ -14,7 +14,11 @@ internal sealed interface PrivateChatAction {
     data class ApplyNotice(val notice: PrivateChatNotice, val notify: Boolean = false) : PrivateChatAction
     data class ChangeInput(val value: String) : PrivateChatAction
     data object SendText : PrivateChatAction
-    data class UploadAttachment(val path: String) : PrivateChatAction
+    data class PickAttachment(val uri: android.net.Uri, val isVideo: Boolean) : PrivateChatAction
+    data class RemoveAttachment(val index: Int) : PrivateChatAction
+    data class RetryAttachment(val index: Int) : PrivateChatAction
+    data class ChangeCursor(val position: Int) : PrivateChatAction
+    data object ClearCursorRequest : PrivateChatAction
     data object ToggleEmoji : PrivateChatAction
     data object CloseEmoji : PrivateChatAction
     data class SelectEmojiGroup(val groupId: String) : PrivateChatAction

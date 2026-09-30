@@ -139,7 +139,7 @@ import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.data.FishPiUser
 import dev.fishpi.mobile.data.MedalView
 import dev.fishpi.mobile.data.RedPacketOpenResult
-import dev.fishpi.mobile.data.UploadedChatFile
+import dev.fishpi.mobile.data.ComposerAttachment
 import dev.fishpi.mobile.feature.chat.model.ChatMentionCandidateUiModel
 import dev.fishpi.mobile.feature.chat.barrage.ChatBarrageComposerState
 import dev.fishpi.mobile.feature.chat.barrage.ChatBarrageUiModel
@@ -283,7 +283,8 @@ internal interface DefaultChatUiBridge {
     val gestureRedPacket: ChatRoomMessage?
     val redPacketResult: RedPacketOpenResult?
     val redPacketResultSource: ChatRoomMessage?
-    val pendingAttachments: List<UploadedChatFile>
+    val attachments: List<ComposerAttachment>
+    val composerCursorRequest: Int?
     val blockedMessagesOpen: Boolean
     val scrollToBottomRequest: Int
     val keepPositionAfterPrependCount: Int
@@ -307,7 +308,7 @@ internal interface DefaultChatUiBridge {
     fun showLinkPreview(url: String)
     fun replaceDraft(value: String, requestFocus: Boolean = false, resetInput: Boolean = false)
     fun setQuote(quote: ChatQuote?)
-    fun removePendingAttachment(file: UploadedChatFile)
+    fun clearCursorRequest()
     fun clearFocusInputRequest()
     fun openAttachmentPanel()
     fun openPluginManager()
@@ -420,7 +421,8 @@ private fun DefaultChatUiContent(
     val gestureRedPacket = bridge.gestureRedPacket
     val redPacketResult = bridge.redPacketResult
     val redPacketResultSource = bridge.redPacketResultSource
-    val pendingAttachments = bridge.pendingAttachments
+    val attachments = bridge.attachments
+    val composerCursorRequest = bridge.composerCursorRequest
     val blockedMessagesOpen = bridge.blockedMessagesOpen
     var chatListNearBottom by remember { mutableStateOf(true) }
     var chatListNearTop by remember { mutableStateOf(false) }
@@ -502,7 +504,7 @@ private fun DefaultChatUiContent(
     }
 
     val attachmentPicker = rememberChatAttachmentPicker(
-        onPickedPath = { path -> dispatch(ChatAction.UploadAttachment(path)) },
+        onPicked = { uri, isVideo -> dispatch(ChatAction.PickAttachment(uri, isVideo)) },
         onError = { message -> bridge.showError(message) },
     )
     val chatToolActions = listOf(
@@ -510,7 +512,7 @@ private fun DefaultChatUiContent(
             id = "gallery",
             label = "相册",
             icon = Icons.Rounded.PhotoLibrary,
-            enabled = !isUploadingAttachment,
+            enabled = true,
             iconTint = FishPiTheme.toolGallery,
             iconBackground = FishPiTheme.toolGallery.copy(alpha = 0.12f),
             onClick = {
@@ -522,7 +524,7 @@ private fun DefaultChatUiContent(
             id = "camera",
             label = "拍照",
             icon = Icons.Rounded.AddAPhoto,
-            enabled = !isUploadingAttachment,
+            enabled = true,
             iconTint = FishPiTheme.toolCamera,
             iconBackground = FishPiTheme.toolCamera.copy(alpha = 0.12f),
             onClick = {
@@ -534,7 +536,7 @@ private fun DefaultChatUiContent(
             id = "file",
             label = "文件",
             icon = Icons.Rounded.AttachFile,
-            enabled = !isUploadingAttachment,
+            enabled = true,
             iconTint = FishPiTheme.accent,
             iconBackground = FishPiTheme.accent.copy(alpha = 0.10f),
             onClick = {
@@ -546,7 +548,7 @@ private fun DefaultChatUiContent(
             id = "qr-scan",
             label = "扫码",
             icon = Icons.Rounded.QrCodeScanner,
-            enabled = !isUploadingAttachment,
+            enabled = true,
             iconTint = FishPiTheme.accent,
             iconBackground = FishPiTheme.accent.copy(alpha = 0.10f),
             onClick = {
@@ -561,7 +563,7 @@ private fun DefaultChatUiContent(
             id = "red-packet",
             label = "红包",
             icon = Icons.Rounded.CardGiftcard,
-            enabled = !isUploadingAttachment,
+            enabled = true,
             iconTint = FishPiTheme.toolRedPacket,
             iconBackground = FishPiTheme.toolRedPacket.copy(alpha = 0.12f),
             onClick = {
@@ -572,7 +574,7 @@ private fun DefaultChatUiContent(
             id = "barrager",
             label = "弹幕",
             icon = Icons.Rounded.AlternateEmail,
-            enabled = !isUploadingAttachment,
+            enabled = true,
             iconTint = FishPiTheme.accent,
             iconBackground = FishPiTheme.accent.copy(alpha = 0.10f),
             onClick = {
@@ -937,7 +939,7 @@ private fun DefaultChatUiContent(
             focusInputAfterQuote = focusInputAfterQuote,
             inputResetKey = inputResetKey,
             isUploadingAttachment = isUploadingAttachment,
-            pendingAttachments = pendingAttachments,
+            attachments = attachments,
             atCandidates = atCandidates,
             sendOnEnter = chatFilters.sendOnEnter,
             emojiPanelOpen = emojiPanelOpen,
@@ -953,8 +955,11 @@ private fun DefaultChatUiContent(
             currentTopicLabel = chatTopic.trim().takeIf { it.isNotBlank() && it != "暂无" }?.let { "#$it#" }.orEmpty(),
             onInputChange = { dispatch(ChatAction.ChangeInput(it)) },
             onCancelQuote = { bridge.setQuote(null) },
-            onRemoveAttachment = { file ->
-                bridge.removePendingAttachment(file)
+            onRemoveAttachment = { attachment ->
+                dispatch(ChatAction.RemoveAttachment(attachment.index))
+            },
+            onRetryAttachment = { attachment ->
+                dispatch(ChatAction.RetryAttachment(attachment.index))
             },
             onInputFocused = { bridge.clearFocusInputRequest() },
             onOpenTools = { bridge.openAttachmentPanel() },
@@ -972,12 +977,18 @@ private fun DefaultChatUiContent(
             onPickAtUser = { username ->
                 dispatch(ChatAction.PickMention(username))
             },
-            onCursorPositionChange = { inputCursorPosition = it },
-            inputCursorPositionRequest = inputCursorPositionRequest,
-            onInputCursorPositionRequestHandled = { inputCursorPositionRequest = null },
+            onCursorPositionChange = {
+                inputCursorPosition = it
+                dispatch(ChatAction.ChangeCursor(it))
+            },
+            inputCursorPositionRequest = composerCursorRequest ?: inputCursorPositionRequest,
+            onInputCursorPositionRequestHandled = {
+                inputCursorPositionRequest = null
+                bridge.clearCursorRequest()
+            },
             onSend = { sendText ->
                 val content = normalizeTopicReferenceDraft(sendText).trim()
-                if (content.isBlank() || isSending) {
+                if (isSending || (content.isBlank() && attachments.none { it.referenced })) {
                     return@ChatInputBar
                 }
                 dispatch(ChatAction.SendText(content))

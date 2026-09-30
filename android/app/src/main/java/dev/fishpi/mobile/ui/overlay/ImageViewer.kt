@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import androidx.core.net.toUri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -506,12 +507,35 @@ private fun clampOffset(offset: Offset, scale: Float, width: Float, height: Floa
     )
 }
 
-private fun Context.saveImageToPictures(imageUrl: String): Uri {
-    val extension = imageUrl.substringBefore('?')
+private fun Context.openImageStream(source: String): java.io.InputStream {
+    val scheme = source.substringBefore(':').lowercase()
+    return if (scheme == "content" || scheme == "file") {
+        requireNotNull(contentResolver.openInputStream(source.toUri())) { "无法读取图片" }
+    } else {
+        URL(source).openStream()
+    }
+}
+
+private fun imageExtensionOf(source: String, context: Context): String {
+    val scheme = source.substringBefore(':').lowercase()
+    if (scheme == "content" || scheme == "file") {
+        val mime = context.contentResolver.getType(source.toUri()).orEmpty().lowercase()
+        return when (mime) {
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            "image/gif" -> "gif"
+            else -> "jpg"
+        }
+    }
+    return source.substringBefore('?')
         .substringAfterLast('.', "jpg")
         .lowercase()
         .takeIf { it in setOf("jpg", "jpeg", "png", "webp", "gif") }
         ?: "jpg"
+}
+
+private fun Context.saveImageToPictures(imageUrl: String): Uri {
+    val extension = imageExtensionOf(imageUrl, this)
     val mimeType = when (extension) {
         "png" -> "image/png"
         "webp" -> "image/webp"
@@ -531,7 +555,7 @@ private fun Context.saveImageToPictures(imageUrl: String): Uri {
         "无法创建图片文件"
     }
     try {
-        URL(imageUrl).openStream().use { input ->
+        openImageStream(imageUrl).use { input ->
             resolver.openOutputStream(uri).use { output ->
                 requireNotNull(output) { "无法写入图片文件" }
                 input.copyTo(output)
@@ -551,14 +575,10 @@ private fun Context.saveImageToPictures(imageUrl: String): Uri {
 
 /** 下载到 cacheDir 并通过 FileProvider 生成可分享的 content:// URI。 */
 private fun Context.cacheImageForShare(imageUrl: String): Uri {
-    val extension = imageUrl.substringBefore('?')
-        .substringAfterLast('.', "jpg")
-        .lowercase()
-        .takeIf { it in setOf("jpg", "jpeg", "png", "webp", "gif") }
-        ?: "jpg"
+    val extension = imageExtensionOf(imageUrl, this)
     val dir = File(cacheDir, "shared-images").apply { mkdirs() }
     val file = File(dir, "fishpi-${System.currentTimeMillis()}.$extension")
-    URL(imageUrl).openStream().use { input ->
+    openImageStream(imageUrl).use { input ->
         file.outputStream().use { output -> input.copyTo(output) }
     }
     return FileProvider.getUriForFile(this, "$packageName.fileprovider", file)

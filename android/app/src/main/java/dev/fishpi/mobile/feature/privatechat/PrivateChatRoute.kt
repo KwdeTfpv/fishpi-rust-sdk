@@ -7,6 +7,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import dev.fishpi.mobile.AppSession
 import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.data.PrivateChatNotice
@@ -26,8 +27,10 @@ internal fun PrivateChatRoute(
     onJumpHandled: () -> Unit = {},
     listHeader: @Composable (ColumnScope.() -> Unit)? = null,
 ) {
+    val context = LocalContext.current
     val controller = remember(session.apiKey, session.user.userName) {
         PrivateChatController(
+            context = context,
             apiKey = session.apiKey,
             selfUsername = session.user.userName,
         )

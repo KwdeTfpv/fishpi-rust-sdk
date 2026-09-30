@@ -11,7 +11,9 @@ internal sealed interface BreezemoonAction {
     data object ToggleAttachmentPanel : BreezemoonAction
     data object RequestGalleryAttachment : BreezemoonAction
     data object RequestCameraAttachment : BreezemoonAction
-    data class UploadAttachment(val path: String) : BreezemoonAction
+    data class PickAttachment(val uri: android.net.Uri, val isVideo: Boolean) : BreezemoonAction
+    data class RemoveAttachment(val index: Int) : BreezemoonAction
+    data class RetryAttachment(val index: Int) : BreezemoonAction
     data object ToggleEmoji : BreezemoonAction
     data object CloseEmoji : BreezemoonAction
     data class SelectEmojiGroup(val groupId: String) : BreezemoonAction

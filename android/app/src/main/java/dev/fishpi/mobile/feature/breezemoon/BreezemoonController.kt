@@ -1,5 +1,9 @@
 package dev.fishpi.mobile.feature.breezemoon
 
+import android.content.Context
+import dev.fishpi.mobile.data.AttachmentUpload
+import dev.fishpi.mobile.data.AttachmentUploadQueue
+import dev.fishpi.mobile.data.ComposerAttachments
 import dev.fishpi.mobile.data.FishPiApiClient
 import dev.fishpi.mobile.utils.appendDraftBlock
 import kotlinx.coroutines.CoroutineScope
@@ -17,6 +21,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
 
 internal class BreezemoonController(
+    context: Context,
     private val apiKey: String,
     private val api: FishPiApiClient = FishPiApiClient.shared,
 ) {
@@ -26,6 +31,12 @@ internal class BreezemoonController(
 
     private val effects = Channel<BreezemoonEffect>(Channel.BUFFERED)
     val effect = effects.receiveAsFlow()
+
+    private val uploadQueue = AttachmentUploadQueue.shared(context)
+
+    init {
+        observeAttachmentUploads()
+    }
 
     fun dispatch(action: BreezemoonAction) {
         when (action) {
@@ -41,7 +52,9 @@ internal class BreezemoonController(
                 }
             }
             BreezemoonAction.Publish -> publish()
-            is BreezemoonAction.ChangeInput -> _state.update { it.copy(composeInput = action.value) }
+            is BreezemoonAction.ChangeInput -> _state.update {
+                it.copy(composeInput = action.value, attachments = it.attachments.syncReferences(action.value))
+            }
             BreezemoonAction.OpenAttachmentPanel -> _state.update { it.copy(attachmentPanelOpen = true, emojiPanelOpen = false) }
             BreezemoonAction.CloseAttachmentPanel -> _state.update { it.copy(attachmentPanelOpen = false) }
             BreezemoonAction.ToggleAttachmentPanel -> _state.update { it.copy(attachmentPanelOpen = !it.attachmentPanelOpen, emojiPanelOpen = false) }
@@ -53,7 +66,9 @@ internal class BreezemoonController(
                 _state.update { it.copy(attachmentPanelOpen = false) }
                 emit(BreezemoonEffect.OpenCameraPicker)
             }
-            is BreezemoonAction.UploadAttachment -> uploadAndInsert(action.path)
+            is BreezemoonAction.PickAttachment -> pickAttachment(action.uri, action.isVideo)
+            is BreezemoonAction.RemoveAttachment -> removeAttachment(action.index)
+            is BreezemoonAction.RetryAttachment -> retryAttachment(action.index)
             BreezemoonAction.ToggleEmoji -> toggleEmoji()
             BreezemoonAction.CloseEmoji -> _state.update { it.copy(emojiPanelOpen = false) }
             is BreezemoonAction.SelectEmojiGroup -> loadEmojiGroup(action.groupId)
@@ -92,38 +107,95 @@ internal class BreezemoonController(
         }
     }
 
-    private fun uploadAndInsert(path: String) {
-        if (_state.value.isUploadingAttachment) return
-        _state.update { it.copy(isUploadingAttachment = true, error = null) }
+    private fun pickAttachment(uri: android.net.Uri, isVideo: Boolean) {
+        val current = _state.value
+        val uploadId = uploadQueue.enqueue(apiKey, uri, isVideo)
+        val (nextAttachments, nextInput, _) = current.attachments.append(
+            text = current.composeInput,
+            cursor = current.composeInput.length,
+            uploadId = uploadId,
+            previewUri = uri,
+            isVideo = isVideo,
+        )
+        _state.update {
+            it.copy(composeInput = nextInput, attachments = nextAttachments, error = null)
+        }
+    }
+
+    private fun removeAttachment(index: Int) {
+        val current = _state.value
+        val removed = current.attachments.items.firstOrNull { it.index == index } ?: return
+        val (nextAttachments, nextInput) = current.attachments.removeAt(current.composeInput, index)
+        uploadQueue.remove(removed.uploadId)
+        _state.update { it.copy(composeInput = nextInput, attachments = nextAttachments) }
+    }
+
+    private fun retryAttachment(index: Int) {
+        val target = _state.value.attachments.items.firstOrNull { it.index == index } ?: return
+        uploadQueue.retry(apiKey, target.uploadId)
+    }
+
+    private fun observeAttachmentUploads() {
         scope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) { api.uploadChatFile(apiKey, path) }
-            }.onSuccess { uploaded ->
-                _state.update {
-                    it.copy(
-                        composeInput = appendDraftBlock(it.composeInput, uploaded.markdown),
-                        isUploadingAttachment = false,
-                    )
-                }
-            }.onFailure { throwable ->
-                _state.update { it.copy(isUploadingAttachment = false, error = throwable.message ?: "上传媒体失败") }
+            uploadQueue.uploads.collect { uploads ->
+                val current = _state.value.attachments
+                if (current.isEmpty) return@collect
+                val synced = current.syncFrom(uploads)
+                if (synced == current) return@collect
+                _state.update { it.copy(attachments = synced) }
             }
         }
     }
 
     private fun publish() {
-        val text = _state.value.composeInput.trim()
-        if (text.isBlank() || _state.value.isSending) return
+        val snapshot = _state.value
+        val raw = snapshot.composeInput
+        val attachments = snapshot.attachments.syncReferences(raw)
+        if (snapshot.isSending) return
+        if (raw.isBlank() && !attachments.hasSendableAttachment) return
         _state.update { it.copy(isSending = true, error = null) }
         scope.launch {
+            uploadQueue.awaitSettled(attachments.pendingUploadIds)
+            val settled = attachments.syncFrom(uploadQueue.uploads.value)
+            val text = settled.resolve(raw).trim()
+            if (text.isBlank()) {
+                val reason = settled.items.firstOrNull { it.error != null }?.error
+                    ?: "没有可发布的内容"
+                _state.update { it.copy(attachments = settled, isSending = false, error = reason) }
+                return@launch
+            }
+            val failed = settled.items.filter {
+                it.referenced && it.status == AttachmentUpload.Status.Failed
+            }
+            if (failed.isNotEmpty()) {
+                emit(
+                    BreezemoonEffect.ShowError(
+                        "图" + failed.joinToString("、") { it.index.toString() } + " 上传失败，已跳过",
+                    ),
+                )
+            }
             runCatching {
                 withContext(Dispatchers.IO) { api.sendBreezemoon(apiKey, text) }
             }.onSuccess {
-                _state.update { it.copy(composeInput = "", isSending = false, shouldScrollToBottom = true) }
+                uploadQueue.remove(settled.allUploadIds)
+                _state.update {
+                    it.copy(
+                        composeInput = "",
+                        attachments = ComposerAttachments(),
+                        isSending = false,
+                        shouldScrollToBottom = true,
+                    )
+                }
                 emit(BreezemoonEffect.ShowMessage("发布成功"))
                 load(page = 1, append = false)
             }.onFailure { throwable ->
-                _state.update { it.copy(isSending = false, error = throwable.message ?: "发布清风明月失败") }
+                _state.update {
+                    it.copy(
+                        attachments = settled,
+                        isSending = false,
+                        error = throwable.message ?: "发布清风明月失败",
+                    )
+                }
             }
         }
     }

@@ -45,7 +45,9 @@ internal fun ArticleRoute(
             currentUsername = session.user.userName,
         )
     }
-    val publishController = remember(session.apiKey) { ArticlePublishController(apiKey = session.apiKey) }
+    val publishController = remember(session.apiKey) {
+        ArticlePublishController(context = context, apiKey = session.apiKey)
+    }
     val state by controller.state.collectAsState()
     val publishState by publishController.state.collectAsState()
     var handledJumpRequest by remember { mutableStateOf(-1) }
@@ -55,15 +57,15 @@ internal fun ArticleRoute(
         state.selected == null
 
     val commentAttachmentPicker = rememberChatAttachmentPicker(
-        onPickedPath = { path -> controller.dispatch(ArticleAction.UploadCommentImage(path)) },
+        onPicked = { uri, isVideo -> controller.dispatch(ArticleAction.PickCommentImageUri(uri, isVideo)) },
         onError = { message -> controller.dispatch(ArticleAction.ShowPickerError(message)) },
     )
     val publishContentImagePicker = rememberChatAttachmentPicker(
-        onPickedPath = { path -> publishController.dispatch(ArticlePublishAction.UploadContentImage(path)) },
+        onPicked = { uri, isVideo -> publishController.dispatch(ArticlePublishAction.PickContentImageUri(uri, isVideo)) },
         onError = { message -> publishController.dispatch(ArticlePublishAction.ShowPickerError(message)) },
     )
     val publishRewardImagePicker = rememberChatAttachmentPicker(
-        onPickedPath = { path -> publishController.dispatch(ArticlePublishAction.UploadRewardImage(path)) },
+        onPicked = { uri, isVideo -> publishController.dispatch(ArticlePublishAction.PickRewardImageUri(uri, isVideo)) },
         onError = { message -> publishController.dispatch(ArticlePublishAction.ShowPickerError(message)) },
     )
 

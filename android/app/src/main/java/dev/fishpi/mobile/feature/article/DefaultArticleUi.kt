@@ -148,6 +148,7 @@ import dev.fishpi.mobile.data.ArticleDetailView
 import dev.fishpi.mobile.data.ArticleDraftView
 import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.data.EmojiGroupView
+import dev.fishpi.mobile.data.ComposerAttachment
 import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.feature.article.model.ArticleFilterUiModel
 import dev.fishpi.mobile.feature.article.publish.ArticlePublishAction
@@ -324,7 +325,10 @@ internal fun DefaultArticleUi(
             selectedEmojiGroupId = state.selectedEmojiGroupId,
             isLoadingEmojiPack = state.isLoadingEmojiPack,
             emojiPackError = state.emojiPackError,
-            isUploadingCommentImage = state.isUploadingCommentImage,
+            isUploadingCommentImage = state.commentAttachments.hasPendingUpload,
+            commentAttachments = state.commentAttachments.items,
+            onRemoveCommentAttachment = { dispatch(ArticleAction.RemoveCommentImage(it.index)) },
+            onRetryCommentAttachment = { dispatch(ArticleAction.RetryCommentImage(it.index)) },
             onToggleEmojiPanel = { dispatch(ArticleAction.ToggleEmoji) },
             onDismissEmojiPanel = { dispatch(ArticleAction.DismissEmoji) },
             onPickEmojiGroup = { dispatch(ArticleAction.PickEmojiGroup(it)) },
@@ -1198,6 +1202,9 @@ private fun ArticleDetailPage(
     isLoadingEmojiPack: Boolean,
     emojiPackError: String?,
     isUploadingCommentImage: Boolean,
+    commentAttachments: List<ComposerAttachment>,
+    onRemoveCommentAttachment: (ComposerAttachment) -> Unit,
+    onRetryCommentAttachment: (ComposerAttachment) -> Unit,
     onToggleEmojiPanel: () -> Unit,
     onDismissEmojiPanel: () -> Unit,
     onPickEmojiGroup: (String) -> Unit,
@@ -1450,6 +1457,9 @@ private fun ArticleDetailPage(
                     isLoadingEmojiPack = isLoadingEmojiPack,
                     emojiPackError = emojiPackError,
                     isUploadingCommentImage = isUploadingCommentImage,
+                    commentAttachments = commentAttachments,
+                    onRemoveCommentAttachment = onRemoveCommentAttachment,
+                    onRetryCommentAttachment = onRetryCommentAttachment,
                     onToggleEmojiPanel = onToggleEmojiPanel,
                     onDismissEmojiPanel = onDismissEmojiPanel,
                     onPickEmojiGroup = onPickEmojiGroup,
@@ -1880,6 +1890,9 @@ private fun ArticleReaderBottomBar(
     isLoadingEmojiPack: Boolean,
     emojiPackError: String?,
     isUploadingCommentImage: Boolean,
+    commentAttachments: List<ComposerAttachment>,
+    onRemoveCommentAttachment: (ComposerAttachment) -> Unit,
+    onRetryCommentAttachment: (ComposerAttachment) -> Unit,
     onToggleEmojiPanel: () -> Unit,
     onDismissEmojiPanel: () -> Unit,
     onPickEmojiGroup: (String) -> Unit,
@@ -1987,6 +2000,9 @@ private fun ArticleReaderBottomBar(
                 },
                 onSend = onSend,
                 isUploadingCommentImage = isUploadingCommentImage,
+                commentAttachments = commentAttachments,
+                onRemoveCommentAttachment = onRemoveCommentAttachment,
+                onRetryCommentAttachment = onRetryCommentAttachment,
                 onToggleEmojiPanel = onToggleEmojiPanel,
                 onPickCommentImage = onPickCommentImage,
                 onCaptureCommentImage = onCaptureCommentImage,
@@ -2106,6 +2122,9 @@ private fun ArticleCompactCommentInput(
     onValueChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
     isUploadingCommentImage: Boolean,
+    commentAttachments: List<ComposerAttachment>,
+    onRemoveCommentAttachment: (ComposerAttachment) -> Unit,
+    onRetryCommentAttachment: (ComposerAttachment) -> Unit,
     onToggleEmojiPanel: () -> Unit,
     onPickCommentImage: () -> Unit,
     onCaptureCommentImage: () -> Unit,
@@ -2139,8 +2158,16 @@ private fun ArticleCompactCommentInput(
         }
     }
 
-    Row(
+    Column(
         modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+    ComposerAttachmentStrip(
+        attachments = commentAttachments,
+        onRemove = onRemoveCommentAttachment,
+        onRetry = onRetryCommentAttachment,
+    )
+    Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
@@ -2215,11 +2242,13 @@ private fun ArticleCompactCommentInput(
             ArticleCommentToolButton(
                 icon = Icons.AutoMirrored.Rounded.Send,
                 contentDescription = "发送评论",
-                enabled = !isSending && value.text.isNotBlank(),
+                enabled = !isSending &&
+                    (value.text.isNotBlank() || commentAttachments.any { it.referenced }),
                 prominent = true,
                 onClick = onSend,
             )
         }
+    }
     }
 }
 

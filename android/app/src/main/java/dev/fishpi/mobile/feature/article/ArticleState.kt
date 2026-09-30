@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.feature.article
 
 import dev.fishpi.mobile.data.ArticleDetailView
+import dev.fishpi.mobile.data.ComposerAttachments
 import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.data.EmojiGroupView
 import dev.fishpi.mobile.data.EmojiItemView
@@ -37,7 +38,7 @@ internal data class ArticleState(
     val selectedEmojiGroupId: String = "",
     val isLoadingEmojiPack: Boolean = false,
     val emojiPackError: String? = null,
-    val isUploadingCommentImage: Boolean = false,
+    val commentAttachments: ComposerAttachments = ComposerAttachments(),
     val overlay: ArticleOverlayState = ArticleOverlayState.None,
     val publishOpen: Boolean = false,
     val articleHeat: Long? = null,

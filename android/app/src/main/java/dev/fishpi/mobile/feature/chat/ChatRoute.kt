@@ -12,7 +12,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.data.ChatFilterConfig
-import dev.fishpi.mobile.data.UploadedChatFile
 import dev.fishpi.mobile.feature.chat.model.ChatMentionCandidateUiModel
 import dev.fishpi.mobile.shared.message.ChatQuote
 import dev.fishpi.mobile.data.ChatRoomMessage
@@ -111,7 +110,7 @@ internal fun ChatRoute(
                 override val redPacketMoneyError get() = legacyInteractionState.redPacketMoneyError
                 override val redPacketCountError get() = legacyInteractionState.redPacketCountError
                 override val redPacketReceiversError get() = legacyInteractionState.redPacketReceiversError
-                override val isUploadingAttachment get() = legacyComposerState.isUploadingAttachment
+                override val isUploadingAttachment get() = legacyComposerState.attachments.hasPendingUpload
                 override val atCandidates get() = legacyComposerState.atCandidates.map { candidate ->
                     ChatMentionCandidateUiModel(
                         username = candidate.userName,
@@ -122,7 +121,8 @@ internal fun ChatRoute(
                 override val gestureRedPacket get() = legacyInteractionState.gestureRedPacket
                 override val redPacketResult get() = legacyInteractionState.redPacketResult
                 override val redPacketResultSource get() = legacyInteractionState.redPacketResultSource
-                override val pendingAttachments get() = legacyComposerState.pendingAttachments
+                override val attachments get() = legacyComposerState.attachments.items
+                override val composerCursorRequest get() = legacyComposerState.cursorRequest
                 override val blockedMessagesOpen get() = blockedMessagesOpen
                 override val scrollToBottomRequest get() = controllerState.scrollToBottomRequest
                 override val keepPositionAfterPrependCount get() = controllerState.keepPositionAfterPrependCount
@@ -163,7 +163,7 @@ internal fun ChatRoute(
                 }
                 override fun replaceDraft(value: String, requestFocus: Boolean, resetInput: Boolean) = chatController.replaceDraft(value, requestFocus, resetInput)
                 override fun setQuote(quote: ChatQuote?) = chatController.setQuote(quote)
-                override fun removePendingAttachment(file: UploadedChatFile) = chatController.removePendingAttachment(file)
+                override fun clearCursorRequest() = chatController.clearCursorRequest()
                 override fun clearFocusInputRequest() = chatController.clearFocusInputRequest()
                 override fun openAttachmentPanel() = chatController.openAttachmentPanel()
                 override fun openPluginManager() {

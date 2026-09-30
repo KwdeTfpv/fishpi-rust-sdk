@@ -6,6 +6,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import dev.fishpi.mobile.AppSession
 import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.ui.media.rememberChatAttachmentPicker
@@ -15,10 +16,13 @@ internal fun BreezemoonRoute(
     session: AppSession,
     active: Boolean,
 ) {
-    val controller = remember(session.apiKey) { BreezemoonController(apiKey = session.apiKey) }
+    val context = LocalContext.current
+    val controller = remember(session.apiKey) {
+        BreezemoonController(context = context, apiKey = session.apiKey)
+    }
     val state by controller.state.collectAsState()
     val attachmentPicker = rememberChatAttachmentPicker(
-        onPickedPath = { controller.dispatch(BreezemoonAction.UploadAttachment(it)) },
+        onPicked = { uri, isVideo -> controller.dispatch(BreezemoonAction.PickAttachment(uri, isVideo)) },
         onError = { controller.dispatch(BreezemoonAction.SetError(it)) },
     )
 

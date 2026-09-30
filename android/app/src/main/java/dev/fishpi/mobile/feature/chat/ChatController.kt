@@ -17,7 +17,9 @@ import dev.fishpi.mobile.data.FishPiApiClient
 import dev.fishpi.mobile.data.RedPacketOpenResult
 import dev.fishpi.mobile.data.RedPacketStatusUpdate
 import dev.fishpi.mobile.data.SessionStore
-import dev.fishpi.mobile.data.UploadedChatFile
+import dev.fishpi.mobile.data.AttachmentUpload
+import dev.fishpi.mobile.data.AttachmentUploadQueue
+import dev.fishpi.mobile.data.ComposerAttachments
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.feature.chat.render.ChatRenderModel
 import dev.fishpi.mobile.feature.chat.render.ChatRenderModelReducer
@@ -26,7 +28,6 @@ import dev.fishpi.mobile.feature.chat.model.ChatComposerState
 import dev.fishpi.mobile.feature.chat.model.ChatConnectionState
 import dev.fishpi.mobile.feature.chat.model.ChatConnectionStatus
 import dev.fishpi.mobile.feature.chat.model.ChatMentionCandidateUiModel
-import dev.fishpi.mobile.feature.chat.model.ChatPendingAttachmentUiModel
 import dev.fishpi.mobile.feature.redpacket.DefaultRedPacketMessage
 import dev.fishpi.mobile.feature.redpacket.RedPacketFormState
 import dev.fishpi.mobile.feature.redpacket.RedPacketFormValidator
@@ -38,7 +39,6 @@ import dev.fishpi.mobile.plugin.PluginManager
 import dev.fishpi.mobile.plugin.PluginMenuAction
 import dev.fishpi.mobile.plugin.PluginToolbarEntry
 import dev.fishpi.mobile.utils.appendDraftBlock
-import dev.fishpi.mobile.utils.removeDraftBlock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -66,6 +66,7 @@ internal class ChatController(
     private val requestedHistoryPages = mutableSetOf<Int>()
     private val pluginNotifiedIds = mutableSetOf<String>()
     private val store = SessionStore(context.applicationContext)
+    private val uploadQueue = AttachmentUploadQueue.shared(context)
     private var livenessPollingJob: Job? = null
     private val pluginManager = PluginManager.init(context).also {
         it.apiKey = apiKey
@@ -116,6 +117,7 @@ internal class ChatController(
 
     init {
         startLivenessPolling()
+        observeAttachmentUploads()
     }
 
     override fun dispatch(action: ChatAction) {
@@ -154,9 +156,12 @@ internal class ChatController(
                 )
             }
             is ChatAction.ChangeInput -> replaceDraft(action.value)
+            is ChatAction.ChangeCursor -> changeCursor(action.position)
             is ChatAction.SendText -> sendText(action.content)
             is ChatAction.SetTopic -> setTopic(action.topic)
-            is ChatAction.UploadAttachment -> uploadAttachment(action.path)
+            is ChatAction.PickAttachment -> pickAttachment(action.uri, action.isVideo)
+            is ChatAction.RemoveAttachment -> removeAttachment(action.index)
+            is ChatAction.RetryAttachment -> retryAttachment(action.index)
             ChatAction.ToggleEmoji -> toggleEmoji()
             ChatAction.OpenEmojiPanel -> openEmojiPanel()
             ChatAction.CloseEmojiPanel -> closeEmojiPanel()
@@ -352,15 +357,13 @@ internal class ChatController(
         }
     }
 
-    fun removePendingAttachment(file: UploadedChatFile) {
-        val nextInput = removeDraftBlock(_legacyComposerState.value.input, file.markdown)
-        _legacyComposerState.update {
-            it.copy(
-                input = nextInput,
-                pendingAttachments = it.pendingAttachments.filterNot { item -> item.markdown == file.markdown },
-            )
-        }
-        syncComposerFromLegacy()
+    fun changeCursor(position: Int) {
+        _legacyComposerState.update { it.copy(cursorPosition = position) }
+    }
+
+    fun clearCursorRequest() {
+        if (_legacyComposerState.value.cursorRequest == null) return
+        _legacyComposerState.update { it.copy(cursorRequest = null) }
     }
 
     fun clearFocusInputRequest() {
@@ -792,20 +795,21 @@ internal class ChatController(
     }
 
     private fun sendText(content: String) {
-        val normalizedContent = content.trim()
         val composer = _legacyComposerState.value
-        if (normalizedContent.isBlank() || composer.isSending) {
-            return
-        }
-        val rawContent = composer.quote?.appendTo(normalizedContent) ?: normalizedContent
+        val attachments = composer.attachments.syncReferences(content)
+        if (content.isBlank() && !attachments.hasSendableAttachment) return
+        if (composer.isSending) return
+
         val restoreInput = composer.input
         val restoreQuote = composer.quote
-        val restoreAttachments = composer.pendingAttachments
+        val restoreAttachments = attachments
+        val pendingIds = attachments.pendingUploadIds
         _legacyComposerState.update {
             it.copy(
                 input = "",
+                cursorPosition = 0,
                 quote = null,
-                pendingAttachments = emptyList(),
+                attachments = ComposerAttachments(),
                 emojiPanelOpen = false,
                 inputResetKey = it.inputResetKey + 1,
                 isSending = true,
@@ -813,6 +817,36 @@ internal class ChatController(
         }
         updateComposer { it.copy(isSending = true) }
         scope.launch {
+            uploadQueue.awaitSettled(pendingIds)
+            val settled = restoreAttachments.syncFrom(uploadQueue.uploads.value)
+            val failed = settled.items.filter {
+                it.referenced && it.status == AttachmentUpload.Status.Failed
+            }
+            val resolved = settled.resolve(content).trim()
+            if (resolved.isBlank()) {
+                val reason = failed.firstOrNull()?.error ?: "没有可发送的内容"
+                _legacyComposerState.update {
+                    it.copy(
+                        input = restoreInput,
+                        quote = restoreQuote,
+                        attachments = settled,
+                        inputResetKey = it.inputResetKey + 1,
+                        isSending = false,
+                    )
+                }
+                updateComposer { it.copy(isSending = false) }
+                syncComposerFromLegacy()
+                emitEffect(ChatEffect.ShowError(reason))
+                return@launch
+            }
+            if (failed.isNotEmpty()) {
+                emitEffect(
+                    ChatEffect.ShowError(
+                        "图${failed.joinToString("、") { it.index.toString() }} 上传失败，已跳过",
+                    ),
+                )
+            }
+            val rawContent = restoreQuote?.appendTo(resolved) ?: resolved
             val sendContent = withContext(Dispatchers.Default) {
                 pluginManager.applySendHook(rawContent)
             }
@@ -822,6 +856,7 @@ internal class ChatController(
                     api.sendChatRoomMessage(apiKey, sendContent)
                 }
             }.onSuccess {
+                uploadQueue.remove(settled.allUploadIds)
                 _legacyComposerState.update { it.copy(isSending = false) }
                 _state.update { it.copy(composer = ChatComposerState()) }
             }.onFailure { throwable ->
@@ -831,7 +866,7 @@ internal class ChatController(
                     it.copy(
                         input = restoreInput,
                         quote = restoreQuote,
-                        pendingAttachments = restoreAttachments,
+                        attachments = settled,
                         inputResetKey = it.inputResetKey + 1,
                         error = reason,
                         isSending = false,
@@ -997,35 +1032,67 @@ internal class ChatController(
         }
     }
 
-    private fun uploadAttachment(path: String) {
-        if (_legacyComposerState.value.isUploadingAttachment) return
-        _legacyComposerState.update { it.copy(isUploadingAttachment = true) }
-        updateComposer { it.copy(isUploadingAttachment = true) }
+    private fun pickAttachment(uri: android.net.Uri, isVideo: Boolean) {
+        val current = _legacyComposerState.value
+        val uploadId = uploadQueue.enqueue(apiKey, uri, isVideo)
+        val (nextAttachments, nextInput, nextCursor) = current.attachments.append(
+            text = current.input,
+            cursor = current.cursorPosition,
+            uploadId = uploadId,
+            previewUri = uri,
+            isVideo = isVideo,
+        )
+        _legacyComposerState.update {
+            it.copy(
+                input = nextInput,
+                cursorPosition = nextCursor,
+                cursorRequest = nextCursor,
+                attachments = nextAttachments,
+                focusInputAfterQuote = true,
+                inputResetKey = it.inputResetKey + 1,
+            )
+        }
+        syncComposerFromLegacy()
+    }
+
+    private fun removeAttachment(index: Int) {
+        val current = _legacyComposerState.value
+        val removed = current.attachments.items.firstOrNull { it.index == index } ?: return
+        val (nextAttachments, nextInput) = current.attachments.removeAt(current.input, index)
+        uploadQueue.remove(removed.uploadId)
+        _legacyComposerState.update {
+            it.copy(
+                input = nextInput,
+                attachments = nextAttachments,
+                inputResetKey = it.inputResetKey + 1,
+            )
+        }
+        syncComposerFromLegacy()
+    }
+
+    private fun retryAttachment(index: Int) {
+        val target = _legacyComposerState.value.attachments.items.firstOrNull { it.index == index } ?: return
+        uploadQueue.retry(apiKey, target.uploadId)
+    }
+
+    private fun observeAttachmentUploads() {
         scope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    api.uploadChatFile(apiKey, path)
-                }
-            }.onSuccess { file ->
-                val nextInput = appendDraftBlock(_legacyComposerState.value.input, file.markdown)
-                _legacyComposerState.update {
-                    it.copy(
-                        input = nextInput,
-                        pendingAttachments = (it.pendingAttachments + file).distinctBy { item -> item.markdown },
-                        focusInputAfterQuote = true,
-                        isUploadingAttachment = false,
-                    )
-                }
+            uploadQueue.uploads.collect { uploads ->
+                val current = _legacyComposerState.value
+                if (current.attachments.isEmpty) return@collect
+                val synced = current.attachments.syncFrom(uploads)
+                if (synced == current.attachments) return@collect
+                _legacyComposerState.update { it.copy(attachments = synced) }
                 syncComposerFromLegacy()
-            }.onFailure { throwable ->
-                val reason = throwable.message ?: "上传媒体失败"
-                _legacyComposerState.update { it.copy(isUploadingAttachment = false) }
-                _state.update {
-                    it.copy(
-                        composer = it.composer.copy(isUploadingAttachment = false),
-                    )
-                }
-                emitEffect(ChatEffect.ShowError(reason))
+                synced.items
+                    .filter { it.status == AttachmentUpload.Status.Failed && it.error != null }
+                    .forEach { failed ->
+                        if (current.attachments.items.firstOrNull { it.index == failed.index }?.status
+                            != AttachmentUpload.Status.Failed
+                        ) {
+                            emitEffect(ChatEffect.ShowError("图${failed.index} 上传失败：${failed.error}"))
+                        }
+                    }
             }
         }
     }
@@ -1411,6 +1478,7 @@ internal class ChatController(
         _legacyComposerState.update {
             it.copy(
                 input = value,
+                attachments = it.attachments.syncReferences(value),
                 focusInputAfterQuote = if (requestFocus) true else it.focusInputAfterQuote,
                 inputResetKey = if (resetInput) it.inputResetKey + 1 else it.inputResetKey,
             )
@@ -1429,19 +1497,14 @@ internal class ChatController(
                 error = legacy.error,
                 composer = it.composer.copy(
                     input = legacy.input,
+                    cursorPosition = legacy.cursorPosition,
                     isSending = legacy.isSending,
-                    isUploadingAttachment = legacy.isUploadingAttachment,
+                    isUploadingAttachment = legacy.attachments.hasPendingUpload,
                     emojiPanelOpen = legacy.emojiPanelOpen,
                     attachmentPanelOpen = legacy.attachmentPanelOpen,
                     isLoadingEmojiPack = legacy.isLoadingEmojiPack,
                     emojiPackError = legacy.emojiPackError,
-                    pendingAttachments = legacy.pendingAttachments.map { file ->
-                        ChatPendingAttachmentUiModel(
-                            url = file.url,
-                            markdown = file.markdown,
-                            type = file.type,
-                        )
-                    },
+                    attachments = legacy.attachments.items,
                     mentionAnchor = legacy.atAnchor,
                     mentionQuery = legacy.atQuery,
                     mentionCandidates = legacy.atCandidates.map { candidate ->
@@ -1491,12 +1554,13 @@ internal class ChatController(
 
 internal data class ChatLegacyComposerState(
     val input: String = "",
+    val cursorPosition: Int = 0,
+    val cursorRequest: Int? = null,
     val quote: ChatQuote? = null,
     val focusInputAfterQuote: Boolean = false,
     val inputResetKey: Int = 0,
     val isSending: Boolean = false,
-    val isUploadingAttachment: Boolean = false,
-    val pendingAttachments: List<UploadedChatFile> = emptyList(),
+    val attachments: ComposerAttachments = ComposerAttachments(),
     val attachmentPanelOpen: Boolean = false,
     val emojiPanelOpen: Boolean = false,
     val emojiGroups: List<EmojiGroupView> = emptyList(),

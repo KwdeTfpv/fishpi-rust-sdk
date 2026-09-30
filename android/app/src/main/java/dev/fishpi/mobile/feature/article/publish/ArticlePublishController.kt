@@ -5,8 +5,12 @@ import androidx.compose.ui.text.input.TextFieldValue
 import dev.fishpi.mobile.BuildConfig
 import dev.fishpi.mobile.core.ui.UiController
 import dev.fishpi.mobile.data.ArticleDraftPayload
+import android.content.Context
+import dev.fishpi.mobile.data.AttachmentUpload
+import dev.fishpi.mobile.data.AttachmentUploadQueue
 import dev.fishpi.mobile.data.FishPiApiClient
 import dev.fishpi.mobile.utils.appendDraftBlock
+import dev.fishpi.mobile.utils.attachmentPlaceholder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,6 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 internal class ArticlePublishController(
+    context: Context,
     private val apiKey: String,
     private val api: FishPiApiClient = FishPiApiClient.shared,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
@@ -32,6 +37,13 @@ internal class ArticlePublishController(
     val effects: SharedFlow<ArticlePublishEffect> = _effects.asSharedFlow()
 
     private var initialized = false
+    private val uploadQueue = AttachmentUploadQueue.shared(context)
+    private val uploadTargets = mutableMapOf<Long, Pair<ArticlePublishEditorTarget, Int>>()
+    private var nextPlaceholderIndex = 1
+
+    init {
+        observeImageUploads()
+    }
 
     override fun dispatch(action: ArticlePublishAction) {
         when (action) {
@@ -66,8 +78,8 @@ internal class ArticlePublishController(
                 _state.update { it.copy(imageInsertTarget = ArticlePublishEditorTarget.Reward) }
                 emitEffect(ArticlePublishEffect.OpenRewardImagePicker)
             }
-            is ArticlePublishAction.UploadContentImage -> uploadAndInsertImage(action.path, ArticlePublishEditorTarget.Content)
-            is ArticlePublishAction.UploadRewardImage -> uploadAndInsertImage(action.path, ArticlePublishEditorTarget.Reward)
+            is ArticlePublishAction.PickContentImageUri -> pickImage(action.uri, action.isVideo, ArticlePublishEditorTarget.Content)
+            is ArticlePublishAction.PickRewardImageUri -> pickImage(action.uri, action.isVideo, ArticlePublishEditorTarget.Reward)
             is ArticlePublishAction.ShowPickerError -> setError(action.message)
             is ArticlePublishAction.InsertContentBlock -> _state.update { it.copy(content = appendDraftBlock(it.content, action.text)) }
             is ArticlePublishAction.InsertRewardBlock -> _state.update { it.copy(rewardContent = appendDraftBlock(it.rewardContent, action.text)) }
@@ -235,24 +247,63 @@ internal class ArticlePublishController(
         }
     }
 
-    private fun uploadAndInsertImage(path: String, target: ArticlePublishEditorTarget) {
-        if (_state.value.uploadingImage) return
-        _state.update { it.copy(uploadingImage = true, error = null) }
+    private fun pickImage(uri: android.net.Uri, isVideo: Boolean, target: ArticlePublishEditorTarget) {
+        val index = nextPlaceholderIndex++
+        val uploadId = uploadQueue.enqueue(apiKey, uri, isVideo)
+        uploadTargets[uploadId] = target to index
+        _state.update {
+            val placeholder = attachmentPlaceholder(index)
+            if (target == ArticlePublishEditorTarget.Reward) {
+                it.copy(rewardContent = appendDraftBlock(it.rewardContent, placeholder), uploadingImage = true, error = null)
+            } else {
+                it.copy(content = appendDraftBlock(it.content, placeholder), uploadingImage = true, error = null)
+            }
+        }
+    }
+
+    private fun observeImageUploads() {
         scope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) { api.uploadChatFile(apiKey, path) }
-            }.onSuccess { uploaded ->
-                _state.update {
-                    if (target == ArticlePublishEditorTarget.Reward) {
-                        it.copy(rewardContent = appendDraftBlock(it.rewardContent, uploaded.markdown), uploadingImage = false)
-                    } else {
-                        it.copy(content = appendDraftBlock(it.content, uploaded.markdown), uploadingImage = false)
+            uploadQueue.uploads.collect { uploads ->
+                if (uploadTargets.isEmpty()) return@collect
+                uploadTargets.entries.toList().forEach { (uploadId, slot) ->
+                    val upload = uploads[uploadId] ?: run {
+                        uploadTargets.remove(uploadId)
+                        return@forEach
+                    }
+                    val (target, index) = slot
+                    when (upload.status) {
+                        AttachmentUpload.Status.Done -> {
+                            val markdown = upload.uploaded?.markdown.orEmpty()
+                            uploadTargets.remove(uploadId)
+                            uploadQueue.remove(uploadId)
+                            replacePlaceholder(target, index, markdown)
+                            emitEffect(
+                                ArticlePublishEffect.ShowMessage(
+                                    if (target == ArticlePublishEditorTarget.Reward) "图片已插入打赏区" else "图片已插入正文",
+                                ),
+                            )
+                        }
+                        AttachmentUpload.Status.Failed -> {
+                            uploadTargets.remove(uploadId)
+                            uploadQueue.remove(uploadId)
+                            replacePlaceholder(target, index, "")
+                            setError(upload.error ?: "上传图片失败")
+                        }
+                        AttachmentUpload.Status.Uploading -> Unit
                     }
                 }
-                emitEffect(ArticlePublishEffect.ShowMessage(if (target == ArticlePublishEditorTarget.Reward) "图片已插入打赏区" else "图片已插入正文"))
-            }.onFailure {
-                setError(it.message ?: "上传图片失败")
-                _state.update { state -> state.copy(uploadingImage = false) }
+                _state.update { it.copy(uploadingImage = uploadTargets.isNotEmpty()) }
+            }
+        }
+    }
+
+    private fun replacePlaceholder(target: ArticlePublishEditorTarget, index: Int, markdown: String) {
+        val placeholder = attachmentPlaceholder(index)
+        _state.update {
+            if (target == ArticlePublishEditorTarget.Reward) {
+                it.copy(rewardContent = it.rewardContent.replace(placeholder, markdown))
+            } else {
+                it.copy(content = it.content.replace(placeholder, markdown))
             }
         }
     }

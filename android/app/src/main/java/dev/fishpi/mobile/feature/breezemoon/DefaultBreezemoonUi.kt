@@ -94,6 +94,7 @@ import dev.fishpi.mobile.data.BreezemoonView
 import dev.fishpi.mobile.feature.chat.ChatUserProfileOverlay
 import dev.fishpi.mobile.ui.components.ChatToolAction
 import dev.fishpi.mobile.ui.components.AppToolGridPanel
+import dev.fishpi.mobile.ui.components.ComposerAttachmentStrip
 import dev.fishpi.mobile.ui.animal.AnimalStatusPill
 import dev.fishpi.mobile.utils.toFishPiMemberNameOrNull
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -157,14 +158,14 @@ internal fun DefaultBreezemoonUi(
             id = "gallery",
             label = "相册",
             icon = Icons.Rounded.PhotoLibrary,
-            enabled = !state.isSending && !state.isUploadingAttachment,
+            enabled = !state.isSending,
             onClick = { dispatch(BreezemoonAction.RequestGalleryAttachment) },
         ),
         ChatToolAction(
             id = "camera",
             label = "拍照",
             icon = Icons.Rounded.AddAPhoto,
-            enabled = !state.isSending && !state.isUploadingAttachment,
+            enabled = !state.isSending,
             onClick = { dispatch(BreezemoonAction.RequestCameraAttachment) },
         ),
     )
@@ -271,6 +272,14 @@ internal fun DefaultBreezemoonUi(
                             vertical = FishPiTheme.spacingItem * 0.64f,
                         ),
                 ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem * 0.5f),
+                    ) {
+                    ComposerAttachmentStrip(
+                        attachments = state.attachments.items,
+                        onRemove = { dispatch(BreezemoonAction.RemoveAttachment(it.index)) },
+                        onRetry = { dispatch(BreezemoonAction.RetryAttachment(it.index)) },
+                    )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -281,7 +290,7 @@ internal fun DefaultBreezemoonUi(
                                 dispatch(BreezemoonAction.CloseAttachmentPanel)
                                 dispatch(BreezemoonAction.ToggleEmoji)
                             },
-                            enabled = !state.isSending && !state.isUploadingAttachment,
+                            enabled = !state.isSending,
                             modifier = Modifier.size(34.dp),
                         ) {
                             Icon(
@@ -299,7 +308,7 @@ internal fun DefaultBreezemoonUi(
                         BasicTextField(
                             value = state.composeInput,
                             onValueChange = { dispatch(BreezemoonAction.ChangeInput(it)) },
-                            enabled = !state.isSending && !state.isUploadingAttachment,
+                            enabled = !state.isSending,
                             modifier = Modifier
                                 .weight(1f)
                                 .onFocusChanged { focusState ->
@@ -311,7 +320,6 @@ internal fun DefaultBreezemoonUi(
                                 if (state.composeInput.isBlank()) {
                                     Text(
                                         when {
-                                            state.isUploadingAttachment -> "正在上传并插入..."
                                             state.isSending -> "发布中..."
                                             else -> "记录此刻"
                                         },
@@ -327,7 +335,7 @@ internal fun DefaultBreezemoonUi(
                                 dispatch(BreezemoonAction.CloseEmoji)
                                 dispatch(BreezemoonAction.ToggleAttachmentPanel)
                             },
-                            enabled = !state.isSending && !state.isUploadingAttachment,
+                            enabled = !state.isSending,
                             modifier = Modifier.size(34.dp),
                         ) {
                             Icon(
@@ -338,8 +346,10 @@ internal fun DefaultBreezemoonUi(
                             )
                         }
                     }
+                    }
                 }
-                val enabled = !state.isSending && !state.isUploadingAttachment && state.composeInput.trim().isNotEmpty()
+                val enabled = !state.isSending &&
+                    (state.composeInput.trim().isNotEmpty() || state.attachments.hasSendableAttachment)
                 IconButton(onClick = { dispatch(BreezemoonAction.Publish) }, enabled = enabled, modifier = Modifier.size(40.dp)) {
                     Icon(
                         Icons.Rounded.NightsStay,

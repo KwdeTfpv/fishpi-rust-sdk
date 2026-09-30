@@ -6,6 +6,9 @@ import dev.fishpi.mobile.data.ArticleDetailView
 import dev.fishpi.mobile.data.ArticleRealtimeClient
 import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.data.EmojiItemView
+import dev.fishpi.mobile.data.AttachmentUpload
+import dev.fishpi.mobile.data.AttachmentUploadQueue
+import dev.fishpi.mobile.data.ComposerAttachments
 import dev.fishpi.mobile.data.FishPiApiClient
 import dev.fishpi.mobile.data.toPluginJson
 import dev.fishpi.mobile.plugin.PluginManager
@@ -47,6 +50,11 @@ internal class ArticleController(
 
     private val requestedPages = mutableSetOf<Int>()
     private var heatJob: Job? = null
+    private val uploadQueue = AttachmentUploadQueue.shared(context)
+
+    init {
+        observeCommentUploads()
+    }
 
     private val pluginManager = PluginManager.init(context).also {
         it.apiKey = apiKey
@@ -87,7 +95,9 @@ internal class ArticleController(
             ArticleAction.SendComment -> sendComment()
             ArticleAction.PickCommentImage -> emitEffect(ArticleEffect.OpenCommentGallery)
             ArticleAction.CaptureCommentImage -> emitEffect(ArticleEffect.OpenCommentCamera)
-            is ArticleAction.UploadCommentImage -> uploadCommentImage(action.path)
+            is ArticleAction.PickCommentImageUri -> pickCommentImage(action.uri, action.isVideo)
+            is ArticleAction.RemoveCommentImage -> removeCommentImage(action.index)
+            is ArticleAction.RetryCommentImage -> retryCommentImage(action.index)
             is ArticleAction.ShowPickerError -> setError(action.message)
             is ArticleAction.ReplyToComment -> replyToComment(action.comment)
             ArticleAction.CancelReply -> _state.update { it.copy(replyToCommentId = "", replyTarget = null) }
@@ -365,18 +375,42 @@ internal class ArticleController(
 
     private fun sendComment() {
         val current = _state.value.detail ?: return
-        val text = _state.value.commentInput.trim()
-        if (text.isBlank() || _state.value.isSendingComment) return
+        val raw = _state.value.commentInput
+        val attachments = _state.value.commentAttachments.syncReferences(raw)
+        if (_state.value.isSendingComment) return
+        if (raw.isBlank() && !attachments.hasSendableAttachment) return
         val replyId = _state.value.replyToCommentId
         _state.update { it.copy(isSendingComment = true) }
         scope.launch {
+            uploadQueue.awaitSettled(attachments.pendingUploadIds)
+            val settled = attachments.syncFrom(uploadQueue.uploads.value)
+            val text = settled.resolve(raw).trim()
+            if (text.isBlank()) {
+                val reason = settled.items.firstOrNull { it.error != null }?.error
+                    ?: "没有可发送的内容"
+                _state.update { it.copy(commentAttachments = settled, isSendingComment = false) }
+                setError(reason)
+                return@launch
+            }
+            val failed = settled.items.filter {
+                it.referenced && it.status == AttachmentUpload.Status.Failed
+            }
+            if (failed.isNotEmpty()) {
+                emitEffect(
+                    ArticleEffect.ShowError(
+                        "图" + failed.joinToString("、") { it.index.toString() } + " 上传失败，已跳过",
+                    ),
+                )
+            }
             runCatching {
                 withContext(Dispatchers.IO) { api.sendArticleComment(apiKey, current.id, text, replyId) }
             }.onSuccess {
+                uploadQueue.remove(settled.allUploadIds)
                 if (_state.value.selected?.id == current.id) {
                     _state.update {
                         it.copy(
                             commentInput = "",
+                            commentAttachments = ComposerAttachments(),
                             replyToCommentId = "",
                             replyTarget = null,
                             emojiPanelOpen = false,
@@ -394,23 +428,40 @@ internal class ArticleController(
         }
     }
 
-    private fun uploadCommentImage(path: String) {
-        if (_state.value.isUploadingCommentImage) return
-        _state.update { it.copy(isUploadingCommentImage = true) }
+    private fun pickCommentImage(uri: android.net.Uri, isVideo: Boolean) {
+        val current = _state.value
+        val uploadId = uploadQueue.enqueue(apiKey, uri, isVideo)
+        val (nextAttachments, nextInput, _) = current.commentAttachments.append(
+            text = current.commentInput,
+            cursor = current.commentInput.length,
+            uploadId = uploadId,
+            previewUri = uri,
+            isVideo = isVideo,
+        )
+        _state.update { it.copy(commentInput = nextInput, commentAttachments = nextAttachments) }
+    }
+
+    private fun removeCommentImage(index: Int) {
+        val current = _state.value
+        val removed = current.commentAttachments.items.firstOrNull { it.index == index } ?: return
+        val (nextAttachments, nextInput) = current.commentAttachments.removeAt(current.commentInput, index)
+        uploadQueue.remove(removed.uploadId)
+        _state.update { it.copy(commentInput = nextInput, commentAttachments = nextAttachments) }
+    }
+
+    private fun retryCommentImage(index: Int) {
+        val target = _state.value.commentAttachments.items.firstOrNull { it.index == index } ?: return
+        uploadQueue.retry(apiKey, target.uploadId)
+    }
+
+    private fun observeCommentUploads() {
         scope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) { api.uploadChatFile(apiKey, path) }
-            }.onSuccess { uploaded ->
-                _state.update {
-                    it.copy(
-                        commentInput = appendDraftBlock(it.commentInput, uploaded.markdown),
-                        isUploadingCommentImage = false,
-                    )
-                }
-                emitEffect(ArticleEffect.ShowMessage("图片已插入评论输入框"))
-            }.onFailure {
-                setError(it.message ?: "上传媒体失败")
-                _state.update { state -> state.copy(isUploadingCommentImage = false) }
+            uploadQueue.uploads.collect { uploads ->
+                val current = _state.value.commentAttachments
+                if (current.isEmpty) return@collect
+                val synced = current.syncFrom(uploads)
+                if (synced == current) return@collect
+                _state.update { it.copy(commentAttachments = synced) }
             }
         }
     }

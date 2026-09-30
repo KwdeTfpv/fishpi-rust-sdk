@@ -76,6 +76,7 @@ import dev.fishpi.mobile.shared.message.copyToClipboard
 import dev.fishpi.mobile.shared.message.copyableText
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.EmojiGroupView
+import dev.fishpi.mobile.data.ComposerAttachment
 import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.feature.privatechat.mapper.isFileTransferPeer
 import dev.fishpi.mobile.feature.privatechat.mapper.toPrivateChatSession
@@ -103,7 +104,7 @@ internal fun DefaultPrivateChatUi(
     val context = LocalContext.current
     val imageViewer = LocalImageViewer.current
     val attachmentPicker = rememberChatAttachmentPicker(
-        onPickedPath = { dispatch(PrivateChatAction.UploadAttachment(it)) },
+        onPicked = { uri, isVideo -> dispatch(PrivateChatAction.PickAttachment(uri, isVideo)) },
         onError = { dispatch(PrivateChatAction.ShowError(it)) },
     )
     val privateToolActions = listOf(
@@ -111,7 +112,7 @@ internal fun DefaultPrivateChatUi(
             id = "gallery",
             label = "相册",
             icon = Icons.Rounded.PhotoLibrary,
-            enabled = !conversation.isUploadingAttachment,
+            enabled = true,
             onClick = {
                 dispatch(PrivateChatAction.CloseTools)
                 attachmentPicker.openGallery()
@@ -121,7 +122,7 @@ internal fun DefaultPrivateChatUi(
             id = "camera",
             label = "拍照",
             icon = Icons.Rounded.AddAPhoto,
-            enabled = !conversation.isUploadingAttachment,
+            enabled = true,
             onClick = {
                 dispatch(PrivateChatAction.CloseTools)
                 attachmentPicker.openCamera()
@@ -131,7 +132,7 @@ internal fun DefaultPrivateChatUi(
             id = "file",
             label = "文件",
             icon = Icons.Rounded.AttachFile,
-            enabled = !conversation.isUploadingAttachment,
+            enabled = true,
             onClick = {
                 dispatch(PrivateChatAction.CloseTools)
                 attachmentPicker.openFile()
@@ -167,7 +168,9 @@ internal fun DefaultPrivateChatUi(
             isLoadingMore = conversation.isLoadingMore,
             hasMore = conversation.hasMoreHistory,
             isSending = conversation.isSending,
-            isUploadingAttachment = conversation.isUploadingAttachment,
+            isUploadingAttachment = conversation.attachments.hasPendingUpload,
+            attachments = conversation.attachments.items,
+            cursorRequest = conversation.cursorRequest,
             status = conversation.status,
             error = state.error,
             selfUsername = environment.session.user.userName,
@@ -177,6 +180,10 @@ internal fun DefaultPrivateChatUi(
             onBack = { dispatch(PrivateChatAction.CloseConversation) },
             onLoadMore = { dispatch(PrivateChatAction.LoadMoreHistory) },
             onInputChange = { dispatch(PrivateChatAction.ChangeInput(it)) },
+            onCursorChange = { dispatch(PrivateChatAction.ChangeCursor(it)) },
+            onCursorRequestHandled = { dispatch(PrivateChatAction.ClearCursorRequest) },
+            onRemoveAttachment = { dispatch(PrivateChatAction.RemoveAttachment(it.index)) },
+            onRetryAttachment = { dispatch(PrivateChatAction.RetryAttachment(it.index)) },
             quote = conversation.quote,
             focusInputAfterQuote = conversation.focusInputAfterQuote,
             onInputFocused = { dispatch(PrivateChatAction.InputFocused) },
@@ -423,6 +430,8 @@ private fun PrivateConversation(
     hasMore: Boolean,
     isSending: Boolean,
     isUploadingAttachment: Boolean,
+    attachments: List<ComposerAttachment>,
+    cursorRequest: Int?,
     status: String,
     error: String?,
     selfUsername: String,
@@ -432,6 +441,10 @@ private fun PrivateConversation(
     onBack: () -> Unit,
     onLoadMore: () -> Unit,
     onInputChange: (String) -> Unit,
+    onCursorChange: (Int) -> Unit,
+    onCursorRequestHandled: () -> Unit,
+    onRemoveAttachment: (ComposerAttachment) -> Unit,
+    onRetryAttachment: (ComposerAttachment) -> Unit,
     quote: ChatQuote?,
     focusInputAfterQuote: Boolean,
     onInputFocused: () -> Unit,
@@ -612,7 +625,7 @@ private fun PrivateConversation(
             focusInputAfterQuote = focusInputAfterQuote,
             inputResetKey = inputResetKey,
             isUploadingAttachment = isUploadingAttachment,
-            pendingAttachments = emptyList(),
+            attachments = attachments,
             atCandidates = emptyList(),
             sendOnEnter = true,
             emojiPanelOpen = emojiPanelOpen,
@@ -625,7 +638,8 @@ private fun PrivateConversation(
             toolActions = toolActions,
             onInputChange = onInputChange,
             onCancelQuote = onCancelQuote,
-            onRemoveAttachment = {},
+            onRemoveAttachment = onRemoveAttachment,
+            onRetryAttachment = onRetryAttachment,
             onInputFocused = onInputFocused,
             onOpenTools = onOpenTools,
             onDismissToolPanel = onDismissToolPanel,
@@ -634,8 +648,9 @@ private fun PrivateConversation(
             onPickEmojiGroup = onPickEmojiGroup,
             onPickEmoji = onPickEmoji,
             onPickAtUser = {},
-            inputCursorPositionRequest = null,
-            onInputCursorPositionRequestHandled = {},
+            onCursorPositionChange = onCursorChange,
+            inputCursorPositionRequest = cursorRequest,
+            onInputCursorPositionRequestHandled = onCursorRequestHandled,
             onSend = { onSend() },
         )
     }

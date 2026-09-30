@@ -20,7 +20,9 @@ internal sealed interface ArticleAction {
     data object SendComment : ArticleAction
     data object PickCommentImage : ArticleAction
     data object CaptureCommentImage : ArticleAction
-    data class UploadCommentImage(val path: String) : ArticleAction
+    data class PickCommentImageUri(val uri: android.net.Uri, val isVideo: Boolean) : ArticleAction
+    data class RemoveCommentImage(val index: Int) : ArticleAction
+    data class RetryCommentImage(val index: Int) : ArticleAction
     data class ShowPickerError(val message: String) : ArticleAction
     data class ReplyToComment(val comment: ArticleCommentView) : ArticleAction
     data object CancelReply : ArticleAction

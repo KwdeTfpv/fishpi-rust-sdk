@@ -3,6 +3,7 @@ package dev.fishpi.mobile.feature.privatechat.model
 import dev.fishpi.mobile.shared.message.ChatQuote
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.EmojiGroupView
+import dev.fishpi.mobile.data.ComposerAttachments
 import dev.fishpi.mobile.data.EmojiItemView
 
 internal data class PrivateConversationState(
@@ -17,11 +18,13 @@ internal data class PrivateConversationState(
     val scrollToBottomRequest: Int = 0,
     val keepPositionAfterPrependCount: Int = 0,
     val input: String = "",
+    val cursorPosition: Int = 0,
+    val cursorRequest: Int? = null,
     val inputResetKey: Int = 0,
     val quote: ChatQuote? = null,
     val focusInputAfterQuote: Boolean = false,
     val isSending: Boolean = false,
-    val isUploadingAttachment: Boolean = false,
+    val attachments: ComposerAttachments = ComposerAttachments(),
     val attachmentPanelOpen: Boolean = false,
     val emojiPanelOpen: Boolean = false,
     val emojiGroups: List<EmojiGroupView> = emptyList(),

@@ -28,8 +28,8 @@ internal sealed interface ArticlePublishAction {
     data object DismissGoodArticleConfirm : ArticlePublishAction
     data object PickContentImage : ArticlePublishAction
     data object PickRewardImage : ArticlePublishAction
-    data class UploadContentImage(val path: String) : ArticlePublishAction
-    data class UploadRewardImage(val path: String) : ArticlePublishAction
+    data class PickContentImageUri(val uri: android.net.Uri, val isVideo: Boolean) : ArticlePublishAction
+    data class PickRewardImageUri(val uri: android.net.Uri, val isVideo: Boolean) : ArticlePublishAction
     data class ShowPickerError(val message: String) : ArticlePublishAction
     data class InsertContentBlock(val text: String) : ArticlePublishAction
     data class InsertRewardBlock(val text: String) : ArticlePublishAction

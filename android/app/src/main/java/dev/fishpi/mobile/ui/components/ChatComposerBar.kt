@@ -8,7 +8,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -52,7 +51,8 @@ import androidx.compose.ui.unit.sp
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.data.EmojiGroupView
 import dev.fishpi.mobile.data.EmojiItemView
-import dev.fishpi.mobile.data.UploadedChatFile
+import dev.fishpi.mobile.data.AttachmentUpload
+import dev.fishpi.mobile.data.ComposerAttachment
 import dev.fishpi.mobile.plugin.PluginToolbarEntry
 import dev.fishpi.mobile.shared.message.ChatQuote
 import dev.fishpi.mobile.ui.glass.FishPiGlassRole
@@ -67,7 +67,7 @@ internal fun ChatInputBar(
     focusInputAfterQuote: Boolean,
     inputResetKey: Int,
     isUploadingAttachment: Boolean,
-    pendingAttachments: List<UploadedChatFile>,
+    attachments: List<ComposerAttachment>,
     atCandidates: List<ChatMentionCandidateUiModel>,
     sendOnEnter: Boolean,
     emojiPanelOpen: Boolean,
@@ -83,7 +83,8 @@ internal fun ChatInputBar(
     currentTopicLabel: String = "",
     onInputChange: (String) -> Unit,
     onCancelQuote: () -> Unit,
-    onRemoveAttachment: (UploadedChatFile) -> Unit,
+    onRemoveAttachment: (ComposerAttachment) -> Unit,
+    onRetryAttachment: (ComposerAttachment) -> Unit,
     onInputFocused: () -> Unit,
     onOpenTools: () -> Unit,
     onDismissToolPanel: () -> Unit,
@@ -134,10 +135,13 @@ internal fun ChatInputBar(
         keyboardController?.hide()
     }
     fun composedSendText(): String = textValue.text.withOptionalTopic(currentTopicLabel, topicSelected)
+    val hasSendableAttachment = attachments.any {
+        it.referenced && it.status != AttachmentUpload.Status.Failed
+    }
+    fun canSubmit(): Boolean = composedSendText().isNotBlank() || hasSendableAttachment
     fun submitComposer() {
-        val nextText = composedSendText()
-        if (nextText.isBlank()) return
-        onSend(nextText)
+        if (!canSubmit()) return
+        onSend(composedSendText())
         topicSelected = false
     }
 
@@ -221,22 +225,11 @@ internal fun ChatInputBar(
                 }
             }
         }
-        if (pendingAttachments.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem), verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem)) {
-                pendingAttachments.forEach { file ->
-                    Text(
-                            text = file.filename.ifBlank { "附件" },
-                        color = FishPiTheme.onSurface,
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(FishPiTheme.radiusField))
-                            .background(FishPiTheme.surfaceContainer)
-                            .clickable { onRemoveAttachment(file) }
-                            .padding(horizontal = FishPiTheme.spacingControl, vertical = 7.dp),
-                    )
-                }
-            }
-        }
+        ComposerAttachmentStrip(
+            attachments = attachments,
+            onRemove = onRemoveAttachment,
+            onRetry = onRetryAttachment,
+        )
         MentionCandidatePopup(
             candidates = atCandidates,
             onPick = { candidate -> onPickAtUser(candidate.username) },
@@ -272,7 +265,7 @@ internal fun ChatInputBar(
                         dismissKeyboardForPanel()
                         onToggleEmojiPanel()
                     },
-                    enabled = !isUploadingAttachment,
+                    enabled = true,
                     selected = emojiPanelOpen,
                 )
                 BasicTextField(
@@ -324,15 +317,15 @@ internal fun ChatInputBar(
                         dismissKeyboardForPanel()
                         onOpenTools()
                     },
-                    enabled = !isUploadingAttachment,
+                    enabled = true,
                     selected = toolPanelOpen,
                 )
                 ComposerIconButton(
                     icon = Icons.AutoMirrored.Rounded.Send,
                     contentDescription = "发送",
                     onClick = { submitComposer() },
-                    enabled = composedSendText().trim().isNotEmpty() && !isUploadingAttachment,
-                    prominent = composedSendText().trim().isNotEmpty(),
+                    enabled = canSubmit(),
+                    prominent = canSubmit(),
                 )
             }
         }
