@@ -223,8 +223,6 @@ internal fun DefaultPrivateChatUi(
             onCopyUsername = {
                 context.copyToClipboard("用户名", message.userName.ifBlank { message.displayName })
             },
-            onCopyImageLinks = { context.copyToClipboard("私聊图片链接", message.imageUrls.joinToString("\n")) },
-            onCopyLinks = { context.copyToClipboard("私聊链接", message.linkUrls.joinToString("\n")) },
             onQuote = { dispatch(PrivateChatAction.QuoteMessage(message)) },
             onReaction = {},
             onRepeat = { dispatch(PrivateChatAction.RepeatMessage(message)) },

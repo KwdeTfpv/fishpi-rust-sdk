@@ -33,8 +33,6 @@ internal fun MessageActionSheet(
     onDismiss: () -> Unit,
     onCopyContent: () -> Unit,
     onCopyUsername: () -> Unit,
-    onCopyImageLinks: () -> Unit,
-    onCopyLinks: () -> Unit,
     onMentionUser: (() -> Unit)? = null,
     onQuote: () -> Unit,
     onReaction: (String) -> Unit,

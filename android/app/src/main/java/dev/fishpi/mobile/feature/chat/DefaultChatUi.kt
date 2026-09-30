@@ -1107,8 +1107,6 @@ private fun DefaultChatUiContent(
             onCopyUsername = {
                 context.copyToClipboard("用户名", anchor.message.userName.ifBlank { anchor.message.displayName })
             },
-            onCopyImageLinks = { context.copyToClipboard("图片链接", anchor.message.imageUrls.joinToString("\n")) },
-            onCopyLinks = { context.copyToClipboard("链接", anchor.message.linkUrls.joinToString("\n")) },
             onMentionUser = {
                 bridge.replaceDraft(appendMentionDraft(input, anchor.message.userName), requestFocus = true, resetInput = true)
             },
@@ -1143,8 +1141,6 @@ private fun DefaultChatUiContent(
             onCopyUsername = {
                 context.copyToClipboard("用户名", message.userName.ifBlank { message.displayName })
             },
-            onCopyImageLinks = { context.copyToClipboard("图片链接", message.imageUrls.joinToString("\n")) },
-            onCopyLinks = { context.copyToClipboard("链接", message.linkUrls.joinToString("\n")) },
             onMentionUser = {
                 bridge.replaceDraft(appendMentionDraft(input, message.userName), requestFocus = true, resetInput = true)
             },

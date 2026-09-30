@@ -6,7 +6,6 @@ import androidx.compose.material.icons.rounded.AlternateEmail
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.FormatQuote
-import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.SentimentSatisfied
@@ -21,16 +20,18 @@ internal data class MessageActionSpec(
     val onClick: () -> Unit,
 )
 
-internal fun mainMessageActionSpecs(
+
+internal fun bubbleMessageActionSpecs(
     message: ChatRoomMessage,
     canRevoke: Boolean,
     onCopyContent: () -> Unit,
+    onCopyUsername: () -> Unit,
     onMentionUser: (() -> Unit)?,
     onQuote: () -> Unit,
     onRepeat: () -> Unit,
     onRevoke: () -> Unit,
-    onMore: () -> Unit,
     onReactions: () -> Unit,
+    extraActions: List<MessageActionSpec> = emptyList(),
 ): List<MessageActionSpec> = buildList {
     add(
         MessageActionSpec(
@@ -85,46 +86,14 @@ internal fun mainMessageActionSpecs(
     }
     add(
         MessageActionSpec(
-            label = "更多",
-            icon = Icons.Rounded.MoreHoriz,
-            enabled = true,
-            onClick = onMore,
+            label = "用户名",
+            icon = Icons.Rounded.Person,
+            enabled = message.userName.isNotBlank() || message.displayName.isNotBlank(),
+            onClick = onCopyUsername,
         ),
     )
+    addAll(extraActions)
 }
-
-internal fun moreMessageActionSpecs(
-    message: ChatRoomMessage,
-    onCopyUsername: () -> Unit,
-    onCopyImageLinks: () -> Unit,
-    onCopyLinks: () -> Unit,
-    onBack: () -> Unit,
-): List<MessageActionSpec> = listOf(
-    MessageActionSpec(
-        label = "返回",
-        icon = Icons.Rounded.MoreHoriz,
-        enabled = true,
-        onClick = onBack,
-    ),
-    MessageActionSpec(
-        label = "用户名",
-        icon = Icons.Rounded.Person,
-        enabled = message.userName.isNotBlank() || message.displayName.isNotBlank(),
-        onClick = onCopyUsername,
-    ),
-    MessageActionSpec(
-        label = "图片",
-        icon = Icons.Rounded.ContentCopy,
-        enabled = message.imageUrls.isNotEmpty(),
-        onClick = onCopyImageLinks,
-    ),
-    MessageActionSpec(
-        label = "链接",
-        icon = Icons.Rounded.ContentCopy,
-        enabled = message.linkUrls.isNotEmpty(),
-        onClick = onCopyLinks,
-    ),
-)
 
 internal fun sheetMessageActionSpecs(
     message: ChatRoomMessage,

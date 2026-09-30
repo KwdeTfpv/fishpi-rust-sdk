@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,7 +31,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -42,7 +40,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.fishpi.mobile.shared.message.native.MessageActionAnchor
-import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.ui.blur.FishPiBlurOverlay
 import dev.fishpi.mobile.ui.glass.FishPiGlassRole
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
@@ -51,9 +48,10 @@ import kotlin.math.roundToInt
 
 private enum class MessageActionSubmenu {
     Main,
-    More,
     Reactions,
 }
+
+private const val ACTIONS_PER_ROW = 6
 
 @Composable
 internal fun MessageActionBubbleMenu(
@@ -64,8 +62,6 @@ internal fun MessageActionBubbleMenu(
     onDismiss: () -> Unit,
     onCopyContent: () -> Unit,
     onCopyUsername: () -> Unit,
-    onCopyImageLinks: () -> Unit,
-    onCopyLinks: () -> Unit,
     onMentionUser: (() -> Unit)? = null,
     onQuote: () -> Unit,
     onReaction: (String) -> Unit,
@@ -82,16 +78,28 @@ internal fun MessageActionBubbleMenu(
     val disabledColor = palette.weakText.copy(alpha = 0.44f)
     val selectedBackground = palette.accent.copy(alpha = 0.14f)
     val itemPressedBackground = Color.Transparent
-    val mainActionCount = if (canRevoke) 7 else 6
-    val moreActionCount = 4 + extraActions.size
+    val actions = bubbleMessageActionSpecs(
+        message = anchor.message,
+        canRevoke = canRevoke,
+        onCopyContent = { onCopyContent(); onDismiss() },
+        onCopyUsername = { onCopyUsername(); onDismiss() },
+        onMentionUser = onMentionUser?.let { action -> { action(); onDismiss() } },
+        onQuote = { onQuote(); onDismiss() },
+        onRepeat = { onRepeat(); onDismiss() },
+        onRevoke = { onRevoke(); onDismiss() },
+        onReactions = { submenu = MessageActionSubmenu.Reactions },
+        extraActions = extraActions.map { action ->
+            action.copy(onClick = { action.onClick(); onDismiss() })
+        },
+    )
+    val rowCount = (actions.size + ACTIONS_PER_ROW - 1) / ACTIONS_PER_ROW
+    val columnCount = minOf(actions.size, ACTIONS_PER_ROW)
     val menuWidth = when (submenu) {
-        MessageActionSubmenu.Main -> (mainActionCount * 34 + 14).dp
-        MessageActionSubmenu.More -> (moreActionCount * 38 + 14).dp
+        MessageActionSubmenu.Main -> (columnCount * 38 + 14).dp
         MessageActionSubmenu.Reactions -> 218.dp
     }
     val menuHeight = when (submenu) {
-        MessageActionSubmenu.Main -> 44.dp
-        MessageActionSubmenu.More -> 44.dp
+        MessageActionSubmenu.Main -> (rowCount * 38 + 8).dp
         MessageActionSubmenu.Reactions -> 44.dp
     }
     val horizontalPadding = 8.dp
@@ -105,11 +113,20 @@ internal fun MessageActionBubbleMenu(
     val localLeft = anchor.rectInWindow.left - rootOffsetInWindow.x
     val localRight = anchor.rectInWindow.right - rootOffsetInWindow.x
     val localTop = anchor.rectInWindow.top - rootOffsetInWindow.y
+    val localBottom = anchor.rectInWindow.bottom - rootOffsetInWindow.y
     val menuShape = RoundedCornerShape(FishPiTheme.radiusBox)
     val alignedX = if (anchor.isMine) localRight - menuWidthPx else localLeft.toFloat()
     val maxX = (rootSize.width - menuWidthPx - horizontalPaddingPx).coerceAtLeast(horizontalPaddingPx)
     val x = alignedX.coerceIn(horizontalPaddingPx, maxX).roundToInt()
-    val y = (localTop - menuHeightPx - gapPx).coerceAtLeast(topPaddingPx).roundToInt()
+    val above = localTop - menuHeightPx - gapPx
+    val placeBelow = above < topPaddingPx
+    val y = if (placeBelow) {
+        val below = localBottom + gapPx
+        val maxY = (rootSize.height - menuHeightPx - horizontalPaddingPx).coerceAtLeast(topPaddingPx)
+        below.coerceIn(topPaddingPx, maxY).roundToInt()
+    } else {
+        above.roundToInt()
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -151,32 +168,11 @@ internal fun MessageActionBubbleMenu(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     when (submenu) {
-                        MessageActionSubmenu.Main -> MainActionRow(
-                            message = anchor.message,
-                            canRevoke = canRevoke,
-                            onCopyContent = { onCopyContent(); onDismiss() },
-                            onMentionUser = onMentionUser?.let { action -> { action(); onDismiss() } },
-                            onQuote = { onQuote(); onDismiss() },
-                            onRepeat = { onRepeat(); onDismiss() },
-                            onRevoke = { onRevoke(); onDismiss() },
+                        MessageActionSubmenu.Main -> ActionGrid(
+                            actions = actions,
                             itemBackground = itemPressedBackground,
                             contentColor = contentColor,
                             disabledColor = disabledColor,
-                            onMore = { submenu = MessageActionSubmenu.More },
-                            onReactions = { submenu = MessageActionSubmenu.Reactions },
-                        )
-                        MessageActionSubmenu.More -> MoreActionRow(
-                            message = anchor.message,
-                            itemBackground = itemPressedBackground,
-                            contentColor = contentColor,
-                            disabledColor = disabledColor,
-                            onCopyUsername = { onCopyUsername(); onDismiss() },
-                            onCopyImageLinks = { onCopyImageLinks(); onDismiss() },
-                            onCopyLinks = { onCopyLinks(); onDismiss() },
-                            onBack = { submenu = MessageActionSubmenu.Main },
-                            extraActions = extraActions.map { action ->
-                                action.copy(onClick = { action.onClick(); onDismiss() })
-                            },
                         )
                         MessageActionSubmenu.Reactions -> ReactionActionRow(
                             contentColor = contentColor,
@@ -190,10 +186,17 @@ internal fun MessageActionBubbleMenu(
                 }
                 Box(
                     modifier = Modifier
-                        .align(if (anchor.isMine) Alignment.BottomEnd else Alignment.BottomStart)
+                        .align(
+                            when {
+                                placeBelow && anchor.isMine -> Alignment.TopEnd
+                                placeBelow -> Alignment.TopStart
+                                anchor.isMine -> Alignment.BottomEnd
+                                else -> Alignment.BottomStart
+                            },
+                        )
                         .offset(
                             x = if (anchor.isMine) (-20).dp else 20.dp,
-                            y = 4.dp,
+                            y = if (placeBelow) (-4).dp else 4.dp,
                         )
                         .size(9.dp)
                         .rotate(45f)
@@ -205,82 +208,30 @@ internal fun MessageActionBubbleMenu(
 }
 
 @Composable
-private fun MainActionRow(
-    message: ChatRoomMessage,
-    canRevoke: Boolean,
-    onCopyContent: () -> Unit,
-    onMentionUser: (() -> Unit)?,
-    onQuote: () -> Unit,
-    onRepeat: () -> Unit,
-    onRevoke: () -> Unit,
+private fun ActionGrid(
+    actions: List<MessageActionSpec>,
     itemBackground: Color,
     contentColor: Color,
     disabledColor: Color,
-    onMore: () -> Unit,
-    onReactions: () -> Unit,
 ) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(1.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        mainMessageActionSpecs(
-            message = message,
-            canRevoke = canRevoke,
-            onCopyContent = onCopyContent,
-            onMentionUser = onMentionUser,
-            onQuote = onQuote,
-            onRepeat = onRepeat,
-            onRevoke = onRevoke,
-            onMore = onMore,
-            onReactions = onReactions,
-        ).forEach { action ->
-            MenuAction(
-                action = action,
-                itemBackground = itemBackground,
-                contentColor = contentColor,
-                disabledColor = disabledColor,
-            )
-        }
-    }
-}
-
-@Composable
-private fun MoreActionRow(
-    message: ChatRoomMessage,
-    itemBackground: Color,
-    contentColor: Color,
-    disabledColor: Color,
-    onCopyUsername: () -> Unit,
-    onCopyImageLinks: () -> Unit,
-    onCopyLinks: () -> Unit,
-    onBack: () -> Unit,
-    extraActions: List<MessageActionSpec>,
-) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(1.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        moreMessageActionSpecs(
-            message = message,
-            onCopyUsername = onCopyUsername,
-            onCopyImageLinks = onCopyImageLinks,
-            onCopyLinks = onCopyLinks,
-            onBack = onBack,
-        ).forEach { action ->
-            MenuAction(
-                action = action,
-                itemBackground = itemBackground,
-                contentColor = contentColor,
-                disabledColor = disabledColor,
-            )
-        }
-        extraActions.forEach { action ->
-            MenuAction(
-                action = action,
-                itemBackground = itemBackground,
-                contentColor = contentColor,
-                disabledColor = disabledColor,
-            )
+    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        actions.chunked(ACTIONS_PER_ROW).forEach { row ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(1.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                row.forEach { action ->
+                    MenuAction(
+                        action = action,
+                        itemBackground = itemBackground,
+                        contentColor = contentColor,
+                        disabledColor = disabledColor,
+                    )
+                }
+                repeat(ACTIONS_PER_ROW - row.size) {
+                    Box(modifier = Modifier.width(37.dp))
+                }
+            }
         }
     }
 }
@@ -343,7 +294,7 @@ private fun MenuAction(
     }
     Column(
         modifier = Modifier
-            .width(33.dp)
+            .width(37.dp)
             .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.66f))
             .background(if (action.enabled) itemBackground else Color.Transparent)
             .clickable(enabled = action.enabled, onClick = action.onClick)
