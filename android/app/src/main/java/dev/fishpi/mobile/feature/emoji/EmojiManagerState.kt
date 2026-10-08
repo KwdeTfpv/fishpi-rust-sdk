@@ -149,24 +149,27 @@ internal class EmojiManagerState(
         if (busy) return
         val emojiId = item.emojiId.ifBlank { item.id }
         if (emojiId.isBlank()) return
-        itemCache.remove(item.groupId)
+        val groupId = item.resolveGroupId()
+        itemCache.remove(groupId)
         runWrite(scope, "已移除表情", failure = "移除表情失败") {
-            api.removeEmojiFromGroup(apiKey, item.groupId, emojiId)
+            api.removeEmojiFromGroup(apiKey, groupId, emojiId)
         }
     }
 
     fun renameEmoji(scope: CoroutineScope, item: EmojiItemView, name: String) {
         val label = name.trim()
         if (busy) return
-        itemCache.remove(item.groupId)
+        val groupId = item.resolveGroupId()
+        itemCache.remove(groupId)
         runWrite(scope, "已重命名", failure = "重命名失败") {
-            api.updateEmojiItem(apiKey, item.id, item.groupId, label, item.sortOrZero())
+            api.updateEmojiItem(apiKey, item.id, groupId, label, item.sortOrZero())
         }
     }
 
     fun moveEmoji(scope: CoroutineScope, item: EmojiItemView, targetGroupId: String) {
-        if (busy || targetGroupId.isBlank() || targetGroupId == item.groupId) return
-        itemCache.remove(item.groupId)
+        val sourceGroupId = item.resolveGroupId()
+        if (busy || targetGroupId.isBlank() || targetGroupId == sourceGroupId) return
+        itemCache.remove(sourceGroupId)
         itemCache.remove(targetGroupId)
         val targetName = groups.firstOrNull { it.id == targetGroupId }?.name.orEmpty()
         runWrite(scope, "已移动到「$targetName」", failure = "移动表情失败") {
@@ -196,6 +199,10 @@ internal class EmojiManagerState(
             },
         )
     }
+
+    // 服务端 group/emojis 不保证回传 groupId，退回到当前选中的分组。
+    private fun EmojiItemView.resolveGroupId(): String =
+        groupId.ifBlank { selectedGroupId }
 
     private fun nextGroupSort(): Long =
         (groups.mapNotNull { it.sort.takeIf { s -> s != Long.MAX_VALUE } }.maxOrNull() ?: 0L) + 1L
