@@ -316,8 +316,8 @@ data class ArticleDetailView(
     val rewardPoint: Long,
     val rewardContent: String,
     val voteState: Int,
-    val commentNextPage: Int,
-    val commentHasMore: Boolean,
+    val commentPage: Int,
+    val commentPageCount: Int,
     val comments: List<ArticleCommentView>,
 )
 

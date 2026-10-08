@@ -8,6 +8,7 @@ import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.feature.article.model.ArticleFilterUiModel
 import dev.fishpi.mobile.feature.article.model.ArticleOverlayState
 import dev.fishpi.mobile.feature.article.model.ArticleSummaryUiModel
+import dev.fishpi.mobile.feature.article.model.CommentSort
 import dev.fishpi.mobile.feature.article.model.RecentArticleFilters
 
 internal data class ArticleState(
@@ -44,4 +45,5 @@ internal data class ArticleState(
     val articleHeat: Long? = null,
     val rewardConfirmOpen: Boolean = false,
     val isRewarding: Boolean = false,
+    val commentSort: CommentSort = CommentSort.Earliest,
 )

@@ -4,6 +4,7 @@ import dev.fishpi.mobile.data.ArticleCommentView
 import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.feature.article.model.ArticleFilterUiModel
+import dev.fishpi.mobile.feature.article.model.CommentSort
 
 internal sealed interface ArticleAction {
     data object RefreshList : ArticleAction
@@ -16,6 +17,7 @@ internal sealed interface ArticleAction {
     data class OpenArticleById(val articleId: String) : ArticleAction
     data object CloseDetail : ArticleAction
     data object LoadMoreComments : ArticleAction
+    data class ChangeCommentSort(val sort: CommentSort) : ArticleAction
     data class ChangeCommentInput(val value: String) : ArticleAction
     data object SendComment : ArticleAction
     data object PickCommentImage : ArticleAction

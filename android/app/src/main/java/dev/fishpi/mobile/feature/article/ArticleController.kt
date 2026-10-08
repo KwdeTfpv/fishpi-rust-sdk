@@ -16,6 +16,7 @@ import dev.fishpi.mobile.plugin.PluginToolbarEntry
 import dev.fishpi.mobile.feature.article.mapper.toArticleSummaryUiModel
 import dev.fishpi.mobile.feature.article.mapper.toSummary
 import dev.fishpi.mobile.feature.article.model.ArticleOverlayState
+import dev.fishpi.mobile.feature.article.model.CommentSort
 import dev.fishpi.mobile.feature.article.model.RecentArticleFilters
 import dev.fishpi.mobile.feature.article.model.TaggedArticleFilters
 import dev.fishpi.mobile.feature.article.model.articleFiltersForTag
@@ -91,6 +92,7 @@ internal class ArticleController(
             is ArticleAction.OpenArticleById -> openArticleById(action.articleId)
             ArticleAction.CloseDetail -> closeDetail()
             ArticleAction.LoadMoreComments -> loadMoreComments()
+            is ArticleAction.ChangeCommentSort -> changeCommentSort(action.sort)
             is ArticleAction.ChangeCommentInput -> _state.update { it.copy(commentInput = action.value) }
             ArticleAction.SendComment -> sendComment()
             ArticleAction.PickCommentImage -> emitEffect(ArticleEffect.OpenCommentGallery)
@@ -312,15 +314,19 @@ internal class ArticleController(
             runCatching {
                 withContext(Dispatchers.IO) { api.getArticleDetail(apiKey, articleId) }
             }.onSuccess { loaded ->
-                if (_state.value.selected?.id == articleId) {
-                    _state.update {
-                        it.copy(
-                            detail = loaded,
-                            selected = if (replaceSummary) loaded.toSummary() else it.selected,
-                            isLoadingDetail = false,
-                        )
-                    }
-                    refreshArticleHeat(articleId)
+                if (_state.value.selected?.id != articleId) return@onSuccess
+                val needsLastPage =
+                    _state.value.commentSort == CommentSort.Latest && loaded.commentPageCount > 1
+                _state.update {
+                    it.copy(
+                        detail = if (needsLastPage) loaded.copy(comments = emptyList()) else loaded,
+                        selected = if (replaceSummary) loaded.toSummary() else it.selected,
+                        isLoadingDetail = needsLastPage,
+                    )
+                }
+                refreshArticleHeat(articleId)
+                if (needsLastPage) {
+                    loadCommentPage(articleId, loaded.commentPageCount, replace = true)
                 }
             }.onFailure {
                 if (_state.value.selected?.id == articleId) {
@@ -331,13 +337,78 @@ internal class ArticleController(
         }
     }
 
+    private fun changeCommentSort(sort: CommentSort) {
+        if (_state.value.commentSort == sort) return
+        val detail = _state.value.detail
+        val targetPage = when (sort) {
+            CommentSort.Earliest -> 1
+            CommentSort.Latest -> detail?.commentPageCount ?: 1
+        }
+        val needsReload = detail != null &&
+            detail.commentPageCount > 1 &&
+            detail.commentPage != targetPage
+        _state.update {
+            it.copy(
+                commentSort = sort,
+                detail = if (needsReload) detail.copy(comments = emptyList()) else it.detail,
+                isLoadingDetail = needsReload || it.isLoadingDetail,
+            )
+        }
+        if (needsReload) {
+            loadCommentPage(detail.id, targetPage, replace = true)
+        }
+    }
+
+    private fun loadCommentPage(articleId: String, page: Int, replace: Boolean) {
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { api.getArticleDetail(apiKey, articleId, page) }
+            }.onSuccess { loaded ->
+                val current = _state.value.detail
+                if (current?.id != articleId) return@onSuccess
+                val merged = if (replace) {
+                    loaded.comments
+                } else {
+                    mergeComments(current.comments, loaded.comments, _state.value.commentSort)
+                }
+                _state.update {
+                    it.copy(
+                        detail = current.copy(
+                            comments = merged,
+                            commentPage = loaded.commentPage,
+                            commentPageCount = loaded.commentPageCount,
+                        ),
+                        isLoadingDetail = false,
+                    )
+                }
+            }.onFailure {
+                if (_state.value.detail?.id == articleId) setError(it.message ?: "加载评论失败")
+                _state.update { it.copy(isLoadingDetail = false) }
+            }
+        }
+    }
+
+    private fun mergeComments(
+        loadedComments: List<dev.fishpi.mobile.data.ArticleCommentView>,
+        incoming: List<dev.fishpi.mobile.data.ArticleCommentView>,
+        sort: CommentSort,
+    ): List<dev.fishpi.mobile.data.ArticleCommentView> {
+        val combined = when (sort) {
+            CommentSort.Earliest -> loadedComments + incoming
+            CommentSort.Latest -> incoming + loadedComments
+        }
+        return combined.distinctBy { it.id }
+    }
+
     private fun reloadDetail(articleId: String) {
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) { api.getArticleDetail(apiKey, articleId) }
             }.onSuccess { loaded ->
-                if (_state.value.selected?.id == articleId) {
-                    _state.update { it.copy(detail = loaded) }
+                if (_state.value.selected?.id != articleId) return@onSuccess
+                _state.update { it.copy(detail = loaded) }
+                if (_state.value.commentSort == CommentSort.Latest && loaded.commentPageCount > 1) {
+                    loadCommentPage(articleId, loaded.commentPageCount, replace = true)
                 }
             }.onFailure {
                 if (_state.value.selected?.id == articleId) setError(it.message ?: "刷新帖子详情失败")
@@ -347,30 +418,14 @@ internal class ArticleController(
 
     private fun loadMoreComments() {
         val current = _state.value.detail ?: return
-        if (!current.commentHasMore || _state.value.isLoadingDetail) return
-        _state.update { it.copy(isLoadingDetail = true) }
-        scope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) { api.getArticleDetail(apiKey, current.id, current.commentNextPage) }
-            }.onSuccess { next ->
-                val latest = _state.value.detail
-                if (latest?.id == current.id) {
-                    _state.update {
-                        it.copy(
-                            detail = latest.copy(
-                                comments = (latest.comments + next.comments).distinctBy { comment -> comment.id },
-                                commentNextPage = next.commentNextPage,
-                                commentHasMore = next.commentHasMore,
-                            ),
-                            isLoadingDetail = false,
-                        )
-                    }
-                }
-            }.onFailure {
-                if (_state.value.detail?.id == current.id) setError(it.message ?: "加载更多评论失败")
-                _state.update { it.copy(isLoadingDetail = false) }
-            }
+        if (_state.value.isLoadingDetail) return
+        val nextPage = when (_state.value.commentSort) {
+            CommentSort.Earliest -> current.commentPage + 1
+            CommentSort.Latest -> current.commentPage - 1
         }
+        if (nextPage < 1 || nextPage > current.commentPageCount) return
+        _state.update { it.copy(isLoadingDetail = true) }
+        loadCommentPage(current.id, nextPage, replace = false)
     }
 
     private fun sendComment() {

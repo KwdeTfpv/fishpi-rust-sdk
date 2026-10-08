@@ -151,6 +151,7 @@ import dev.fishpi.mobile.data.EmojiGroupView
 import dev.fishpi.mobile.data.ComposerAttachment
 import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.feature.article.model.ArticleFilterUiModel
+import dev.fishpi.mobile.feature.article.model.CommentSort
 import dev.fishpi.mobile.feature.article.publish.ArticlePublishAction
 import dev.fishpi.mobile.feature.article.publish.ArticlePublishEditorTarget
 import dev.fishpi.mobile.feature.article.publish.ArticlePublishState
@@ -309,6 +310,8 @@ internal fun DefaultArticleUi(
             onFollow = { dispatch(ArticleAction.ToggleFollow) },
             onWatch = { dispatch(ArticleAction.Watch) },
             onLoadMoreComments = { dispatch(ArticleAction.LoadMoreComments) },
+            commentSort = state.commentSort,
+            onCommentSortChange = { dispatch(ArticleAction.ChangeCommentSort(it)) },
             onSendComment = { dispatch(ArticleAction.SendComment) },
             onImageClick = { images, index -> imageViewer.open(images, index) },
             onLinkClick = { dispatch(ArticleAction.ShowLinkPreview(it)) },
@@ -1185,6 +1188,8 @@ private fun ArticleDetailPage(
     onFollow: () -> Unit,
     onWatch: () -> Unit,
     onLoadMoreComments: () -> Unit,
+    commentSort: CommentSort,
+    onCommentSortChange: (CommentSort) -> Unit,
     onSendComment: () -> Unit,
     onImageClick: (images: List<String>, index: Int) -> Unit,
     onLinkClick: (String) -> Unit,
@@ -1294,6 +1299,16 @@ private fun ArticleDetailPage(
                 val commentById = remember(detail.comments) {
                     detail.comments.associateBy { it.id }
                 }
+                val shownComments = remember(detail.comments, commentSort) {
+                    when (commentSort) {
+                        CommentSort.Earliest -> detail.comments
+                        CommentSort.Latest -> detail.comments.asReversed()
+                    }
+                }
+                val hasMoreComments = when (commentSort) {
+                    CommentSort.Earliest -> detail.commentPage < detail.commentPageCount
+                    CommentSort.Latest -> detail.commentPage > 1
+                }
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier
@@ -1377,9 +1392,23 @@ private fun ArticleDetailPage(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontWeight = FontWeight.SemiBold,
                                     )
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    CommentSort.entries.forEach { option ->
+                                        ActionChipButton(
+                                            text = option.label,
+                                            selected = option == commentSort,
+                                            enabled = !isLoading,
+                                            onClick = {
+                                                if (option != commentSort) {
+                                                    onCommentSortChange(option)
+                                                    scope.launch { commentListState.scrollToItem(0) }
+                                                }
+                                            },
+                                        )
+                                    }
                                 }
                             }
-                            items(detail.comments, key = { it.id }) { comment ->
+                            items(shownComments, key = { it.id }) { comment ->
                                 ArticleCommentRow(
                                     comment = comment,
                                     replyTo = comment.replyId
@@ -1413,12 +1442,12 @@ private fun ArticleDetailPage(
                             if (detail.comments.isEmpty()) {
                                 item {
                                     Text(
-                                        text = "还没有评论",
+                                        text = if (isLoading) "正在加载评论..." else "还没有评论",
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                             }
-                            if (detail.commentHasMore) {
+                            if (hasMoreComments) {
                                 item {
                                     Box(
                                         modifier = Modifier.fillMaxWidth(),

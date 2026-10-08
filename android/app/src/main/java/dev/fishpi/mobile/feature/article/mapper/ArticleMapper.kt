@@ -66,8 +66,8 @@ internal fun ArticleDetailView.toArticleDetailUiModel(): ArticleDetailUiModel =
         rewardPoint = rewardPoint,
         rewardContent = rewardContent,
         voteState = voteState,
-        commentNextPage = commentNextPage,
-        commentHasMore = commentHasMore,
+        commentPage = commentPage,
+        commentPageCount = commentPageCount,
         comments = comments,
     )
 

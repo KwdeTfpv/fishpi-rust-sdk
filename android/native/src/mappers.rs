@@ -676,11 +676,7 @@ pub(crate) fn article_detail_to_json(item: ArticleDetail, page: u32) -> Value {
         .into_iter()
         .map(article_comment_to_json)
         .collect::<Vec<_>>();
-    let comment_has_more = item
-        .pagination
-        .as_ref()
-        .map(|p| page < p.count)
-        .unwrap_or(false);
+    let comment_page_count = item.pagination.as_ref().map(|p| p.count).unwrap_or(1).max(1);
     let markdown = if item.source.trim().is_empty() {
         item.content.clone()
     } else {
@@ -715,8 +711,8 @@ pub(crate) fn article_detail_to_json(item: ArticleDetail, page: u32) -> Value {
         "rewardPoint": item.reward_point,
         "rewardContent": item.reward_content,
         "voteState": vote_state,
-        "commentNextPage": page + 1,
-        "commentHasMore": comment_has_more,
+        "commentPage": page,
+        "commentPageCount": comment_page_count,
         "comments": comments,
     })
 }

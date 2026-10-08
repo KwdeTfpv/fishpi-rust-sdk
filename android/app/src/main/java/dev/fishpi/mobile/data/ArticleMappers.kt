@@ -48,8 +48,8 @@ internal fun JSONObject.toArticleDetailView(): ArticleDetailView {
         rewardPoint = optLong("rewardPoint"),
         rewardContent = optString("rewardContent"),
         voteState = optInt("voteState"),
-        commentNextPage = optInt("commentNextPage", 2),
-        commentHasMore = optBoolean("commentHasMore", false),
+        commentPage = optInt("commentPage", 1),
+        commentPageCount = optInt("commentPageCount", 1),
         comments = optJSONArray("comments").toArticleComments(),
     )
 }
