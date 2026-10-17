@@ -360,12 +360,42 @@ internal class ChatController(
     fun favoriteEmoji(url: String) {
         val link = url.trim()
         if (link.isBlank()) return
+        _legacyComposerState.update { it.copy(favoriteEmojiUrl = link) }
+        syncComposerFromLegacy()
+        if (_legacyComposerState.value.emojiGroups.isEmpty()) {
+            loadEmojiGroups()
+        }
+    }
+
+    fun dismissFavoriteEmoji() {
+        if (_legacyComposerState.value.favoriteEmojiUrl == null) return
+        _legacyComposerState.update { it.copy(favoriteEmojiUrl = null, isFavoritingEmoji = false) }
+        syncComposerFromLegacy()
+    }
+
+    fun refreshEmojiGroups() {
+        loadEmojiGroups()
+    }
+
+    fun confirmFavoriteEmoji(groupId: String, name: String) {
+        val link = _legacyComposerState.value.favoriteEmojiUrl?.trim().orEmpty()
+        val target = groupId.trim()
+        if (link.isBlank() || target.isBlank() || _legacyComposerState.value.isFavoritingEmoji) return
+        _legacyComposerState.update { it.copy(isFavoritingEmoji = true) }
+        syncComposerFromLegacy()
         scope.launch {
             runCatching {
-                withContext(Dispatchers.IO) { api.uploadEmojiUrl(apiKey, link) }
+                withContext(Dispatchers.IO) {
+                    api.addEmojiUrlToGroup(apiKey, target, link, name = name.trim())
+                }
             }.onSuccess {
+                _legacyComposerState.update { it.copy(favoriteEmojiUrl = null, isFavoritingEmoji = false) }
+                syncComposerFromLegacy()
                 emitEffect(ChatEffect.ShowMessage("已收藏到表情包"))
+                refreshEmojiGroups()
             }.onFailure { throwable ->
+                _legacyComposerState.update { it.copy(isFavoritingEmoji = false) }
+                syncComposerFromLegacy()
                 emitEffect(ChatEffect.ShowError(throwable.message ?: "收藏表情失败"))
             }
         }
@@ -1582,6 +1612,8 @@ internal data class ChatLegacyComposerState(
     val selectedEmojiGroupId: String = "",
     val isLoadingEmojiPack: Boolean = false,
     val emojiPackError: String? = null,
+    val favoriteEmojiUrl: String? = null,
+    val isFavoritingEmoji: Boolean = false,
     val atAnchor: Int? = null,
     val atQuery: String? = null,
     val atCandidates: List<AtUserCandidate> = emptyList(),

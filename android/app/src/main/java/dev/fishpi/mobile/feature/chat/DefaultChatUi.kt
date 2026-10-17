@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -47,6 +48,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -81,6 +84,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.key
@@ -103,6 +107,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.TextStyle
@@ -169,8 +174,10 @@ import dev.fishpi.mobile.utils.appendDraftBlock
 import dev.fishpi.mobile.utils.appendMentionDraft
 import dev.fishpi.mobile.utils.toPlainMessageText
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val ChatIconButtonSize = 36.dp
 private const val ChatPluginFloatPrefsName = "chat_plugin_float"
@@ -265,6 +272,8 @@ internal interface DefaultChatUiBridge {
     val selectedEmojiGroupId: String
     val isLoadingEmojiPack: Boolean
     val emojiPackError: String?
+    val favoriteEmojiUrl: String?
+    val isFavoritingEmoji: Boolean
     val attachmentPanelOpen: Boolean
     val redPacketComposerOpen: Boolean
     val redPacketType: String
@@ -314,6 +323,8 @@ internal interface DefaultChatUiBridge {
     fun openPluginManager()
     fun openEmojiManager()
     fun favoriteEmoji(url: String)
+    fun confirmFavoriteEmoji(groupId: String, name: String)
+    fun dismissFavoriteEmoji()
     fun emitPluginToolbarAction(entry: PluginToolbarEntry, actionId: String)
     fun emitPluginMenuAction(action: PluginMenuAction, message: ChatRoomMessage)
     fun dismissLinkPreview()
@@ -382,6 +393,7 @@ private fun DefaultChatUiContent(
     var qrScannerOpen by remember { mutableStateOf(false) }
     var topicEditorOpen by remember { mutableStateOf(false) }
     var topicDraft by remember { mutableStateOf("") }
+    var favoriteEmojiSelectorOpen by remember { mutableStateOf(false) }
     val pluginFloatPrefs = remember(context) {
         context.getSharedPreferences(ChatPluginFloatPrefsName, Context.MODE_PRIVATE)
     }
@@ -503,6 +515,25 @@ private fun DefaultChatUiContent(
         keyboardController?.hide()
         focusManager.clearFocus(force = true)
         onOpenUserProfile(target)
+    }
+
+    val clipboardScope = rememberCoroutineScope()
+    fun copyMessageImage(message: ChatRoomMessage) {
+        val url = message.allRenderableImageUrls().firstOrNull()?.takeIf { it.isNotBlank() } ?: return
+        clipboardScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { context.copyImageToClipboard(url) }
+            }.onSuccess {
+                FishPiNotifier.success("图片已复制")
+            }.onFailure {
+                FishPiNotifier.error(it.message ?: "复制图片失败")
+            }
+        }
+    }
+    fun copyMessageImageLink(message: ChatRoomMessage) {
+        val url = message.allRenderableImageUrls().firstOrNull()?.takeIf { it.isNotBlank() } ?: return
+        context.copyToClipboard("图片链接", url)
+        FishPiNotifier.success("图片链接已复制")
     }
 
     val attachmentPicker = rememberChatAttachmentPicker(
@@ -1123,7 +1154,13 @@ private fun DefaultChatUiContent(
             onRevoke = {
                 dispatch(ChatAction.RevokeMessage(anchor.message))
             },
-            onFavoriteEmoji = anchor.message.imageUrls.firstOrNull()?.let { url ->
+            onCopyImage = anchor.message.allRenderableImageUrls().firstOrNull()?.let {
+                { copyMessageImage(anchor.message) }
+            },
+            onCopyImageLink = anchor.message.allRenderableImageUrls().firstOrNull()?.let {
+                { copyMessageImageLink(anchor.message) }
+            },
+            onFavoriteEmoji = anchor.message.allRenderableImageUrls().firstOrNull()?.let { url ->
                 { bridge.favoriteEmoji(url) }
             },
             extraActions = pluginMessageActions,
@@ -1161,6 +1198,15 @@ private fun DefaultChatUiContent(
             },
             onRevoke = {
                 dispatch(ChatAction.RevokeMessage(message))
+            },
+            onCopyImage = message.allRenderableImageUrls().firstOrNull()?.let {
+                { copyMessageImage(message) }
+            },
+            onCopyImageLink = message.allRenderableImageUrls().firstOrNull()?.let {
+                { copyMessageImageLink(message) }
+            },
+            onFavoriteEmoji = message.allRenderableImageUrls().firstOrNull()?.let { url ->
+                { bridge.favoriteEmoji(url) }
             },
             extraActions = pluginMessageActions,
             )
@@ -1275,6 +1321,29 @@ private fun DefaultChatUiContent(
                     },
                 )
             }
+            }
+        }
+
+        // 表情收藏选择器
+        if (bridge.favoriteEmojiUrl != null) {
+            Dialog(
+                onDismissRequest = { bridge.dismissFavoriteEmoji() },
+                properties = DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    decorFitsSystemWindows = false,
+                ),
+            ) {
+                FishPiOverlayWindow {
+                    FavoriteEmojiSelectorSheet(
+                        url = bridge.favoriteEmojiUrl ?: "",
+                        groups = emojiGroups,
+                        isLoading = bridge.isFavoritingEmoji,
+                        onGroupSelected = { groupId, emojiName ->
+                            bridge.confirmFavoriteEmoji(groupId, emojiName)
+                        },
+                        onDismiss = { bridge.dismissFavoriteEmoji() },
+                    )
+                }
             }
         }
 
@@ -3442,5 +3511,147 @@ private fun ChatOverlayPill(
     enabled: Boolean = true,
 ) {
     FloatingNoticePill(text = text, onClick = onClick, modifier = modifier, enabled = enabled)
+}
+
+@Composable
+private fun FavoriteEmojiSelectorSheet(
+    url: String,
+    groups: List<EmojiGroupView>,
+    isLoading: Boolean,
+    onGroupSelected: (String, String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var emojiName by remember { mutableStateOf("") }
+    val palette = LocalFishPiPalette.current
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .clip(RoundedCornerShape(12.dp)),
+            color = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // 标题
+                Text(
+                    text = "收藏表情",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = palette.onSurface,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+
+                // 表情名称输入框
+                Text(
+                    text = "表情名称",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = palette.onSurface,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+                BasicTextField(
+                    value = emojiName,
+                    onValueChange = { emojiName = it.take(32) },
+                    enabled = !isLoading,
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(palette.surface)
+                        .border(1.dp, palette.outline.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                        .padding(8.dp)
+                        .defaultMinSize(minHeight = 32.dp),
+                    decorationBox = { innerTextField ->
+                        if (emojiName.isEmpty()) {
+                            Text(
+                                text = "输入表情名称...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.outline.copy(alpha = 0.5f),
+                            )
+                        }
+                        innerTextField()
+                    },
+                )
+
+                // 分组标题
+                Text(
+                    text = "选择分组",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = palette.onSurface,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                )
+
+                // 分组列表
+                if (groups.isEmpty()) {
+                    Text(
+                        text = "暂无表情分组",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = palette.weakText,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        textAlign = TextAlign.Center,
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 150.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        groups.forEach { group ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable(
+                                        enabled = !isLoading,
+                                        onClick = {
+                                            val finalName = emojiName.trim().takeIf { it.isNotBlank() } ?: group.name
+                                            onGroupSelected(group.id, finalName)
+                                            onDismiss()
+                                        },
+                                    ),
+                                color = palette.surfaceContainer,
+                            ) {
+                                Text(
+                                    text = group.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (isLoading) palette.weakText else palette.onSurface,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onDismiss),
+                    color = palette.surfaceContainer,
+                ) {
+                    Text(
+                        text = "取消",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = palette.onSurface,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        }
+    }
 }
 

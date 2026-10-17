@@ -67,6 +67,8 @@ internal fun MessageActionBubbleMenu(
     onReaction: (String) -> Unit,
     onRepeat: () -> Unit,
     onRevoke: () -> Unit,
+    onCopyImage: (() -> Unit)? = null,
+    onCopyImageLink: (() -> Unit)? = null,
     onFavoriteEmoji: (() -> Unit)? = null,
     extraActions: List<MessageActionSpec> = emptyList(),
 ) {
@@ -89,6 +91,8 @@ internal fun MessageActionBubbleMenu(
         onRepeat = { onRepeat(); onDismiss() },
         onRevoke = { onRevoke(); onDismiss() },
         onReactions = { submenu = MessageActionSubmenu.Reactions },
+        onCopyImage = onCopyImage?.let { action -> { action(); onDismiss() } },
+        onCopyImageLink = onCopyImageLink?.let { action -> { action(); onDismiss() } },
         onFavoriteEmoji = onFavoriteEmoji?.let { action -> { action(); onDismiss() } },
         extraActions = extraActions.map { action ->
             action.copy(onClick = { action.onClick(); onDismiss() })

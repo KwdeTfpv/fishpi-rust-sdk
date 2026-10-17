@@ -55,7 +55,9 @@ internal fun ChatRoomMessage.copyableText(): String {
             .takeIf { it.isNotEmpty() }
             ?.joinToString("\n")
             ?.let(::add)
-    }.joinToString("\n\n")
+    }.joinToString("\n\n").takeIf { it.isNotBlank() } ?: run {
+        allRenderableImageUrls().takeIf { it.isNotEmpty() }?.joinToString("\n").orEmpty()
+    }
 }
 
 internal fun Context.copyToClipboard(label: String, text: String) {
@@ -63,7 +65,7 @@ internal fun Context.copyToClipboard(label: String, text: String) {
     clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
 }
 
-internal fun ChatRoomMessage.repeatableDraftContent(includeImageFallback: Boolean = false): String {
+internal fun ChatRoomMessage.repeatableDraftContent(includeImageFallback: Boolean = true): String {
     val mdText = md.trim()
     if (mdText.isNotBlank()) {
         return mdText

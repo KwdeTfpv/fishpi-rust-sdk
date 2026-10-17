@@ -100,6 +100,8 @@ internal fun ChatRoute(
                 override val selectedEmojiGroupId get() = legacyComposerState.selectedEmojiGroupId
                 override val isLoadingEmojiPack get() = legacyComposerState.isLoadingEmojiPack
                 override val emojiPackError get() = legacyComposerState.emojiPackError
+                override val favoriteEmojiUrl get() = legacyComposerState.favoriteEmojiUrl
+                override val isFavoritingEmoji get() = legacyComposerState.isFavoritingEmoji
                 override val attachmentPanelOpen get() = legacyComposerState.attachmentPanelOpen
                 override val redPacketComposerOpen get() = legacyInteractionState.redPacketComposerOpen
                 override val redPacketType get() = legacyInteractionState.redPacketType
@@ -178,6 +180,12 @@ internal fun ChatRoute(
                 override fun favoriteEmoji(url: String) {
                     chatController.favoriteEmoji(url)
                 }
+                override fun confirmFavoriteEmoji(groupId: String, name: String) {
+                    chatController.confirmFavoriteEmoji(groupId, name)
+                }
+                override fun dismissFavoriteEmoji() {
+                    chatController.dismissFavoriteEmoji()
+                }
                 override fun emitPluginToolbarAction(entry: PluginToolbarEntry, actionId: String) = chatController.emitPluginToolbarAction(entry, actionId)
                 override fun emitPluginMenuAction(action: PluginMenuAction, message: ChatRoomMessage) = chatController.emitPluginMenuAction(action, message)
                 override fun dismissLinkPreview() {
@@ -218,7 +226,10 @@ internal fun ChatRoute(
     if (emojiManagerOpen) {
         dev.fishpi.mobile.feature.emoji.EmojiManagerScreen(
             apiKey = appSession.apiKey,
-            onDismiss = { emojiManagerOpen = false },
+            onDismiss = {
+                emojiManagerOpen = false
+                chatController.refreshEmojiGroups()
+            },
         )
     }
 }

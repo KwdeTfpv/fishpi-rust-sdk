@@ -38,6 +38,9 @@ internal fun MessageActionSheet(
     onReaction: (String) -> Unit,
     onRepeat: () -> Unit,
     onRevoke: () -> Unit,
+    onCopyImage: (() -> Unit)? = null,
+    onCopyImageLink: (() -> Unit)? = null,
+    onFavoriteEmoji: (() -> Unit)? = null,
     showReactions: Boolean = true,
     extraActions: List<MessageActionSpec> = emptyList(),
 ) {
@@ -95,6 +98,9 @@ internal fun MessageActionSheet(
                 onQuote = onQuote,
                 onRepeat = onRepeat,
                 onRevoke = onRevoke,
+                onCopyImage = onCopyImage,
+                onCopyImageLink = onCopyImageLink,
+                onFavoriteEmoji = onFavoriteEmoji,
             ).forEach { action ->
                 AppSheetActionRow(
                     text = action.label,
