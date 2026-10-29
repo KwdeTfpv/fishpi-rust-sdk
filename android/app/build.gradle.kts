@@ -160,8 +160,43 @@ val copyRustArm64 = tasks.register<Copy>("copyRustArm64") {
     into(layout.buildDirectory.dir("generated/rustJniLibs/arm64-v8a"))
 }
 
+val checkUiContract = tasks.register("checkUiContract") {
+    val featureRoot = layout.projectDirectory.dir("src/main/java/dev/fishpi/mobile/feature").asFile
+    inputs.dir(featureRoot)
+    doLast {
+        val forbiddenImports = listOf(
+            "dev.fishpi.mobile.data.",
+            "dev.fishpi.mobile.plugin.",
+            "android.content.SharedPreferences",
+        )
+        val violations = featureRoot.walkTopDown()
+            .filter { file ->
+                file.isFile &&
+                    file.extension == "kt" &&
+                    file.path.contains("${File.separator}ui${File.separator}")
+            }
+            .flatMap { file ->
+                file.readLines().withIndex()
+                    .filter { (_, line) ->
+                        val trimmed = line.trimStart()
+                        trimmed.startsWith("import ") && forbiddenImports.any { trimmed.contains(it) }
+                    }
+                    .map { (index, line) ->
+                        "${file.relativeTo(featureRoot).path}:${index + 1}: ${line.trim()}"
+                    }
+            }
+            .toList()
+        if (violations.isNotEmpty()) {
+            throw org.gradle.api.GradleException(
+                "feature/**/ui must not import data/plugin/SharedPreferences:\n" +
+                    violations.joinToString("\n"),
+            )
+        }
+    }
+}
+
 tasks.named("preBuild") {
-    dependsOn(copyRustArm64)
+    dependsOn(copyRustArm64, checkUiContract)
 }
 
 dependencies {
