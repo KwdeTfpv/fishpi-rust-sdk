@@ -38,14 +38,15 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getPrivateChatSe
             rt.block_on(async {
                 let client = current_user(&token).await?;
                 let chat = client.chat();
-                let unread = chat
-                    .unread()
+                let unread = timeout(Duration::from_secs(8), chat.unread())
                     .await
+                    .ok()
+                    .and_then(Result::ok)
                     .map(|items| private_unread_counts(items, &username))
                     .unwrap_or_default();
-                let sessions = chat
-                    .list()
+                let sessions = timeout(Duration::from_secs(16), chat.list())
                     .await
+                    .map_err(|_| "加载私聊会话超时".to_string())?
                     .map_err(|err| format!("加载私聊会话失败: {err}"))?
                     .into_iter()
                     .map(|msg| {
