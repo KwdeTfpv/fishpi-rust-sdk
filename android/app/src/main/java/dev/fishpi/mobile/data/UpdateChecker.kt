@@ -5,14 +5,20 @@ import dev.fishpi.mobile.BuildConfig
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 
 data class ReleaseUpdateInfo(
     val versionCode: Int,
+    val versionName: String,
     val changelog: String,
     val tagName: String,
     val apkUrl: String,
+    val urls: List<String> = listOf(apkUrl),
+    val sha256: String = "",
+    val sizeBytes: Long = 0L,
+    val channel: String = UpdateChannel.Stable.key,
 )
 
 data class ReleaseUpdateCheckResult(
@@ -28,26 +34,76 @@ object UpdateChecker {
     private val VersionCodeRegex = Regex("""(?m)^versionCode:\s*(\d+)""")
 
     fun check(): ReleaseUpdateInfo? {
-        return runCatching { checkForUpdate().updateInfo }.getOrNull()
+        return runCatching { checkForUpdate(UpdateChannel.Stable).updateInfo }.getOrNull()
     }
 
-    fun checkForUpdate(): ReleaseUpdateCheckResult {
-        val atomRelease = runCatching { requestLatestReleaseByAtom() }.getOrNull()
-        if (atomRelease != null) {
-            if (compareSemver(atomRelease.tagName, BuildConfig.VERSION_NAME) <= 0) {
-                return ReleaseUpdateCheckResult(updateInfo = null, latestTagName = atomRelease.tagName)
+    fun checkForUpdate(channel: UpdateChannel = UpdateChannel.Stable): ReleaseUpdateCheckResult {
+        val manifest = runCatching { fetchManifest(channel) }.getOrNull()
+        if (manifest != null) {
+            return if (compareSemver(manifest.versionName, BuildConfig.VERSION_NAME) <= 0) {
+                ReleaseUpdateCheckResult(updateInfo = null, latestTagName = manifest.versionName)
+            } else {
+                ReleaseUpdateCheckResult(updateInfo = manifest, latestTagName = manifest.versionName)
+            }
+        }
+        return checkForUpdateFromAtom(channel)
+    }
+
+    private fun fetchManifest(channel: UpdateChannel): ReleaseUpdateInfo? {
+        val rcTag = if (channel == UpdateChannel.Rc) {
+            requestAtomReleases().firstOrNull { it.tagName.contains("-rc.") }?.tagName ?: return null
+        } else {
+            null
+        }
+        val url = if (rcTag == null) {
+            releasesUrl("latest/download/update.json")
+        } else {
+            releasesUrl("download/$rcTag/update.json")
+        }
+        val payload = runCatching { JSONObject(requestText(url, followRedirects = true)) }.getOrNull()
+            ?: return null
+        return manifestToInfo(payload, channel)
+    }
+
+    private fun manifestToInfo(payload: JSONObject, channel: UpdateChannel): ReleaseUpdateInfo? {
+        val versionName = payload.optString("versionName").trim()
+        val versionCode = payload.optInt("versionCode", -1)
+        if (versionName.isBlank() || versionCode < 0) return null
+        val tagName = "v$versionName"
+        val urls = payload.optJSONArray("urls").toStringList()
+        val apkUrl = urls.firstOrNull() ?: buildApkUrl(tagName)
+        return ReleaseUpdateInfo(
+            versionCode = versionCode,
+            versionName = versionName,
+            changelog = payload.optString("changelog").trim().ifBlank {
+                "发现新版本 $tagName，请下载后安装。"
+            },
+            tagName = tagName,
+            apkUrl = apkUrl,
+            urls = if (urls.isEmpty()) listOf(apkUrl) else urls,
+            sha256 = payload.optString("sha256").trim(),
+            sizeBytes = payload.optLong("sizeBytes", 0L),
+            channel = payload.optString("channel").trim().ifBlank { channel.key },
+        )
+    }
+
+    private fun checkForUpdateFromAtom(channel: UpdateChannel): ReleaseUpdateCheckResult {
+        val releases = runCatching { requestAtomReleases() }.getOrDefault(emptyList())
+        val release = when (channel) {
+            UpdateChannel.Rc -> releases.firstOrNull { it.tagName.contains("-rc.") }
+            UpdateChannel.Stable -> releases.firstOrNull { !it.tagName.contains("-rc.") }
+        }
+        if (release != null) {
+            if (compareSemver(release.tagName, BuildConfig.VERSION_NAME) <= 0) {
+                return ReleaseUpdateCheckResult(updateInfo = null, latestTagName = release.tagName)
             }
             return ReleaseUpdateCheckResult(
-                updateInfo = ReleaseUpdateInfo(
-                    versionCode = atomRelease.versionCode,
-                    changelog = atomRelease.changelog.ifBlank {
-                        "发现新版本 ${atomRelease.tagName}，请下载后安装。"
-                    },
-                    tagName = atomRelease.tagName,
-                    apkUrl = buildApkUrl(atomRelease.tagName),
-                ),
-                latestTagName = atomRelease.tagName,
+                updateInfo = atomReleaseToInfo(release),
+                latestTagName = release.tagName,
             )
+        }
+        if (channel == UpdateChannel.Rc) {
+            return ReleaseUpdateCheckResult(updateInfo = null, latestTagName = "")
         }
 
         val latestTag = requestLatestTagNameByRedirect()
@@ -55,24 +111,43 @@ object UpdateChecker {
         if (compareSemver(latestTag, BuildConfig.VERSION_NAME) <= 0) {
             return ReleaseUpdateCheckResult(updateInfo = null, latestTagName = latestTag)
         }
+        val apkUrl = buildApkUrl(latestTag)
         return ReleaseUpdateCheckResult(
             updateInfo = ReleaseUpdateInfo(
                 versionCode = -1,
+                versionName = latestTag.removePrefix("v"),
                 changelog = "发现新版本 $latestTag，请下载后安装。",
                 tagName = latestTag,
-                apkUrl = buildApkUrl(latestTag),
+                apkUrl = apkUrl,
+                urls = listOf(apkUrl),
             ),
             latestTagName = latestTag,
         )
     }
 
-    private fun requestLatestReleaseByAtom(): AtomRelease? {
-        val endpoint =
-            "https://github.com/${BuildConfig.UPDATE_REPO_OWNER}/${BuildConfig.UPDATE_REPO_NAME}/releases.atom"
+    private fun atomReleaseToInfo(release: AtomRelease): ReleaseUpdateInfo {
+        val versionName = release.tagName.removePrefix("v")
+        val apkUrl = buildApkUrl(release.tagName)
+        return ReleaseUpdateInfo(
+            versionCode = release.versionCode,
+            versionName = versionName,
+            changelog = release.changelog.ifBlank {
+                "发现新版本 ${release.tagName}，请下载后安装。"
+            },
+            tagName = release.tagName,
+            apkUrl = apkUrl,
+            urls = listOf(apkUrl),
+            channel = if (release.tagName.contains("-rc.")) UpdateChannel.Rc.key else UpdateChannel.Stable.key,
+        )
+    }
+
+    private fun requestAtomReleases(): List<AtomRelease> {
+        val endpoint = releasesUrl("atom")
         val xml = requestText(endpoint, followRedirects = true)
         val parser = XmlPullParserFactory.newInstance().newPullParser().apply {
             setInput(xml.reader())
         }
+        val releases = mutableListOf<AtomRelease>()
         var inEntry = false
         var tagName = ""
         var content = ""
@@ -101,7 +176,7 @@ object UpdateChecker {
                     val normalizedTag = tagName.trim()
                     if (normalizedTag.isNotBlank()) {
                         val plainContent = content.toPlainReleaseText()
-                        return AtomRelease(
+                        releases += AtomRelease(
                             tagName = normalizedTag,
                             changelog = plainContent.toReleaseChangelog(),
                             versionCode = VersionCodeRegex.find(plainContent)
@@ -116,12 +191,11 @@ object UpdateChecker {
             }
             event = parser.next()
         }
-        return null
+        return releases
     }
 
     private fun requestLatestTagNameByRedirect(): String? {
-        val endpoint =
-            "https://github.com/${BuildConfig.UPDATE_REPO_OWNER}/${BuildConfig.UPDATE_REPO_NAME}/releases/latest"
+        val endpoint = releasesUrl("latest")
         val connection = openConnection(endpoint, followRedirects = false)
         return try {
             val code = connection.responseCode
@@ -157,8 +231,11 @@ object UpdateChecker {
             }
             ?: throw IOException("无法创建网络连接")
 
+    private fun releasesUrl(path: String): String =
+        "https://github.com/${BuildConfig.UPDATE_REPO_OWNER}/${BuildConfig.UPDATE_REPO_NAME}/releases/$path"
+
     private fun buildApkUrl(tagName: String): String =
-        "https://github.com/${BuildConfig.UPDATE_REPO_OWNER}/${BuildConfig.UPDATE_REPO_NAME}/releases/download/$tagName/$DefaultApkAssetName"
+        releasesUrl("download/$tagName/$DefaultApkAssetName")
 
     private fun compareSemver(left: String, right: String): Int {
         val l = parseSemver(left) ?: return 0

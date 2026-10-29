@@ -370,7 +370,7 @@ internal fun MainShell(
         isCheckingUpdate = true
         scope.launch {
             runCatching {
-                withContext(Dispatchers.IO) { UpdateChecker.checkForUpdate() }
+                withContext(Dispatchers.IO) { UpdateChecker.checkForUpdate(store.getUpdateChannel()) }
             }.onSuccess { result ->
                 val info = result.updateInfo
                 if (info != null) {
