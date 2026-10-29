@@ -1,12 +1,7 @@
 package dev.fishpi.mobile
 
 import android.app.Activity
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.BackHandler
@@ -229,7 +224,7 @@ internal fun MainShell(
     var lastNoticeRefreshAt by remember { mutableStateOf(0L) }
     var updateInfo by remember { mutableStateOf<ReleaseUpdateInfo?>(null) }
     var updateDismissed by remember { mutableStateOf(false) }
-    var updateDownloadId by remember { mutableStateOf<Long?>(null) }
+    var isDownloadingUpdate by remember { mutableStateOf(false) }
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var showVisitorVerify by remember { mutableStateOf(false) }
     val visitorVerifyVisible by rememberUpdatedState(showVisitorVerify)
@@ -425,37 +420,6 @@ internal fun MainShell(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-
-    DisposableEffect(context, updateDownloadId) {
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context, intent: Intent?) {
-                if (intent?.action != DownloadManager.ACTION_DOWNLOAD_COMPLETE) {
-                    return
-                }
-                val completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
-                if (completedId <= 0L || completedId != updateDownloadId) {
-                    return
-                }
-                val installed = runCatching {
-                    UpdateDownloader.installDownloadedApk(context, completedId)
-                }.getOrDefault(false)
-                if (!installed) {
-                    FishPiNotifier.error("下载完成，但安装启动失败，请手动安装")
-                }
-                updateDownloadId = null
-            }
-        }
-        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            context.registerReceiver(receiver, filter)
-        }
-        onDispose {
-            runCatching { context.unregisterReceiver(receiver) }
         }
     }
 
@@ -842,21 +806,36 @@ internal fun MainShell(
             },
             confirmButton = {
                 TextButton(
+                    enabled = !isDownloadingUpdate,
                     onClick = {
-                        val downloadId = runCatching {
-                            val fileName = UpdateDownloader.buildApkFileName(pendingUpdate.tagName)
-                            UpdateDownloader.downloadApk(context, pendingUpdate.apkUrl, fileName)
-                        }.getOrNull()
-                        if (downloadId == null) {
-                            FishPiNotifier.error("启动下载失败，请稍后重试")
-                            return@TextButton
-                        }
-                        updateDownloadId = downloadId
+                        if (isDownloadingUpdate) return@TextButton
+                        isDownloadingUpdate = true
                         updateDismissed = true
-                        FishPiNotifier.success("已开始下载，完成后将自动安装")
+                        scope.launch {
+                            val downloaded = runCatching {
+                                withContext(Dispatchers.IO) {
+                                    UpdateDownloader.downloadApk(
+                                        context = context,
+                                        urls = pendingUpdate.urls,
+                                        expectedSha256 = pendingUpdate.sha256,
+                                    )
+                                }
+                            }
+                            downloaded.onSuccess { apk ->
+                                val started = runCatching {
+                                    UpdateDownloader.installDownloadedApk(context, apk)
+                                }.getOrDefault(false)
+                                if (!started) {
+                                    FishPiNotifier.error("安装启动失败，请手动安装")
+                                }
+                            }.onFailure {
+                                FishPiNotifier.error(it.message ?: "下载失败")
+                            }
+                            isDownloadingUpdate = false
+                        }
                     },
                 ) {
-                    Text("立即更新")
+                    Text(if (isDownloadingUpdate) "下载中..." else "立即更新")
                 }
             },
             dismissButton = {
