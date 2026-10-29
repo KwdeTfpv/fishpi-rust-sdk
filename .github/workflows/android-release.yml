@@ -191,6 +191,45 @@ jobs:
           fi
           printf '%s\n' "$notes" > release-notes.md
 
+      - name: Prepare update manifest
+        shell: bash
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          apk="android/app/build/outputs/apk/release/app-release.apk"
+          if [[ ! -f "$apk" ]]; then
+            echo "::error::APK not found."
+            exit 1
+          fi
+          sha="$(sha256sum "$apk" | awk '{print $1}')"
+          size="$(stat -c%s "$apk")"
+          printf '%s\n' "$sha" > app-release.apk.sha256
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/app-release.apk"
+          python3 - "$CHANNEL" "$VERSION_NAME" "$VERSION_CODE" "$sha" "$size" "$url" <<'PY'
+          import json
+          import sys
+
+          channel, version_name, version_code, sha, size, url = sys.argv[1:7]
+          with open("release-notes.md", encoding="utf-8") as handle:
+              changelog = handle.read()
+          payload = {
+              "channel": channel,
+              "versionName": version_name,
+              "versionCode": int(version_code),
+              "sha256": sha,
+              "sizeBytes": int(size),
+              "changelog": changelog,
+              "urls": [url],
+              "minSupportedVersionCode": 0,
+          }
+          with open("update.json", "w", encoding="utf-8") as handle:
+              json.dump(payload, handle, ensure_ascii=False, indent=2)
+          PY
+
       - name: Publish release
         if: steps.version.outputs.dry_run != 'true'
         shell: bash
@@ -209,12 +248,12 @@ jobs:
           git tag "$TAG"
           git push origin "$TAG"
           if [[ "$CHANNEL" == "rc" ]]; then
-            gh release create "$TAG" "$apk" \
+            gh release create "$TAG" "$apk" app-release.apk.sha256 update.json \
               --title "FishPi ${VERSION_NAME}" \
               --notes-file release-notes.md \
               --prerelease
           else
-            gh release create "$TAG" "$apk" \
+            gh release create "$TAG" "$apk" app-release.apk.sha256 update.json \
               --title "FishPi ${VERSION_NAME}" \
               --notes-file release-notes.md \
               --latest
@@ -227,4 +266,6 @@ jobs:
           name: fishpi-${{ steps.version.outputs.version_name }}
           path: |
             android/app/build/outputs/apk/release/app-release.apk
+            app-release.apk.sha256
+            update.json
             release-notes.md
