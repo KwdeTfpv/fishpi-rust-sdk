@@ -35,14 +35,14 @@ internal class ChatRenderModelReducer {
             }
         }
         val (items, itemEndMessageIndexes) = buildVisibleItems(visible)
-        renderHintCache.retainRecentRenderHints(visible)
-        listItemCache.retainRecentListItems(visible)
         model = ChatRenderModel(
             visibleItems = items,
             itemEndMessageIndexes = itemEndMessageIndexes,
             visibleMessages = visible,
             blockedMessages = blocked,
         )
+        renderHintCache.retainRecentRenderHints(visible)
+        listItemCache.retainRecentListItems(model)
         return model
     }
 
@@ -72,7 +72,7 @@ internal class ChatRenderModelReducer {
                 visibleMessages = listOf(appended),
             )
             renderHintCache.retainRecentRenderHints(model.visibleMessages)
-            listItemCache.retainRecentListItems(model.visibleMessages)
+            listItemCache.retainRecentListItems(model)
             return model
         }
 
@@ -103,7 +103,7 @@ internal class ChatRenderModelReducer {
             )
         }
         renderHintCache.retainRecentRenderHints(newVisible)
-        listItemCache.retainRecentListItems(newVisible)
+        listItemCache.retainRecentListItems(model)
         return model
     }
 
@@ -144,7 +144,7 @@ internal class ChatRenderModelReducer {
         val newItems = model.visibleItems.toMutableList().also { it[itemIdx] = rebuilt }
         model = model.copy(visibleItems = newItems, visibleMessages = newVisible)
         renderHintCache.retainRecentRenderHints(newVisible)
-        listItemCache.retainRecentListItems(newVisible)
+        listItemCache.retainRecentListItems(model)
         return model
     }
 
@@ -169,8 +169,7 @@ internal class ChatRenderModelReducer {
     ): ChatListItem {
         val message = groupMessages.first()
         val hintKey = message.renderHintCacheKey()
-        val previousKey = previousMsg?.renderHintCacheKey().orEmpty()
-        val itemKey = "$previousKey->$hintKey-${groupMessages.size}"
+        val itemKey = listItemCacheKey(previousMsg, groupMessages)
 
         val repeatStack = if (groupMessages.size > 1) {
             val participants = groupMessages
@@ -278,18 +277,36 @@ private fun LinkedHashMap<String, ChatMessageRenderHints>.retainRecentRenderHint
     entries.removeIf { (key, _) -> key !in activeKeys }
 }
 
+private fun listItemCacheKey(
+    previous: ChatRoomMessage?,
+    groupMessages: List<ChatRoomMessage>,
+): String {
+    val message = groupMessages.first()
+    val previousKey = previous?.renderHintCacheKey().orEmpty()
+    return "$previousKey->${message.renderHintCacheKey()}-${groupMessages.size}"
+}
+
 private fun LinkedHashMap<String, ChatListItem>.retainRecentListItems(
-    visibleMessages: List<ChatRoomMessage>,
+    model: ChatRenderModel,
 ) {
-    val recentMessages = visibleMessages.takeLast(180)
-    val firstRecentIndex = visibleMessages.size - recentMessages.size
-    val activeKeys = recentMessages.mapIndexedTo(HashSet()) { index, message ->
-        val previousKey = when {
-            index > 0 -> recentMessages[index - 1].renderHintCacheKey()
-            firstRecentIndex > 0 -> visibleMessages[firstRecentIndex - 1].renderHintCacheKey()
-            else -> ""
-        }
-        "$previousKey->${message.renderHintCacheKey()}"
+    val messages = model.visibleMessages
+    val ends = model.itemEndMessageIndexes
+    if (ends.isEmpty()) {
+        clear()
+        return
+    }
+    val firstRecentIndex = (messages.size - 180).coerceAtLeast(0)
+    var firstGroup = ends.size - 1
+    while (firstGroup > 0 && ends[firstGroup - 1] >= firstRecentIndex) {
+        firstGroup--
+    }
+    val activeKeys = HashSet<String>(ends.size - firstGroup)
+    var start = if (firstGroup > 0) ends[firstGroup - 1] + 1 else 0
+    for (index in firstGroup until ends.size) {
+        val end = ends[index]
+        val previous = if (start > 0) messages[start - 1] else null
+        activeKeys.add(listItemCacheKey(previous, messages.subList(start, end + 1)))
+        start = end + 1
     }
     entries.removeIf { (key, _) -> key !in activeKeys }
 }
