@@ -70,6 +70,9 @@ object RealtimeConnectionManager {
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
 
+    private val _noticeStatus = MutableStateFlow("")
+    val noticeStatus: StateFlow<String> = _noticeStatus.asStateFlow()
+
     @Volatile
     private var session: RealtimeSession? = null
 
@@ -104,6 +107,7 @@ object RealtimeConnectionManager {
         notice.connect(
             apiKey = next.apiKey,
             onNotice = { _noticeEvents.tryEmit(Unit) },
+            onStatus = { _noticeStatus.value = it },
         )
 
         noticeReconnectJob?.cancel()
@@ -115,6 +119,7 @@ object RealtimeConnectionManager {
                 notice.connect(
                     apiKey = current.apiKey,
                     onNotice = { _noticeEvents.tryEmit(Unit) },
+                    onStatus = { _noticeStatus.value = it },
                 )
             }
         }
@@ -137,6 +142,7 @@ object RealtimeConnectionManager {
         started = false
         session = null
         _connected.value = false
+        _noticeStatus.value = ""
         chatRoom.disconnect()
         privateOverview.disconnect()
         notice.disconnect()

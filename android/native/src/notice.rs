@@ -169,7 +169,20 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_connectNotice(
         Ok(Box::into_raw(handle) as jlong)
     })();
 
-    result.unwrap_or_default()
+    match result {
+        Ok(handle) => handle,
+        Err(err) => {
+            let fallback_vm = env.get_java_vm().ok().map(Arc::new);
+            if let (Some(java_vm), Ok(callback)) = (fallback_vm, env.new_global_ref(&callback)) {
+                emit_callback(
+                    &java_vm,
+                    &callback,
+                    json!({ "event": "error", "message": err }),
+                );
+            }
+            0
+        }
+    }
 }
 
 #[unsafe(no_mangle)]

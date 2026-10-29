@@ -1,16 +1,20 @@
 package dev.fishpi.mobile.data
 
 import android.os.Handler
-import org.json.JSONObject
 
 internal class NoticeRealtimeClient : NativeRealtimeClient() {
 
     fun connect(
         apiKey: String,
         onNotice: () -> Unit,
+        onStatus: (String) -> Unit = {},
     ) {
-        connectInternal {
-            val callback = NativeCallback(mainHandler, onNotice)
+        connectInternal(
+            connectingStatus = "正在连接通知...",
+            failedStatus = "通知连接失败",
+            onStatus = onStatus,
+        ) {
+            val callback = NativeCallback(mainHandler, onNotice, onStatus)
             FishPiNative.connectNotice(apiKey, callback)
         }
     }
@@ -20,14 +24,18 @@ internal class NoticeRealtimeClient : NativeRealtimeClient() {
     }
 
     private class NativeCallback(
-        private val mainHandler: Handler,
+        mainHandler: Handler,
         private val onNotice: () -> Unit,
+        onStatus: (String) -> Unit,
     ) {
+        private val dispatcher = RealtimeEventDispatcher(mainHandler, onStatus)
+
         @Suppress("unused")
         fun onEvent(payload: String) {
-            val event = runCatching { JSONObject(payload) }.getOrNull() ?: return
-            if (event.optString("event") == "notice") {
-                mainHandler.post { onNotice() }
+            dispatcher.dispatch(payload) { _, type ->
+                if (type == "notice") {
+                    post { onNotice() }
+                }
             }
         }
     }
