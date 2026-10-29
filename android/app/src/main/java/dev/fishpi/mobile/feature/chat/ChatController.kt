@@ -9,6 +9,7 @@ import dev.fishpi.mobile.data.AtUserCandidate
 import dev.fishpi.mobile.data.ChatReactionUpdate
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.realtime.ChatRoomEvent
+import dev.fishpi.mobile.realtime.ChatRoomSnapshot
 import dev.fishpi.mobile.realtime.RealtimeConnectionManager
 import dev.fishpi.mobile.realtime.RealtimeStatus
 import dev.fishpi.mobile.data.EmojiGroupView
@@ -125,6 +126,7 @@ internal class ChatController(
         get() = pluginManager.menuActions
     private var realtimeConnectConfig: RealtimeConnectConfig? = null
     private var chatEventJob: Job? = null
+    private var snapshotJob: Job? = null
     private var pollingActive = false
 
     init {
@@ -282,6 +284,12 @@ internal class ChatController(
                 handleChatEvent(event)
             }
         }
+        snapshotJob?.cancel()
+        snapshotJob = scope.launch {
+            RealtimeConnectionManager.chatRoomSnapshot.collect { snapshot ->
+                applySnapshot(snapshot)
+            }
+        }
     }
 
     private suspend fun handleChatEvent(event: ChatRoomEvent) {
@@ -317,6 +325,8 @@ internal class ChatController(
     fun disconnectRealtime(markPaused: Boolean = true) {
         chatEventJob?.cancel()
         chatEventJob = null
+        snapshotJob?.cancel()
+        snapshotJob = null
         if (markPaused && !_state.value.isLoading) {
             updateConnectionStatus(RealtimeStatus.Disconnected, "聊天室实时连接已暂停")
         }
@@ -330,6 +340,8 @@ internal class ChatController(
         pollingActive = false
         chatEventJob?.cancel()
         chatEventJob = null
+        snapshotJob?.cancel()
+        snapshotJob = null
         livenessPollingJob?.cancel()
         livenessPollingJob = null
         renderJob?.cancel()
@@ -806,6 +818,21 @@ internal class ChatController(
             maxRetained = config?.maxRetainedMessages ?: 520,
             trimTo = config?.trimMessagesTo ?: 440,
         )
+    }
+
+    private fun applySnapshot(snapshot: ChatRoomSnapshot) {
+        _state.update {
+            it.copy(
+                connection = it.connection.copy(
+                    status = snapshot.status.toChatConnectionStatus(),
+                    label = snapshot.label,
+                    nodeName = snapshot.nodeName,
+                    topic = snapshot.topic,
+                    onlineCount = snapshot.onlineCount.toLong(),
+                    onlineUsers = snapshot.onlineUsers,
+                ),
+            )
+        }
     }
 
     private fun onNodeChanged(nodeName: String) {

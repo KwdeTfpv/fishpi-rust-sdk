@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import java.util.concurrent.atomic.AtomicLong
 
 enum class RealtimeStatus {
@@ -46,6 +47,15 @@ sealed interface ChatRoomEvent {
 }
 
 data class RealtimeSession(val apiKey: String, val username: String)
+
+data class ChatRoomSnapshot(
+    val nodeName: String = "",
+    val topic: String = "",
+    val onlineCount: Int = 0,
+    val onlineUsers: List<ChatOnlineUser> = emptyList(),
+    val status: RealtimeStatus = RealtimeStatus.Disconnected,
+    val label: String = "",
+)
 
 // 进程级单例：三条实时连接的唯一持有者，事件通过 SharedFlow 扇出
 object RealtimeConnectionManager {
@@ -100,6 +110,9 @@ object RealtimeConnectionManager {
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
 
+    private val _chatRoomSnapshot = MutableStateFlow(ChatRoomSnapshot())
+    val chatRoomSnapshot: StateFlow<ChatRoomSnapshot> = _chatRoomSnapshot.asStateFlow()
+
     private val _noticeStatus = MutableStateFlow("")
     val noticeStatus: StateFlow<String> = _noticeStatus.asStateFlow()
 
@@ -125,13 +138,26 @@ object RealtimeConnectionManager {
             onRevoke = { emitChat(ChatRoomEvent.Revoke(it)) },
             onReaction = { emitChat(ChatRoomEvent.Reaction(it)) },
             onRedPacketStatus = { emitChat(ChatRoomEvent.RedPacketStatus(it)) },
-            onOnline = { count, topic, users -> emitChat(ChatRoomEvent.Online(count, topic, users)) },
-            onDiscussChanged = { emitChat(ChatRoomEvent.DiscussChanged(it)) },
-            onNodeChanged = { emitChat(ChatRoomEvent.NodeChanged(it)) },
+            onOnline = { count, topic, users ->
+                _chatRoomSnapshot.update {
+                    it.copy(onlineCount = count, topic = topic.trim(), onlineUsers = users)
+                }
+                emitChat(ChatRoomEvent.Online(count, topic, users))
+            },
+            onDiscussChanged = { topic ->
+                _chatRoomSnapshot.update { it.copy(topic = topic.trim()) }
+                emitChat(ChatRoomEvent.DiscussChanged(topic))
+            },
+            onNodeChanged = { nodeName ->
+                _chatRoomSnapshot.update { it.copy(nodeName = nodeName.trim()) }
+                emitChat(ChatRoomEvent.NodeChanged(nodeName))
+            },
             onStatus = { raw ->
                 val status = classifyChatStatus(raw)
+                val label = chatStatusLabel(raw)
                 _connected.value = status == RealtimeStatus.Connected
-                emitChat(chatStatusEvent(raw))
+                _chatRoomSnapshot.update { it.copy(status = status, label = label) }
+                emitChat(ChatRoomEvent.Status(status, label))
             },
         )
         connectPrivateOverview(next)
@@ -173,6 +199,7 @@ object RealtimeConnectionManager {
         started = false
         session = null
         _connected.value = false
+        _chatRoomSnapshot.value = ChatRoomSnapshot()
         _noticeStatus.value = ""
         chatRoom.disconnect()
         privateOverview.disconnect()
