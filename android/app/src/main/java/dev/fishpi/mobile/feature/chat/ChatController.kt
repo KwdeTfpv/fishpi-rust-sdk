@@ -39,6 +39,7 @@ import dev.fishpi.mobile.plugin.PluginManager
 import dev.fishpi.mobile.plugin.PluginMenuAction
 import dev.fishpi.mobile.plugin.PluginToolbarEntry
 import dev.fishpi.mobile.utils.appendDraftBlock
+import dev.fishpi.mobile.utils.toEpochMillisOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -489,8 +490,8 @@ internal class ChatController(
             }.onSuccess { history ->
 
                 val previous = rawMessages.value
-                val locallySynthesized = previous
-                    .filter { it.isLocallySynthesized }
+                val localTail = previous
+                    .filter { it.isLocallySynthesized || it.isOptimistic }
                     .takeLast(MaxRetainedSynthesizedMessages)
                 val echoKeyByOId = previous
                     .filter { it.echoKey.isNotBlank() && it.oId.isNotBlank() }
@@ -503,7 +504,20 @@ internal class ChatController(
                         if (echoKey != null && message.echoKey.isBlank()) message.copy(echoKey = echoKey) else message
                     }
                 }
-                val merged = if (locallySynthesized.isEmpty()) historyWithEcho else historyWithEcho + locallySynthesized
+                val unmatchedHistory = historyWithEcho.toMutableList()
+                val retainedLocal = localTail.filter { local ->
+                    if (!local.isOptimistic) return@filter true
+                    val matchIndex = unmatchedHistory.indexOfFirst { historyMessage ->
+                        local.matchesOptimisticHistory(historyMessage)
+                    }
+                    if (matchIndex >= 0) {
+                        unmatchedHistory.removeAt(matchIndex)
+                        false
+                    } else {
+                        true
+                    }
+                }
+                val merged = historyWithEcho + retainedLocal
                 rawMessages.value = merged
                 refreshRenderModel()
                 _state.update {
@@ -676,6 +690,16 @@ internal class ChatController(
         val mineText = renderSource.trim()
         val theirText = incoming.renderSource.trim()
         return mineText.isNotEmpty() && mineText == theirText
+    }
+
+    private fun ChatRoomMessage.matchesOptimisticHistory(history: ChatRoomMessage): Boolean {
+        if (!userName.equals(currentUsername, ignoreCase = true)) return false
+        if (!history.userName.equals(currentUsername, ignoreCase = true)) return false
+        if (renderSource.trim() != history.renderSource.trim()) return false
+        val localTime = time.toEpochMillisOrNull()
+        val historyTime = history.time.toEpochMillisOrNull()
+        if (localTime == null || historyTime == null) return false
+        return kotlin.math.abs(localTime - historyTime) <= OptimisticHistoryMatchWindowMs
     }
 
     private inline fun updateMessageByOId(
@@ -1590,6 +1614,7 @@ internal class ChatController(
         const val MaxBarragerLength = 80
         const val DefaultBarragerColor = "#ffffff"
         const val MaxRetainedSynthesizedMessages = 10
+        const val OptimisticHistoryMatchWindowMs = 2 * 60 * 1000L
     }
 
     private var lastRealtimeRefreshAtMs: Long = 0L
@@ -1683,3 +1708,6 @@ private data class RealtimeConnectConfig(
  */
 private val ChatRoomMessage.isLocallySynthesized: Boolean
     get() = oId.startsWith("custom:") || oId.startsWith("discuss:") || oId.startsWith("plugin:")
+
+private val ChatRoomMessage.isOptimistic: Boolean
+    get() = oId.startsWith("local:")
