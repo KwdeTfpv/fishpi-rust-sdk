@@ -53,6 +53,9 @@ android {
         val updateRepoName = (project.findProperty("updateRepoName") as String?) ?: "fishpi-rust-sdk"
         buildConfigField("String", "UPDATE_REPO_OWNER", "\"$updateRepoOwner\"")
         buildConfigField("String", "UPDATE_REPO_NAME", "\"$updateRepoName\"")
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     signingConfigs {
