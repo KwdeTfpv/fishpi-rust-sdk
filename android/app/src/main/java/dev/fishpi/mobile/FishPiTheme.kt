@@ -143,6 +143,7 @@ internal data class FishPiGlassTokens(
     val chromaticAberration: Boolean,
     val shadowAlpha: Float,
     val innerShadowRadius: Float,
+    val scrimAlpha: Float,
 )
 
 internal data class FishPiThemeTokens(
@@ -223,11 +224,26 @@ internal val ClassicFishPiGlassTokens = FishPiGlassTokens(
     chromaticAberration = false,
     shadowAlpha = 0.18f,
     innerShadowRadius = 10f,
+    scrimAlpha = 0.44f,
+)
+
+internal val DisabledFishPiGlassTokens = ClassicFishPiGlassTokens.copy(
+    surfaceAlpha = 1f,
+    elevatedAlpha = 1f,
+    floatingAlpha = 1f,
+    blurRadius = 0f,
+    refractionHeight = 0f,
+    refractionAmount = 0f,
+    chromaticAberration = false,
+    shadowAlpha = 0f,
+    innerShadowRadius = 0f,
+    scrimAlpha = 0.20f,
 )
 
 internal val LocalFishPiPalette = compositionLocalOf { IslandFishPiPalette }
 internal val LocalFishPiThemeTokens = compositionLocalOf { IslandFishPiThemeTokens }
 internal val LocalFishPiGlassTokens = compositionLocalOf { ClassicFishPiGlassTokens }
+internal val LocalFishPiGlassEnabled = compositionLocalOf { true }
 
 internal object FishPiTheme {
     val background: Color @Composable get() = LocalFishPiPalette.current.background
@@ -256,6 +272,7 @@ internal object FishPiTheme {
     val borderWidth: Dp @Composable get() = LocalFishPiThemeTokens.current.border.width.dp
     val depth: Float @Composable get() = LocalFishPiThemeTokens.current.depth.level
     val glass: FishPiGlassTokens @Composable get() = LocalFishPiGlassTokens.current
+    val glassEnabled: Boolean @Composable get() = LocalFishPiGlassEnabled.current
 }
 
 internal fun FishPiThemeTokens.toPalette(wallpaperImageUri: String? = null): FishPiPalette {
@@ -754,6 +771,7 @@ internal fun FishPiM3BridgedTheme(
     palette: FishPiPalette,
     tokens: FishPiThemeTokens = IslandFishPiThemeTokens,
     dynamicColor: Boolean = false,
+    glassEnabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -770,7 +788,8 @@ internal fun FishPiM3BridgedTheme(
     androidx.compose.runtime.CompositionLocalProvider(
         LocalFishPiPalette provides palette,
         LocalFishPiThemeTokens provides tokens,
-        LocalFishPiGlassTokens provides tokens.glassTokens(),
+        LocalFishPiGlassEnabled provides glassEnabled,
+        LocalFishPiGlassTokens provides if (glassEnabled) tokens.glassTokens() else DisabledFishPiGlassTokens,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

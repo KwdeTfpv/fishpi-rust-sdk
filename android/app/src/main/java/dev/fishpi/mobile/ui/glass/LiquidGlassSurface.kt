@@ -53,12 +53,13 @@ internal fun Modifier.fishPiGlassSurface(
     role: FishPiGlassRole = FishPiGlassRole.Control,
     exportedBackdrop: LayerBackdrop? = null,
 ): Modifier {
-    val shouldDrawBackdrop = backdrop != null && role != FishPiGlassRole.Control
+    val glassEnabled = FishPiTheme.glassEnabled
+    val shouldDrawBackdrop = glassEnabled && backdrop != null && role != FishPiGlassRole.Control
     val glass = if (!shouldDrawBackdrop) {
         Modifier
             .clip(shape)
             .background(containerColor)
-            .background(softSheenBrush())
+            .then(if (glassEnabled) Modifier.background(softSheenBrush()) else Modifier)
     } else {
         Modifier.drawBackdrop(
             backdrop = backdrop,
@@ -91,15 +92,19 @@ internal fun Modifier.fishPiGlassSurface(
     return then(glass)
         .then(
             if (borderWidth > 0.dp) {
-                Modifier.border(
-                    width = borderWidth,
-                    brush = Brush.verticalGradient(
-                        0f to Color.White.copy(alpha = 0.24f),
-                        0.45f to borderColor,
-                        1f to Color.Black.copy(alpha = 0.10f),
-                    ),
-                    shape = shape,
-                )
+                if (glassEnabled) {
+                    Modifier.border(
+                        width = borderWidth,
+                        brush = Brush.verticalGradient(
+                            0f to Color.White.copy(alpha = 0.24f),
+                            0.45f to borderColor,
+                            1f to Color.Black.copy(alpha = 0.10f),
+                        ),
+                        shape = shape,
+                    )
+                } else {
+                    Modifier.border(width = borderWidth, color = borderColor, shape = shape)
+                }
             } else {
                 Modifier
             },

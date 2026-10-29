@@ -206,6 +206,13 @@ class SessionStore(context: Context) {
         prefs.edit().putString(KEY_THEME_PRESET, key).apply()
     }
 
+    fun getGlassEffectsEnabled(): Boolean =
+        prefs.getBoolean(KEY_GLASS_EFFECTS_ENABLED, true)
+
+    fun saveGlassEffectsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_GLASS_EFFECTS_ENABLED, enabled).apply()
+    }
+
     fun getImportedThemeJsons(): List<String> {
         val raw = prefs.getString(KEY_IMPORTED_THEMES, "").orEmpty()
         if (raw.isBlank()) return emptyList()
@@ -414,6 +421,7 @@ class SessionStore(context: Context) {
         const val KEY_ACCOUNTS = "accounts"
         const val KEY_CHAT_FILTERS = "chat_filters"
         const val KEY_THEME_PRESET = "theme_preset"
+        const val KEY_GLASS_EFFECTS_ENABLED = "glass_effects_enabled"
         const val KEY_IMPORTED_THEMES = "imported_themes"
         const val KEY_CHAT_WALLPAPER_URI = "chat_wallpaper_uri"
         const val KEY_HOME_WORK_SETTINGS = "home_work_settings"

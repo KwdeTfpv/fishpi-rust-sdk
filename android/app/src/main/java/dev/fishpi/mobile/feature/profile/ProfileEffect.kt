@@ -20,5 +20,6 @@ internal sealed interface ProfileEffect {
     data class SaveEditedTheme(val raw: String) : ProfileEffect
     data class DeleteCustomTheme(val key: String) : ProfileEffect
     data class ChangeChatWallpaper(val uri: String) : ProfileEffect
+    data class SetGlassEffectsEnabled(val enabled: Boolean) : ProfileEffect
     data object CloseProfile : ProfileEffect
 }

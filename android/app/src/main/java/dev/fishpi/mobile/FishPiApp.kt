@@ -34,6 +34,7 @@ fun FishPiApp() {
         })
     }
     var chatWallpaperUri by remember { mutableStateOf(store.getChatWallpaperUri()) }
+    var glassEffectsEnabled by remember { mutableStateOf(store.getGlassEffectsEnabled()) }
     val themeOptions = remember(builtinOptions, importedThemes) {
         buildThemeOptions(builtinOptions, importedThemes)
     }
@@ -114,6 +115,10 @@ fun FishPiApp() {
         chatWallpaperUri = uri
         store.saveChatWallpaperUri(uri)
     }
+    fun applyGlassEffectsEnabled(enabled: Boolean) {
+        glassEffectsEnabled = enabled
+        store.saveGlassEffectsEnabled(enabled)
+    }
     LaunchedEffect(themeOptions, themeKey, fallbackTheme) {
         val resolvedKey = themeOptions.firstOrNull { it.key == themeKey }?.key
             ?: themeOptions.firstOrNull { it.key == fallbackTheme.key }?.key
@@ -122,7 +127,11 @@ fun FishPiApp() {
             applyThemeKey(resolvedKey)
         }
     }
-    FishPiM3BridgedTheme(palette = palette, tokens = activeTheme.tokens) {
+    FishPiM3BridgedTheme(
+        palette = palette,
+        tokens = activeTheme.tokens,
+        glassEnabled = glassEffectsEnabled,
+    ) {
         val api = remember { FishPiApiClient.shared }
         val scope = rememberCoroutineScope()
         var session by remember { mutableStateOf<AppSession?>(null) }
@@ -248,6 +257,8 @@ fun FishPiApp() {
                     onDeleteCustomTheme = { deleteCustomTheme(it) },
                     chatWallpaperUri = chatWallpaperUri,
                     onChatWallpaperChange = { applyChatWallpaper(it) },
+                    glassEffectsEnabled = glassEffectsEnabled,
+                    onGlassEffectsEnabledChange = { applyGlassEffectsEnabled(it) },
                     onSwitchAccount = { account -> switchAccount(account) },
                     onAddAccount = {
                         session = null

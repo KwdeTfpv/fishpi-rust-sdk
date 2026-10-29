@@ -173,6 +173,8 @@ internal fun MainShell(
     onDeleteCustomTheme: (String) -> Boolean,
     chatWallpaperUri: String,
     onChatWallpaperChange: (String) -> Unit,
+    glassEffectsEnabled: Boolean,
+    onGlassEffectsEnabledChange: (Boolean) -> Unit,
     onSwitchAccount: (SavedAccount) -> Unit,
     onAddAccount: () -> Unit,
     onLogout: () -> Unit,
@@ -617,6 +619,8 @@ internal fun MainShell(
                                 onDeleteCustomTheme = onDeleteCustomTheme,
                                 chatWallpaperUri = chatWallpaperUri,
                                 onChatWallpaperChange = onChatWallpaperChange,
+                                glassEffectsEnabled = glassEffectsEnabled,
+                                onGlassEffectsEnabledChange = onGlassEffectsEnabledChange,
                                 onOpenArticle = { articleId, summary ->
                                     openArticleDetail(articleId, summary = summary)
                                 },
@@ -711,6 +715,8 @@ internal fun MainShell(
                                 onDeleteCustomTheme = onDeleteCustomTheme,
                                 chatWallpaperUri = chatWallpaperUri,
                                 onChatWallpaperChange = onChatWallpaperChange,
+                                glassEffectsEnabled = glassEffectsEnabled,
+                                onGlassEffectsEnabledChange = onGlassEffectsEnabledChange,
                                 onOpenArticle = { articleId, summary ->
                                     openArticleDetail(articleId, summary = summary)
                                 },
@@ -1119,10 +1125,12 @@ private fun LiquidBottomNavTrack(
                 },
             )
         }
-        val bottomBarSurfaceColor = if (FishPiTheme.background.luminance() < 0.5f) {
-            Color.Black.copy(alpha = FishPiTheme.glass.floatingAlpha)
+        val bottomBarSurfaceColor = if (!FishPiTheme.glassEnabled) {
+            FishPiTheme.surface
+        } else if (FishPiTheme.background.luminance() < 0.5f) {
+            Color.Black.copy(alpha = FishPiTheme.glass.scrimAlpha)
         } else {
-            Color.White.copy(alpha = FishPiTheme.glass.floatingAlpha)
+            Color.White.copy(alpha = FishPiTheme.glass.scrimAlpha)
         }
         val bottomBarBlurRadius = FishPiTheme.glass.blurRadius.dp
         val bottomBarRefractionHeight = FishPiTheme.glass.refractionHeight.dp

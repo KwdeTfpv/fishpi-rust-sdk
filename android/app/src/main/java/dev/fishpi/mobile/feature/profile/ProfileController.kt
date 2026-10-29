@@ -97,6 +97,10 @@ internal class ProfileController(
                 _state.update { it.copy(chatWallpaperUri = action.uri) }
                 emit(ProfileEffect.ChangeChatWallpaper(action.uri))
             }
+            is ProfileAction.ToggleGlassEffects -> {
+                _state.update { it.copy(glassEffectsEnabled = action.enabled) }
+                emit(ProfileEffect.SetGlassEffectsEnabled(action.enabled))
+            }
             is ProfileAction.WebLoginQrScanned -> handleWebLoginQr(action.raw)
             ProfileAction.ConfirmWebLogin -> confirmWebLogin()
             ProfileAction.DismissWebLoginConfirm -> _state.update {
@@ -170,6 +174,7 @@ internal class ProfileController(
                 themeOptions = action.themeOptions,
                 themeKey = action.themeKey,
                 chatWallpaperUri = action.chatWallpaperUri,
+                glassEffectsEnabled = action.glassEffectsEnabled,
                 noticeUnread = action.noticeUnread,
                 closeOnBack = action.closeOnBack,
                 contentOpen = if (targetChanged) false else it.contentOpen,

@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
+import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 
 private val SquareShape = RoundedCornerShape(0.dp)
@@ -23,7 +24,7 @@ internal fun FishPiBlurBackdrop(
     blurRadius: Dp = 22.dp,
 ) {
     val backdrop = LocalFishPiGlassBackdrop.current
-    if (backdrop == null) {
+    if (!FishPiTheme.glassEnabled || backdrop == null) {
         Box(modifier = modifier.background(overlayColor))
         return
     }

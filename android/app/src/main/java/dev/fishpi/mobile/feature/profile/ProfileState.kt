@@ -44,6 +44,7 @@ internal data class ProfileState(
     val themeOptions: List<FishPiThemeOption> = emptyList(),
     val themeKey: String = "",
     val chatWallpaperUri: String = "",
+    val glassEffectsEnabled: Boolean = true,
     val noticeUnread: Long = 0L,
     val closeOnBack: Boolean = false,
     val webLoginTargetId: String? = null,

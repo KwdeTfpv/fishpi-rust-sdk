@@ -30,6 +30,8 @@ internal fun ProfileRoute(
     onDeleteCustomTheme: (String) -> Boolean,
     chatWallpaperUri: String,
     onChatWallpaperChange: (String) -> Unit,
+    glassEffectsEnabled: Boolean,
+    onGlassEffectsEnabledChange: (Boolean) -> Unit,
     onOpenArticle: (String, ArticleSummary?) -> Unit,
     onCloseProfile: () -> Unit = {},
     closeOnBack: Boolean = false,
@@ -59,6 +61,7 @@ internal fun ProfileRoute(
         themeOptions,
         themeKey,
         chatWallpaperUri,
+        glassEffectsEnabled,
         noticeUnread,
         closeOnBack,
     ) {
@@ -70,6 +73,7 @@ internal fun ProfileRoute(
                 themeOptions = themeOptions,
                 themeKey = themeKey,
                 chatWallpaperUri = chatWallpaperUri,
+                glassEffectsEnabled = glassEffectsEnabled,
                 noticeUnread = noticeUnread,
                 closeOnBack = closeOnBack,
             ),
@@ -105,6 +109,7 @@ internal fun ProfileRoute(
                     if (onDeleteCustomTheme(effect.key)) FishPiNotifier.success("已删除自定义主题") else FishPiNotifier.error("删除失败")
                 }
                 is ProfileEffect.ChangeChatWallpaper -> onChatWallpaperChange(effect.uri)
+                is ProfileEffect.SetGlassEffectsEnabled -> onGlassEffectsEnabledChange(effect.enabled)
                 ProfileEffect.CloseProfile -> onCloseProfile()
             }
         }

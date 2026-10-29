@@ -46,6 +46,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Article
@@ -53,6 +54,7 @@ import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Block
+import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -291,6 +293,8 @@ internal fun DefaultProfileUi(
             themeOptions = state.themeOptions,
             themeKey = state.themeKey,
             chatWallpaperUri = state.chatWallpaperUri,
+            glassEffectsEnabled = state.glassEffectsEnabled,
+            onGlassEffectsEnabledChange = { dispatch(ProfileAction.ToggleGlassEffects(it)) },
             onThemeChange = { dispatch(ProfileAction.ChangeTheme(it)) },
             onImportThemePackage = { dispatch(ProfileAction.ImportThemePackage(it)) },
             onEditTheme = { dispatch(ProfileAction.OpenThemeEditor) },
@@ -418,6 +422,8 @@ private fun ProfileSettingsOverlay(
     themeOptions: List<FishPiThemeOption>,
     themeKey: String,
     chatWallpaperUri: String,
+    glassEffectsEnabled: Boolean,
+    onGlassEffectsEnabledChange: (Boolean) -> Unit,
     onThemeChange: (String) -> Unit,
     onImportThemePackage: (String) -> Unit,
     onEditTheme: () -> Unit,
@@ -478,6 +484,8 @@ private fun ProfileSettingsOverlay(
                     onDeleteCustomTheme = onDeleteCustomTheme,
                     chatWallpaperUri = chatWallpaperUri,
                     onChatWallpaperChange = onChatWallpaperChange,
+                    glassEffectsEnabled = glassEffectsEnabled,
+                    onGlassEffectsEnabledChange = onGlassEffectsEnabledChange,
                 )
             }
             item {
@@ -514,6 +522,8 @@ private fun ThemeSettingsSection(
     onDeleteCustomTheme: (String) -> Boolean,
     chatWallpaperUri: String,
     onChatWallpaperChange: (String) -> Unit,
+    glassEffectsEnabled: Boolean,
+    onGlassEffectsEnabledChange: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     val importLauncher = rememberLauncherForActivityResult(
@@ -622,6 +632,28 @@ private fun ThemeSettingsSection(
                 onClick = { onChatWallpaperChange("") },
             )
         }
+        FishPiSettingsRow(
+            icon = {
+                Icon(
+                    imageVector = Icons.Rounded.BlurOn,
+                    contentDescription = null,
+                    tint = profileAccentColor(),
+                )
+            },
+            title = "柔光玻璃",
+            summary = if (glassEffectsEnabled) {
+                "开启模糊、折射与半透明层"
+            } else {
+                "已关闭，使用不透明界面"
+            },
+            iconBoxColor = profileAccentSoft(),
+            trailing = {
+                Switch(
+                    checked = glassEffectsEnabled,
+                    onCheckedChange = onGlassEffectsEnabledChange,
+                )
+            },
+        )
     }
 }
 
