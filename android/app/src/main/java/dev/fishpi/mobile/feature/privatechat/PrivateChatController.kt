@@ -19,8 +19,10 @@ import dev.fishpi.mobile.shared.message.markMessageRevoked
 import dev.fishpi.mobile.shared.message.repeatableDraftContent
 import dev.fishpi.mobile.shared.message.toQuote
 import dev.fishpi.mobile.utils.appendDraftBlock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,6 +50,9 @@ internal class PrivateChatController(
     val effects: SharedFlow<PrivateChatEffect> = _effects.asSharedFlow()
 
     private val uploadQueue = AttachmentUploadQueue.shared(context)
+
+    private var historyJob: Job? = null
+    private var conversationGeneration = 0L
 
     init {
         observeAttachmentUploads()
@@ -165,6 +170,9 @@ internal class PrivateChatController(
     private fun openSession(session: PrivateChatSession) {
         val peer = session.peer.trim()
         if (peer.isBlank()) return
+        conversationGeneration += 1
+        val generation = conversationGeneration
+        historyJob?.cancel()
         conversationRealtime.disconnect()
         val nextConversation = PrivateConversationState(
             selectedPeer = peer,
@@ -174,7 +182,7 @@ internal class PrivateChatController(
         _state.update { it.copy(conversation = nextConversation, error = null) }
         clearUnread(peer)
         emitDetailActive(true)
-        scope.launch {
+        historyJob = scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
                     withTimeout(16_000) {
@@ -182,13 +190,17 @@ internal class PrivateChatController(
                     }
                 }
             }.onSuccess { history ->
+                if (generation != conversationGeneration) return@onSuccess
+                if (_state.value.conversation.selectedPeer != peer) return@onSuccess
+                val current = _state.value.conversation.messages
+                val merged = (history + current).distinctBy { it.stableMessageKey() }
                 updateConversation {
                     it.copy(
-                        messages = history,
+                        messages = merged,
                         isLoading = false,
                         nextHistoryPage = 2,
                         hasMoreHistory = history.size >= PrivateHistoryPageSize,
-                        scrollToBottomRequest = if (history.isNotEmpty()) it.scrollToBottomRequest + 1 else it.scrollToBottomRequest,
+                        scrollToBottomRequest = if (merged.isNotEmpty()) it.scrollToBottomRequest + 1 else it.scrollToBottomRequest,
                     )
                 }
                 scope.launch {
@@ -196,14 +208,19 @@ internal class PrivateChatController(
                         withContext(Dispatchers.IO) { api.markPrivateChatRead(apiKey, peer) }
                     }
                 }
-            }.onFailure {
-                setError(it.message ?: "加载私聊历史失败")
+            }.onFailure { error ->
+                if (error is CancellationException) return@onFailure
+                if (generation != conversationGeneration) return@onFailure
+                if (_state.value.conversation.selectedPeer != peer) return@onFailure
+                setError(error.message ?: "加载私聊历史失败")
                 updateConversation { state -> state.copy(isLoading = false) }
             }
         }
     }
 
     private fun closeConversation() {
+        conversationGeneration += 1
+        historyJob?.cancel()
         conversationRealtime.disconnect()
         _state.update { it.copy(conversation = PrivateConversationState()) }
         emitDetailActive(false)
@@ -215,8 +232,9 @@ internal class PrivateChatController(
         val peer = snapshot.selectedPeer ?: return
         if (snapshot.isLoading || snapshot.isLoadingMore || !snapshot.hasMoreHistory) return
         val page = snapshot.nextHistoryPage
+        val generation = conversationGeneration
         updateConversation { it.copy(isLoadingMore = true) }
-        scope.launch {
+        historyJob = scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
                     withTimeout(16_000) {
@@ -229,20 +247,25 @@ internal class PrivateChatController(
                     }
                 }
             }.onSuccess { older ->
+                if (generation != conversationGeneration) return@onSuccess
+                if (_state.value.conversation.selectedPeer != peer) return@onSuccess
                 val current = _state.value.conversation.messages
                 val existing = current.mapTo(HashSet()) { it.stableMessageKey() }
                 val unique = older.filterNot { it.stableMessageKey() in existing }
                 updateConversation {
                     it.copy(
-                        messages = unique + current,
+                        messages = (unique + current).distinctBy { message -> message.stableMessageKey() },
                         isLoadingMore = false,
                         nextHistoryPage = page + 1,
                         hasMoreHistory = older.size >= PrivateHistoryPageSize && unique.isNotEmpty(),
                         keepPositionAfterPrependCount = unique.size,
                     )
                 }
-            }.onFailure {
-                setError(it.message ?: "加载更早私聊失败")
+            }.onFailure { error ->
+                if (error is CancellationException) return@onFailure
+                if (generation != conversationGeneration) return@onFailure
+                if (_state.value.conversation.selectedPeer != peer) return@onFailure
+                setError(error.message ?: "加载更早私聊失败")
                 updateConversation { state -> state.copy(isLoadingMore = false) }
             }
         }
