@@ -1,5 +1,7 @@
 package dev.fishpi.mobile
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mail
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
@@ -50,6 +53,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -77,6 +81,7 @@ internal fun LoginScreen(
     onAuthenticated: (AppSession) -> Unit,
 ) {
     val api = remember { FishPiApiClient.shared }
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var nameOrEmail by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -411,6 +416,32 @@ internal fun LoginScreen(
                         )
                         Spacer(Modifier.width(6.dp))
                         Text("扫码登录", fontSize = 14.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse("https://fishpi.cn/register?r=Kirito"),
+                                    ),
+                                )
+                            }.onFailure {
+                                error = "无法打开注册页面"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        enabled = !isLoading,
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.PersonAdd,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("注册账号", fontSize = 14.sp)
                     }
                 }
             }
