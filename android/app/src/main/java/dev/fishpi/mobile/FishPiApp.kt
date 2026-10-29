@@ -265,7 +265,7 @@ fun FishPiApp() {
                         bootError = null
                     },
                     onLogout = {
-                        store.clear(session!!.apiKey)
+                        store.clear()
                         refreshSavedAccounts()
                         session = null
                     },
