@@ -10,6 +10,7 @@ mod notice;
 mod private_chat;
 mod profession;
 mod redpacket;
+mod registration;
 mod runtime;
 mod search;
 mod session;

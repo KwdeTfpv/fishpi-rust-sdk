@@ -6,6 +6,10 @@ use crate::utils::error::Error;
 use crate::utils::{build_http_path, request_upload_ticket, upload_files};
 
 impl FishPi {
+    pub async fn captcha(&self) -> Result<Vec<u8>, Error> {
+        self.get_bytes("captcha").await
+    }
+
     /// 预注册（发送手机验证码等）。
     pub async fn pre_register(&self, data: &PreRegisterInfo) -> Result<(), Error> {
         self.post_raw("register", data).await?;

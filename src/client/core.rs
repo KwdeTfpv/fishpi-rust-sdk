@@ -205,6 +205,7 @@ fn build_http_client_from_builder(
     };
 
     builder
+        .cookie_store(true)
         .connect_timeout(config.connect_timeout)
         .timeout(config.timeout)
         .build()
@@ -218,6 +219,23 @@ impl FishPi {
             self.inner.config.domain,
             path.trim_start_matches('/')
         )
+    }
+
+    pub(crate) async fn get_bytes(&self, path: &str) -> Result<Vec<u8>, Error> {
+        let url = self.full_url(path);
+        let resp = self
+            .inner
+            .http
+            .get(&url)
+            .header("User-Agent", USER_AGENT)
+            .header("Referer", format!("https://{}/", self.inner.config.domain))
+            .send()
+            .await?;
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(Error::decode(format!("HTTP error: {status}")));
+        }
+        Ok(resp.bytes().await?.to_vec())
     }
 
     /// 在路径上附加 `apiKey` 查询参数。

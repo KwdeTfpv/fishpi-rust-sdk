@@ -62,6 +62,30 @@ class FishPiApiClient private constructor() {
         }
     }
 
+    fun fetchRegisterCaptcha(): String {
+        return dataObject(FishPiNative.fetchRegisterCaptcha())
+            .optString("imageBase64")
+            .ifBlank { throw IllegalStateException("没有获取到图形验证码") }
+    }
+
+    fun preRegister(username: String, phone: String, inviteCode: String, captcha: String) {
+        FishPiNative.preRegister(username, phone, inviteCode, captcha).unwrapApiResult()
+    }
+
+    fun verifyRegisterCode(code: String): String {
+        return dataObject(FishPiNative.verifyRegisterCode(code))
+            .optString("userId")
+            .ifBlank { throw IllegalStateException("没有获取到注册用户 Id") }
+    }
+
+    fun registerAccount(userId: String, password: String, role: String, inviteCode: String) {
+        FishPiNative.registerAccount(userId, password, role, inviteCode).unwrapApiResult()
+    }
+
+    fun resetRegisterSession() {
+        FishPiNative.resetRegisterSession()
+    }
+
     fun getUser(apiKey: String): FishPiUser {
         return cached(userCache, apiKey, USER_TTL_MS, "getUser") {
             dataObject(FishPiNative.getUser(apiKey)).toFishPiUser()

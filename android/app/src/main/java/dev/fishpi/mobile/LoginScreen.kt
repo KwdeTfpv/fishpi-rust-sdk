@@ -522,7 +522,6 @@ internal fun LoginScreen(
         }
         if (showRegister) {
             RegisterScreen(
-                url = "https://fishpi.cn/register?r=Kirito",
                 onClose = { showRegister = false },
             )
         }
