@@ -68,8 +68,12 @@ jobs:
               echo "::error::No stable tag found."
               exit 1
             fi
-            latest="${latest#v}"
-            IFS=. read -r major minor patch <<< "$latest"
+            latest_version="${latest#v}"
+            file_version="$(sed -n 's/^versionName=//p' android/version.properties | tr -d '\r' | head -n1)"
+            if [[ "$file_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && [[ "$(printf '%s\n%s\n' "$latest_version" "$file_version" | sort -V | tail -n1)" == "$file_version" ]]; then
+              latest_version="$file_version"
+            fi
+            IFS=. read -r major minor patch <<< "$latest_version"
             case "$INPUT_BUMP" in
               major) major=$((major + 1)); minor=0; patch=0 ;;
               minor) minor=$((minor + 1)); patch=0 ;;
