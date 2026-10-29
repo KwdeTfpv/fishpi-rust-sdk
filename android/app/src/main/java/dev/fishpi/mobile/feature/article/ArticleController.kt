@@ -50,6 +50,7 @@ internal class ArticleController(
     val effects: SharedFlow<ArticleEffect> = _effects.asSharedFlow()
 
     private val requestedPages = mutableSetOf<Int>()
+    private var commentGeneration = 0
     private var heatJob: Job? = null
     private val uploadQueue = AttachmentUploadQueue.shared(context)
 
@@ -252,6 +253,7 @@ internal class ArticleController(
     }
 
     private fun openArticle(article: ArticleSummary) {
+        commentGeneration += 1
         disconnectRealtime()
         _state.update {
             it.copy(
@@ -291,6 +293,7 @@ internal class ArticleController(
     }
 
     private fun closeDetail() {
+        commentGeneration += 1
         disconnectRealtime()
         _state.update {
             it.copy(
@@ -339,6 +342,7 @@ internal class ArticleController(
 
     private fun changeCommentSort(sort: CommentSort) {
         if (_state.value.commentSort == sort) return
+        commentGeneration += 1
         val detail = _state.value.detail
         val targetPage = when (sort) {
             CommentSort.Earliest -> 1
@@ -360,16 +364,19 @@ internal class ArticleController(
     }
 
     private fun loadCommentPage(articleId: String, page: Int, replace: Boolean) {
+        val generation = commentGeneration
+        val sort = _state.value.commentSort
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) { api.getArticleDetail(apiKey, articleId, page) }
             }.onSuccess { loaded ->
+                if (generation != commentGeneration) return@onSuccess
                 val current = _state.value.detail
                 if (current?.id != articleId) return@onSuccess
                 val merged = if (replace) {
                     loaded.comments
                 } else {
-                    mergeComments(current.comments, loaded.comments, _state.value.commentSort)
+                    mergeComments(current.comments, loaded.comments, sort)
                 }
                 _state.update {
                     it.copy(
@@ -382,6 +389,7 @@ internal class ArticleController(
                     )
                 }
             }.onFailure {
+                if (generation != commentGeneration) return@onFailure
                 if (_state.value.detail?.id == articleId) setError(it.message ?: "加载评论失败")
                 _state.update { it.copy(isLoadingDetail = false) }
             }
@@ -401,17 +409,23 @@ internal class ArticleController(
     }
 
     private fun reloadDetail(articleId: String) {
+        commentGeneration += 1
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) { api.getArticleDetail(apiKey, articleId) }
             }.onSuccess { loaded ->
                 if (_state.value.selected?.id != articleId) return@onSuccess
-                _state.update { it.copy(detail = loaded) }
-                if (_state.value.commentSort == CommentSort.Latest && loaded.commentPageCount > 1) {
+                val needsLastPage =
+                    _state.value.commentSort == CommentSort.Latest && loaded.commentPageCount > 1
+                _state.update { it.copy(detail = loaded, isLoadingDetail = needsLastPage) }
+                if (needsLastPage) {
                     loadCommentPage(articleId, loaded.commentPageCount, replace = true)
                 }
             }.onFailure {
-                if (_state.value.selected?.id == articleId) setError(it.message ?: "刷新帖子详情失败")
+                if (_state.value.selected?.id == articleId) {
+                    setError(it.message ?: "刷新帖子详情失败")
+                    _state.update { state -> state.copy(isLoadingDetail = false) }
+                }
             }
         }
     }
