@@ -345,6 +345,13 @@ class SessionStore(context: Context) {
             .apply()
     }
 
+    fun getUpdateChannel(): UpdateChannel =
+        UpdateChannel.fromKey(prefs.getString(KEY_UPDATE_CHANNEL, ""))
+
+    fun saveUpdateChannel(channel: UpdateChannel) {
+        prefs.edit().putString(KEY_UPDATE_CHANNEL, channel.key).apply()
+    }
+
     fun getNotificationPrefs(): NotificationPrefs {
         val raw = prefs.getString(KEY_NOTIFICATION_PREFS, "").orEmpty()
         if (raw.isBlank()) return NotificationPrefs()
@@ -386,6 +393,7 @@ class SessionStore(context: Context) {
         const val KEY_CHAT_WALLPAPER_URI = "chat_wallpaper_uri"
         const val KEY_HOME_WORK_SETTINGS = "home_work_settings"
         const val KEY_NOTIFICATION_PREFS = "notification_prefs"
+        const val KEY_UPDATE_CHANNEL = "update_channel"
     }
 }
 

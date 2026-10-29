@@ -26,6 +26,12 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import dev.fishpi.mobile.data.SessionStore
+import dev.fishpi.mobile.data.UpdateChannel
 import dev.fishpi.mobile.ui.components.AppFullScreenWorkspace
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -112,6 +118,8 @@ internal fun AboutAcknowledgementsWorkspace(
     val context = LocalContext.current
     val versionName = BuildConfig.VERSION_NAME.ifBlank { "未知版本" }
     val versionCode = BuildConfig.VERSION_CODE
+    val store = remember { SessionStore(context.applicationContext) }
+    var updateChannel by remember { mutableStateOf(store.getUpdateChannel()) }
     AppFullScreenWorkspace(
         title = "关于与鸣谢",
         subtitle = "FishPi $versionName ($versionCode)",
@@ -124,6 +132,28 @@ internal fun AboutAcknowledgementsWorkspace(
         ) {
             item {
                 AboutHeroCard(versionName = versionName, versionCode = versionCode)
+            }
+            item {
+                AboutSection(title = "更新") {
+                    AboutInfoRow(
+                        title = UpdateChannel.Stable.label,
+                        value = if (updateChannel == UpdateChannel.Stable) "当前通道" else "切换",
+                        fallback = "",
+                        onClick = {
+                            updateChannel = UpdateChannel.Stable
+                            store.saveUpdateChannel(UpdateChannel.Stable)
+                        },
+                    )
+                    AboutInfoRow(
+                        title = UpdateChannel.Rc.label,
+                        value = if (updateChannel == UpdateChannel.Rc) "当前通道" else "切换",
+                        fallback = "",
+                        onClick = {
+                            updateChannel = UpdateChannel.Rc
+                            store.saveUpdateChannel(UpdateChannel.Rc)
+                        },
+                    )
+                }
             }
             item {
                 AboutSection(title = "项目") {
