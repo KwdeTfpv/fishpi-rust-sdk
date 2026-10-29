@@ -90,7 +90,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_preRegister(
                     captcha: captcha.trim().to_string(),
                 };
                 client
-                    .pre_register(&data)
+                    .pre_register_with_referral(&data, Some(DEFAULT_INVITER))
                     .await
                     .map_err(|err| format!("发送短信验证码失败: {err}"))?;
                 Ok(json!({ "sent": true }))

@@ -23,7 +23,21 @@ impl FishPi {
 
     /// 预注册（发送手机验证码等）。
     pub async fn pre_register(&self, data: &PreRegisterInfo) -> Result<(), Error> {
-        let value = self.post_raw("register", data).await?;
+        self.pre_register_with_referral(data, None).await
+    }
+
+    pub async fn pre_register_with_referral(
+        &self,
+        data: &PreRegisterInfo,
+        referral: Option<&str>,
+    ) -> Result<(), Error> {
+        let path = match referral {
+            Some(referral) if !referral.is_empty() => {
+                build_http_path("register", &[("r", referral.to_string())])
+            }
+            _ => "register".to_string(),
+        };
+        let value = self.post_raw(&path, data).await?;
         ensure_register_success(value, "发送短信验证码失败")?;
         Ok(())
     }
