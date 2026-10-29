@@ -33,7 +33,7 @@ internal fun bubbleMessageActionSpecs(
     onQuote: () -> Unit,
     onRepeat: () -> Unit,
     onRevoke: () -> Unit,
-    onReactions: () -> Unit,
+    onReactions: (() -> Unit)?,
     onCopyImage: (() -> Unit)? = null,
     onCopyImageLink: (() -> Unit)? = null,
     onFavoriteEmoji: (() -> Unit)? = null,
@@ -77,14 +77,16 @@ internal fun bubbleMessageActionSpecs(
             onClick = onQuote,
         ),
     )
-    add(
-        MessageActionSpec(
-            label = "@TA",
-            icon = Icons.Rounded.AlternateEmail,
-            enabled = onMentionUser != null && message.userName.isNotBlank(),
-            onClick = onMentionUser ?: {},
-        ),
-    )
+    if (onMentionUser != null) {
+        add(
+            MessageActionSpec(
+                label = "@TA",
+                icon = Icons.Rounded.AlternateEmail,
+                enabled = message.userName.isNotBlank(),
+                onClick = onMentionUser,
+            ),
+        )
+    }
     add(
         MessageActionSpec(
             label = "复读",
@@ -93,14 +95,16 @@ internal fun bubbleMessageActionSpecs(
             onClick = onRepeat,
         ),
     )
-    add(
-        MessageActionSpec(
-            label = "表情",
-            icon = Icons.Rounded.SentimentSatisfied,
-            enabled = true,
-            onClick = onReactions,
-        ),
-    )
+    if (onReactions != null) {
+        add(
+            MessageActionSpec(
+                label = "表情",
+                icon = Icons.Rounded.SentimentSatisfied,
+                enabled = true,
+                onClick = onReactions,
+            ),
+        )
+    }
     if (canRevoke) {
         add(
             MessageActionSpec(

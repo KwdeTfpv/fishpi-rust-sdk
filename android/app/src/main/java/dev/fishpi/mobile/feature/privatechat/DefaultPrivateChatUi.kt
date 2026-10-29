@@ -52,9 +52,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -73,7 +77,7 @@ import dev.fishpi.mobile.ui.overlay.LocalImageViewer
 import dev.fishpi.mobile.ui.overlay.LinkPreviewOverlay
 import dev.fishpi.mobile.ui.components.LoadingScreen
 import dev.fishpi.mobile.ui.components.FloatingNoticePill
-import dev.fishpi.mobile.shared.message.ui.MessageActionSheet
+import dev.fishpi.mobile.shared.message.ui.MessageActionBubbleMenu
 import dev.fishpi.mobile.shared.message.canBeRevokedBy
 import dev.fishpi.mobile.shared.message.copyToClipboard
 import dev.fishpi.mobile.shared.message.copyableText
@@ -84,6 +88,7 @@ import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.feature.privatechat.mapper.isFileTransferPeer
 import dev.fishpi.mobile.feature.privatechat.mapper.toPrivateChatSession
 import dev.fishpi.mobile.feature.privatechat.model.PrivateSessionUiModel
+import dev.fishpi.mobile.shared.message.native.MessageActionAnchor
 import dev.fishpi.mobile.shared.message.native.NativeMessageList
 import dev.fishpi.mobile.shared.message.native.rememberNativeMessageListController
 import dev.fishpi.mobile.ui.components.ChatToolAction
@@ -104,7 +109,6 @@ internal fun DefaultPrivateChatUi(
 ) {
     val environment = LocalPrivateChatUiEnvironment.current
     val conversation = state.conversation
-    val context = LocalContext.current
     val imageViewer = LocalImageViewer.current
     val attachmentPicker = rememberChatAttachmentPicker(
         onPicked = { uri, isVideo -> dispatch(PrivateChatAction.PickAttachment(uri, isVideo)) },
@@ -208,31 +212,19 @@ internal fun DefaultPrivateChatUi(
             onDismissToolPanel = { dispatch(PrivateChatAction.CloseTools) },
             onImageClick = { images, index -> imageViewer.open(images, index) },
             onLinkClick = { dispatch(PrivateChatAction.ShowLinkPreview(it)) },
-            onMessageLongPress = { dispatch(PrivateChatAction.ShowMessageActions(it)) },
+            canRevoke = { message ->
+                message.canBeRevokedBy(
+                    session = environment.session,
+                    allowRevokeOthers = false,
+                    excludeRedPacket = false,
+                )
+            },
+            onQuoteMessage = { dispatch(PrivateChatAction.QuoteMessage(it)) },
+            onRepeatMessage = { dispatch(PrivateChatAction.RepeatMessage(it)) },
+            onRevokeMessage = { dispatch(PrivateChatAction.RevokeMessage(it)) },
             onSend = { dispatch(PrivateChatAction.SendText) },
         )
     }
-    }
-
-    conversation.actionMessage?.let { message ->
-        MessageActionSheet(
-            message = message,
-            canRevoke = message.canBeRevokedBy(
-                session = environment.session,
-                allowRevokeOthers = false,
-                excludeRedPacket = false,
-            ),
-            onDismiss = { dispatch(PrivateChatAction.DismissMessageActions) },
-            onCopyContent = { context.copyToClipboard("私聊内容", message.copyableText()) },
-            onCopyUsername = {
-                context.copyToClipboard("用户名", message.userName.ifBlank { message.displayName })
-            },
-            onQuote = { dispatch(PrivateChatAction.QuoteMessage(message)) },
-            onReaction = {},
-            onRepeat = { dispatch(PrivateChatAction.RepeatMessage(message)) },
-            onRevoke = { dispatch(PrivateChatAction.RevokeMessage(message)) },
-            showReactions = false,
-        )
     }
 
     conversation.previewLinkUrl?.let { url ->
@@ -243,9 +235,6 @@ internal fun DefaultPrivateChatUi(
         )
     }
 
-    BackHandler(enabled = environment.active && conversation.actionMessage != null) {
-        dispatch(PrivateChatAction.DismissMessageActions)
-    }
     BackHandler(enabled = environment.active && conversation.previewLinkUrl != null) {
         dispatch(PrivateChatAction.DismissLinkPreview)
     }
@@ -473,10 +462,17 @@ private fun PrivateConversation(
     onDismissToolPanel: () -> Unit,
     onImageClick: (images: List<String>, index: Int) -> Unit,
     onLinkClick: (String) -> Unit,
-    onMessageLongPress: (ChatRoomMessage) -> Unit,
+    canRevoke: (ChatRoomMessage) -> Boolean,
+    onQuoteMessage: (ChatRoomMessage) -> Unit,
+    onRepeatMessage: (ChatRoomMessage) -> Unit,
+    onRevokeMessage: (ChatRoomMessage) -> Unit,
     onSend: () -> Unit,
 ) {
     val listController = rememberNativeMessageListController()
+    val context = LocalContext.current
+    var actionAnchor by remember(peer) { mutableStateOf<MessageActionAnchor?>(null) }
+    var rootOffsetInWindow by remember { mutableStateOf(IntOffset.Zero) }
+    var rootSize by remember { mutableStateOf(IntSize.Zero) }
     val displayName = remember(peer) {
         peer.toPrivateChatDisplayName()
     }
@@ -524,7 +520,12 @@ private fun PrivateConversation(
         modifier = Modifier
             .fillMaxSize()
             .background(uiPageBrush())
-            .windowInsetsPadding(WindowInsets.imeAnimationTarget.union(WindowInsets.navigationBars)),
+            .windowInsetsPadding(WindowInsets.imeAnimationTarget.union(WindowInsets.navigationBars))
+            .onGloballyPositioned { coordinates ->
+                val position = coordinates.positionInWindow()
+                rootOffsetInWindow = IntOffset(position.x.toInt(), position.y.toInt())
+                rootSize = coordinates.size
+            },
     ) {
         TopAppBar(
             modifier = Modifier
@@ -613,7 +614,7 @@ private fun PrivateConversation(
                     onNearBottomChanged = {},
                     onImageClick = onImageClick,
                     onLinkClick = onLinkClick,
-                    onLongPress = { anchor -> onMessageLongPress(anchor.message) },
+                    onLongPress = { anchor -> actionAnchor = anchor },
                     onAvatarClick = { username ->
                         if (username.isNotBlank() && !username.isFileTransferPeer()) {
                             onOpenUserProfile(username)
@@ -682,6 +683,29 @@ private fun PrivateConversation(
             onInputCursorPositionRequestHandled = onCursorRequestHandled,
             onSend = { onSend() },
         )
+        actionAnchor?.let { anchor ->
+            MessageActionBubbleMenu(
+                anchor = anchor,
+                rootOffsetInWindow = rootOffsetInWindow,
+                rootSize = rootSize,
+                canRevoke = canRevoke(anchor.message),
+                onDismiss = { actionAnchor = null },
+                onCopyContent = {
+                    context.copyToClipboard("私聊内容", anchor.message.copyableText())
+                },
+                onCopyUsername = {
+                    context.copyToClipboard(
+                        "用户名",
+                        anchor.message.userName.ifBlank { anchor.message.displayName },
+                    )
+                },
+                onQuote = { onQuoteMessage(anchor.message) },
+                onRepeat = { onRepeatMessage(anchor.message) },
+                onRevoke = { onRevokeMessage(anchor.message) },
+                onMentionUser = null,
+                onReaction = null,
+            )
+        }
     }
 }
 

@@ -64,7 +64,7 @@ internal fun MessageActionBubbleMenu(
     onCopyUsername: () -> Unit,
     onMentionUser: (() -> Unit)? = null,
     onQuote: () -> Unit,
-    onReaction: (String) -> Unit,
+    onReaction: ((String) -> Unit)? = null,
     onRepeat: () -> Unit,
     onRevoke: () -> Unit,
     onCopyImage: (() -> Unit)? = null,
@@ -90,7 +90,7 @@ internal fun MessageActionBubbleMenu(
         onQuote = { onQuote(); onDismiss() },
         onRepeat = { onRepeat(); onDismiss() },
         onRevoke = { onRevoke(); onDismiss() },
-        onReactions = { submenu = MessageActionSubmenu.Reactions },
+        onReactions = onReaction?.let { { submenu = MessageActionSubmenu.Reactions } },
         onCopyImage = onCopyImage?.let { action -> { action(); onDismiss() } },
         onCopyImageLink = onCopyImageLink?.let { action -> { action(); onDismiss() } },
         onFavoriteEmoji = onFavoriteEmoji?.let { action -> { action(); onDismiss() } },
@@ -185,7 +185,7 @@ internal fun MessageActionBubbleMenu(
                             selectedBackground = selectedBackground,
                             itemBackground = itemPressedBackground,
                             selected = anchor.message.currentUserReaction,
-                            onReaction = { value -> onReaction(value); onDismiss() },
+                            onReaction = { value -> onReaction?.invoke(value); onDismiss() },
                             onBack = { submenu = MessageActionSubmenu.Main },
                         )
                     }
