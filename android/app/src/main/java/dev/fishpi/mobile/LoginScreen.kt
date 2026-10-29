@@ -1,7 +1,5 @@
 package dev.fishpi.mobile
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -53,7 +51,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -81,7 +78,6 @@ internal fun LoginScreen(
     onAuthenticated: (AppSession) -> Unit,
 ) {
     val api = remember { FishPiApiClient.shared }
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var nameOrEmail by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -97,6 +93,7 @@ internal fun LoginScreen(
     val mfaFocus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     var showQrScanner by remember { mutableStateOf(false) }
+    var showRegister by remember { mutableStateOf(false) }
 
     // Auto-dismiss error after user starts typing
     LaunchedEffect(nameOrEmail, password) {
@@ -419,18 +416,7 @@ internal fun LoginScreen(
                     }
 
                     OutlinedButton(
-                        onClick = {
-                            runCatching {
-                                context.startActivity(
-                                    Intent(
-                                        Intent.ACTION_VIEW,
-                                        Uri.parse("https://fishpi.cn/register?r=Kirito"),
-                                    ),
-                                )
-                            }.onFailure {
-                                error = "无法打开注册页面"
-                            }
-                        },
+                        onClick = { showRegister = true },
                         modifier = Modifier.fillMaxWidth().height(44.dp),
                         enabled = !isLoading,
                         shape = RoundedCornerShape(14.dp),
@@ -532,6 +518,12 @@ internal fun LoginScreen(
                     }
                 },
                 onDismiss = { showVisitorVerify = false },
+            )
+        }
+        if (showRegister) {
+            RegisterScreen(
+                url = "https://fishpi.cn/register?r=Kirito",
+                onClose = { showRegister = false },
             )
         }
 
