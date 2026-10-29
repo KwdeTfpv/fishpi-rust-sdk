@@ -153,6 +153,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
+private const val UpdateCheckIntervalMs = 24L * 60L * 60L * 1000L
+
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
 internal fun MainShell(
@@ -367,21 +369,33 @@ internal fun MainShell(
             if (manual) FishPiNotifier.show("正在检查更新...")
             return
         }
+        if (!manual) {
+            val lastCheckedAt = store.getUpdateCheckAt()
+            if (lastCheckedAt > 0 && System.currentTimeMillis() - lastCheckedAt < UpdateCheckIntervalMs) {
+                return
+            }
+        }
         isCheckingUpdate = true
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) { UpdateChecker.checkForUpdate(store.getUpdateChannel()) }
             }.onSuccess { result ->
                 val info = result.updateInfo
+                val checkedAt = System.currentTimeMillis()
+                store.saveUpdateCheckAt(checkedAt)
                 if (info != null) {
+                    store.saveUpdateCheckResult("发现新版本 ${info.tagName}")
                     updateInfo = info
                     updateDismissed = false
                     if (manual) FishPiNotifier.success("发现新版本 ${info.tagName}")
-                } else if (manual) {
+                } else {
                     val latest = result.latestTagName.ifBlank { BuildConfig.VERSION_NAME }
-                    FishPiNotifier.show("当前已是最新版本：$latest")
+                    store.saveUpdateCheckResult("已是最新版本：$latest")
+                    if (manual) FishPiNotifier.show("当前已是最新版本：$latest")
                 }
             }.onFailure {
+                store.saveUpdateCheckAt(System.currentTimeMillis())
+                store.saveUpdateCheckResult("检查失败：${it.message ?: "网络异常"}")
                 if (manual) FishPiNotifier.error("检查更新失败：${it.message ?: "网络异常"}")
             }
             isCheckingUpdate = false

@@ -352,6 +352,18 @@ class SessionStore(context: Context) {
         prefs.edit().putString(KEY_UPDATE_CHANNEL, channel.key).apply()
     }
 
+    fun getUpdateCheckAt(): Long = prefs.getLong(KEY_UPDATE_CHECK_AT, 0L)
+
+    fun saveUpdateCheckAt(value: Long) {
+        prefs.edit().putLong(KEY_UPDATE_CHECK_AT, value).apply()
+    }
+
+    fun getUpdateCheckResult(): String = prefs.getString(KEY_UPDATE_CHECK_RESULT, "").orEmpty()
+
+    fun saveUpdateCheckResult(value: String) {
+        prefs.edit().putString(KEY_UPDATE_CHECK_RESULT, value).apply()
+    }
+
     fun getNotificationPrefs(): NotificationPrefs {
         val raw = prefs.getString(KEY_NOTIFICATION_PREFS, "").orEmpty()
         if (raw.isBlank()) return NotificationPrefs()
@@ -394,6 +406,8 @@ class SessionStore(context: Context) {
         const val KEY_HOME_WORK_SETTINGS = "home_work_settings"
         const val KEY_NOTIFICATION_PREFS = "notification_prefs"
         const val KEY_UPDATE_CHANNEL = "update_channel"
+        const val KEY_UPDATE_CHECK_AT = "update_check_at"
+        const val KEY_UPDATE_CHECK_RESULT = "update_check_result"
     }
 }
 

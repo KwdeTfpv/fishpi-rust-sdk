@@ -44,6 +44,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private const val AboutRepositoryUrl = "https://github.com/KwdeTfpv/fishpi-rust-sdk"
 private const val AboutLicenseName = "MIT License"
@@ -120,6 +123,8 @@ internal fun AboutAcknowledgementsWorkspace(
     val versionCode = BuildConfig.VERSION_CODE
     val store = remember { SessionStore(context.applicationContext) }
     var updateChannel by remember { mutableStateOf(store.getUpdateChannel()) }
+    val lastCheckAt = store.getUpdateCheckAt()
+    val lastCheckResult = store.getUpdateCheckResult()
     AppFullScreenWorkspace(
         title = "关于与鸣谢",
         subtitle = "FishPi $versionName ($versionCode)",
@@ -152,6 +157,15 @@ internal fun AboutAcknowledgementsWorkspace(
                             updateChannel = UpdateChannel.Rc
                             store.saveUpdateChannel(UpdateChannel.Rc)
                         },
+                    )
+                    AboutInfoRow(
+                        title = "最近检查",
+                        value = if (lastCheckAt > 0) {
+                            "${formatUpdateCheckTime(lastCheckAt)} · ${lastCheckResult.ifBlank { "无结果" }}"
+                        } else {
+                            "尚未检查"
+                        },
+                        fallback = "",
                     )
                 }
             }
@@ -406,6 +420,9 @@ private fun AboutInfoRow(
         }
     }
 }
+
+private fun formatUpdateCheckTime(value: Long): String =
+    SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(value))
 
 private fun openOrCopyAboutValue(context: Context, label: String, value: String) {
     if (value.isBlank()) return
