@@ -4,6 +4,7 @@ import dev.fishpi.mobile.core.ui.UiController
 import android.content.Context
 import dev.fishpi.mobile.data.AttachmentUpload
 import dev.fishpi.mobile.data.AttachmentUploadQueue
+import dev.fishpi.mobile.data.ChatQuotePreview
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.ComposerAttachments
 import dev.fishpi.mobile.data.EmojiItemView
@@ -318,7 +319,12 @@ internal class PrivateChatController(
             return
         }
         updateConversation {
-            val nextMessages = (it.messages + incoming).distinctBy { message -> message.stableMessageKey() }
+            val withoutLocalEcho = it.messages.filterNot { message ->
+                message.oId.startsWith("local:") &&
+                    message.userName.equals(selfUsername, ignoreCase = true) &&
+                    message.content == incoming.content
+            }
+            val nextMessages = (withoutLocalEcho + incoming).distinctBy { message -> message.stableMessageKey() }
             it.copy(
                 messages = nextMessages,
                 scrollToBottomRequest = it.scrollToBottomRequest + 1,
@@ -368,6 +374,30 @@ internal class PrivateChatController(
                 targetUrl = "https://fishpi.cn/chat#${snapshot.quote.messageId}",
                 title = "私聊引用",
             ) ?: resolved
+            val localId = "local:${System.nanoTime()}"
+            val optimistic = ChatRoomMessage(
+                oId = localId,
+                userName = selfUsername,
+                userNickname = selfUsername,
+                content = resolved,
+                time = "刚刚",
+                quote = snapshot.quote?.takeIf { it.isValid }?.let {
+                    ChatQuotePreview(text = it.content, imageUrls = it.imageUrls)
+                },
+            )
+            updateConversation {
+                val unchanged = it.input == snapshot.input
+                it.copy(
+                    messages = (it.messages + optimistic).distinctBy { message -> message.stableMessageKey() },
+                    scrollToBottomRequest = it.scrollToBottomRequest + 1,
+                    input = if (unchanged) "" else it.input,
+                    cursorPosition = if (unchanged) 0 else it.cursorPosition,
+                    attachments = if (unchanged) ComposerAttachments() else it.attachments,
+                    inputResetKey = if (unchanged) it.inputResetKey + 1 else it.inputResetKey,
+                    quote = if (unchanged) null else it.quote,
+                    emojiPanelOpen = false,
+                )
+            }
             runCatching {
                 withContext(Dispatchers.IO) {
                     val sentViaRealtime = runCatching { conversationRealtime.send(sendContent) }.getOrDefault(false)
@@ -381,12 +411,14 @@ internal class PrivateChatController(
                 uploadQueue.remove(settled.allUploadIds)
                 updateSessionPreview(peer, resolved, unread = 0)
                 updateConversation {
+                    val cleared = it.input.isBlank()
                     it.copy(
-                        input = "",
-                        cursorPosition = 0,
-                        attachments = ComposerAttachments(),
-                        inputResetKey = it.inputResetKey + 1,
-                        quote = null,
+                        messages = it.messages.filterNot { message -> message.oId == localId },
+                        input = if (cleared) "" else it.input,
+                        cursorPosition = if (cleared) 0 else it.cursorPosition,
+                        attachments = if (cleared) ComposerAttachments() else it.attachments,
+                        inputResetKey = if (cleared) it.inputResetKey + 1 else it.inputResetKey,
+                        quote = if (cleared) null else it.quote,
                         emojiPanelOpen = false,
                         isSending = false,
                     )
@@ -394,7 +426,17 @@ internal class PrivateChatController(
                 _state.update { it.copy(error = null) }
             }.onFailure {
                 setError(it.message ?: "私聊发送失败")
-                updateConversation { state -> state.copy(isSending = false) }
+                updateConversation { state ->
+                    val restoreInput = state.input.isBlank()
+                    state.copy(
+                        messages = state.messages.filterNot { message -> message.oId == localId },
+                        input = if (restoreInput) snapshot.input else state.input,
+                        cursorPosition = if (restoreInput) snapshot.cursorPosition else state.cursorPosition,
+                        attachments = if (state.attachments.isEmpty) snapshot.attachments else state.attachments,
+                        quote = if (state.quote == null) snapshot.quote else state.quote,
+                        isSending = false,
+                    )
+                }
             }
         }
     }
