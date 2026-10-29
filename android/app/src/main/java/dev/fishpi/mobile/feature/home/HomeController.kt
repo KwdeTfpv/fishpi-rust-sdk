@@ -52,6 +52,7 @@ internal class HomeController(
 
     private var initialized = false
     private var activitySyncJob: Job? = null
+    private var activitySyncRequest: Job? = null
 
     override fun dispatch(action: HomeAction) {
         when (action) {
@@ -99,6 +100,7 @@ internal class HomeController(
 
     fun close() {
         activitySyncJob?.cancel()
+        activitySyncRequest?.cancel()
     }
 
     private fun initialize() {
@@ -116,7 +118,8 @@ internal class HomeController(
     }
 
     private fun syncHomeActivity() {
-        scope.launch {
+        if (activitySyncRequest?.isActive == true) return
+        activitySyncRequest = scope.launch {
             val cachedActivity = store.getHomeActivity(apiKey)?.takeIf { it.isToday() }
             _state.update {
                 it.copy(
