@@ -9,11 +9,11 @@ object FishPiNative {
 
     external fun fetchRegisterCaptcha(): String
 
-    external fun preRegister(username: String, phone: String, inviteCode: String, captcha: String): String
+    external fun preRegister(username: String, phone: String, captcha: String): String
 
     external fun verifyRegisterCode(code: String): String
 
-    external fun registerAccount(userId: String, password: String, role: String, inviteCode: String): String
+    external fun registerAccount(userId: String, password: String, role: String): String
 
     external fun resetRegisterSession()
 

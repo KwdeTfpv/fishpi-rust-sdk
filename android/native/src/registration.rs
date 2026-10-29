@@ -9,6 +9,8 @@ use jni::sys::jstring;
 use serde_json::json;
 use std::sync::{Mutex, OnceLock};
 
+const DEFAULT_INVITER: &str = "Kirito";
+
 static REGISTER_CLIENT: OnceLock<Mutex<Option<FishPi>>> = OnceLock::new();
 
 fn register_client() -> &'static Mutex<Option<FishPi>> {
@@ -72,7 +74,6 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_preRegister(
     _class: JClass,
     username: JString,
     phone: JString,
-    _invite_code: JString,
     captcha: JString,
 ) -> jstring {
     let result = (|| {
@@ -135,22 +136,19 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_registerAccount(
     user_id: JString,
     password: JString,
     role: JString,
-    invite_code: JString,
 ) -> jstring {
     let result = (|| {
         let user_id = string_arg(&mut env, user_id)?;
         let password = string_arg(&mut env, password)?;
         let role = string_arg(&mut env, role)?;
-        let invite_code = string_arg(&mut env, invite_code)?;
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let client = cached_client()?;
-                let invite = invite_code.trim();
                 let data = RegisterInfo {
                     role: role.trim().to_string(),
                     passwd: password,
                     user_id: user_id.trim().to_string(),
-                    r: (!invite.is_empty()).then_some(invite.to_string()),
+                    r: Some(DEFAULT_INVITER.to_string()),
                 };
                 client
                     .register(&data)

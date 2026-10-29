@@ -68,8 +68,8 @@ class FishPiApiClient private constructor() {
             .ifBlank { throw IllegalStateException("没有获取到图形验证码") }
     }
 
-    fun preRegister(username: String, phone: String, inviteCode: String, captcha: String) {
-        FishPiNative.preRegister(username, phone, inviteCode, captcha).unwrapApiResult()
+    fun preRegister(username: String, phone: String, captcha: String) {
+        FishPiNative.preRegister(username, phone, captcha).unwrapApiResult()
     }
 
     fun verifyRegisterCode(code: String): String {
@@ -78,8 +78,8 @@ class FishPiApiClient private constructor() {
             .ifBlank { throw IllegalStateException("没有获取到注册用户 Id") }
     }
 
-    fun registerAccount(userId: String, password: String, role: String, inviteCode: String) {
-        FishPiNative.registerAccount(userId, password, role, inviteCode).unwrapApiResult()
+    fun registerAccount(userId: String, password: String, role: String) {
+        FishPiNative.registerAccount(userId, password, role).unwrapApiResult()
     }
 
     fun resetRegisterSession() {

@@ -66,7 +66,6 @@ internal fun RegisterScreen(
     var step by remember { mutableIntStateOf(1) }
     var username by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
-    var inviteCode by remember { mutableStateOf("Kirito") }
     var captcha by remember { mutableStateOf("") }
     var smsCode by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -118,7 +117,7 @@ internal fun RegisterScreen(
             error = null
             try {
                 withContext(Dispatchers.IO) {
-                    api.preRegister(name, phoneNumber, inviteCode.trim(), code)
+                    api.preRegister(name, phoneNumber, code)
                 }
                 step = 2
             } catch (e: Exception) {
@@ -164,7 +163,7 @@ internal fun RegisterScreen(
             error = null
             try {
                 withContext(Dispatchers.IO) {
-                    api.registerAccount(userId, password, role, inviteCode.trim())
+                    api.registerAccount(userId, password, role)
                 }
                 onClose()
             } catch (e: Exception) {
@@ -263,14 +262,6 @@ internal fun RegisterScreen(
                         singleLine = true,
                         enabled = !loading,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = inviteCode,
-                        onValueChange = { inviteCode = it },
-                        label = { Text("邀请人（选填，默认 Kirito）") },
-                        singleLine = true,
-                        enabled = !loading,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Row(
