@@ -25,6 +25,7 @@ internal fun PrivateChatRoute(
     onUnreadChange: (Long) -> Unit = {},
     onNoticeHandled: () -> Unit = {},
     onJumpHandled: () -> Unit = {},
+    onOpenUserProfile: (String) -> Unit = {},
     listHeader: @Composable (ColumnScope.() -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -81,6 +82,7 @@ internal fun PrivateChatRoute(
         environment = PrivateChatUiEnvironment(
             session = session,
             active = active,
+            onOpenUserProfile = onOpenUserProfile,
             listHeader = listHeader,
         ),
     ) {

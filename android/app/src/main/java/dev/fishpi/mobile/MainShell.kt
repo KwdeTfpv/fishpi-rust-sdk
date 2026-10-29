@@ -577,6 +577,7 @@ internal fun MainShell(
                                 externalNoticeVersion = pendingPrivateNoticeVersion,
                                 onNoticeHandled = { pendingPrivateNotice = null },
                                 onJumpHandled = { privatePeerJump = null },
+                                onOpenUserProfile = { username -> openProfileOverlay(username) },
                                 onDetailActiveChange = { privateChatDetailActive = it },
                                 onUnreadChange = { privateUnread = it },
                                 listHeader = {

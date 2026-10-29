@@ -178,6 +178,7 @@ internal fun DefaultPrivateChatUi(
             keepPositionAfterPrependCount = conversation.keepPositionAfterPrependCount,
             onKeepPositionConsumed = { dispatch(PrivateChatAction.KeepPositionConsumed) },
             onBack = { dispatch(PrivateChatAction.CloseConversation) },
+            onOpenUserProfile = environment.onOpenUserProfile,
             onLoadMore = { dispatch(PrivateChatAction.LoadMoreHistory) },
             onInputChange = { dispatch(PrivateChatAction.ChangeInput(it)) },
             onCursorChange = { dispatch(PrivateChatAction.ChangeCursor(it)) },
@@ -264,6 +265,7 @@ internal fun ProvidePrivateChatUiEnvironment(
 internal data class PrivateChatUiEnvironment(
     val session: AppSession,
     val active: Boolean,
+    val onOpenUserProfile: (String) -> Unit = {},
     val listHeader: @Composable (ColumnScope.() -> Unit)? = null,
 )
 
@@ -437,6 +439,7 @@ private fun PrivateConversation(
     keepPositionAfterPrependCount: Int,
     onKeepPositionConsumed: () -> Unit,
     onBack: () -> Unit,
+    onOpenUserProfile: (String) -> Unit,
     onLoadMore: () -> Unit,
     onInputChange: (String) -> Unit,
     onCursorChange: (Int) -> Unit,
@@ -469,6 +472,9 @@ private fun PrivateConversation(
     val listController = rememberNativeMessageListController()
     val displayName = remember(peer) {
         peer.toPrivateChatDisplayName()
+    }
+    val profileClickable = remember(peer) {
+        !peer.isFileTransferPeer()
     }
     val listItems = remember(messages) {
         messages.mapIndexed { index, message ->
@@ -521,6 +527,9 @@ private fun PrivateConversation(
             },
             title = {
                 Row(
+                    modifier = Modifier.clickable(enabled = profileClickable) {
+                        onOpenUserProfile(peer)
+                    },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
@@ -587,7 +596,11 @@ private fun PrivateConversation(
                     onImageClick = onImageClick,
                     onLinkClick = onLinkClick,
                     onLongPress = { anchor -> onMessageLongPress(anchor.message) },
-                    onAvatarClick = {},
+                    onAvatarClick = { username ->
+                        if (username.isNotBlank() && !username.isFileTransferPeer()) {
+                            onOpenUserProfile(username)
+                        }
+                    },
                     onAvatarLongPress = {},
                     onRedPacketClick = {},
                     onReactionClick = { _, _ -> },
