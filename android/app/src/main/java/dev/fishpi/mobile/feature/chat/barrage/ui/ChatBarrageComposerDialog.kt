@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.feature.chat.barrage.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +31,9 @@ import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.feature.chat.barrage.ChatBarrageComposerState
 import dev.fishpi.mobile.ui.components.FishPiIconButton
 import dev.fishpi.mobile.ui.components.FishPiPillButton
+import dev.fishpi.mobile.ui.glass.FishPiGlassRole
+import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 
 @Composable
 internal fun ChatBarrageComposerDialog(
@@ -39,14 +43,18 @@ internal fun ChatBarrageComposerDialog(
     onDismiss: () -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = 460.dp),
-            shape = RoundedCornerShape(FishPiTheme.radiusBox),
-            color = FishPiTheme.surface,
-            border = BorderStroke(FishPiTheme.borderWidth, FishPiTheme.outline.copy(alpha = 0.16f)),
-            shadowElevation = 0.dp,
+                .widthIn(max = 460.dp)
+                .fishPiGlassSurface(
+                    backdrop = LocalFishPiGlassBackdrop.current,
+                    shape = RoundedCornerShape(FishPiTheme.radiusBox),
+                    containerColor = FishPiTheme.surface.copy(alpha = 0.82f),
+                    borderColor = FishPiTheme.outline.copy(alpha = 0.18f),
+                    borderWidth = FishPiTheme.borderWidth,
+                    role = FishPiGlassRole.Floating,
+                ),
         ) {
             Column(
                 modifier = Modifier.padding(FishPiTheme.spacingSection),

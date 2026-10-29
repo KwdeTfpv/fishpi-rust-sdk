@@ -52,8 +52,8 @@ internal fun AppBottomSheet(
             modifier = Modifier
                 .fillMaxSize()
                 .silentTap(onDismiss),
-            overlayColor = Color.Black.copy(alpha = 0.22f),
-            blurRadius = 24f,
+            overlayColor = Color.Black.copy(alpha = 0.14f),
+            blurRadius = 24.dp,
         ) {
             Box(
                 modifier = Modifier.fillMaxSize(),

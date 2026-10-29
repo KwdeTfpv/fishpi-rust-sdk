@@ -50,8 +50,8 @@ internal fun LinkPreviewOverlay(
             Box(modifier = Modifier.fillMaxWidth()) {
                 FishPiBlurBackdrop(
                     modifier = Modifier.matchParentSize(),
-                    overlayColor = FishPiTheme.accent.copy(alpha = 0.72f),
-                    blurRadius = 20f,
+                    overlayColor = Color.Black.copy(alpha = 0.30f),
+                    blurRadius = 20.dp,
                 )
                 Row(
                     modifier = Modifier

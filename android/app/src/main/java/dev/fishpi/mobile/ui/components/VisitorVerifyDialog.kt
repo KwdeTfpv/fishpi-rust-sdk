@@ -8,7 +8,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -47,6 +48,7 @@ import dev.fishpi.mobile.auth.isVisitorVerificationBypassedUrl
 import dev.fishpi.mobile.auth.isVisitorVerificationChallengeUrl
 import dev.fishpi.mobile.auth.isVisitorVerificationSuccessResponse
 import dev.fishpi.mobile.auth.visitorVerificationStartUrl
+import dev.fishpi.mobile.ui.blur.FishPiBlurOverlay
 
 @Composable
 internal fun VisitorVerifyDialog(
@@ -70,24 +72,32 @@ internal fun VisitorVerifyDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
-                .padding(horizontal = 16.dp, vertical = 28.dp),
-            contentAlignment = Alignment.Center,
+        FishPiBlurOverlay(
+            modifier = Modifier.fillMaxSize(),
+            overlayColor = Color.Black.copy(alpha = 0.28f),
+            blurRadius = 20.dp,
         ) {
-            Surface(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.82f)
-                    .sizeIn(maxWidth = 560.dp),
-                shape = RoundedCornerShape(FishPiTheme.radiusBox + 8.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 0.dp,
-                shadowElevation = 10.dp,
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 28.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                Column(Modifier.fillMaxSize()) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.82f)
+                        .sizeIn(maxWidth = 560.dp),
+                    shape = RoundedCornerShape(FishPiTheme.radiusBox + 8.dp),
+                    color = FishPiTheme.surface.copy(alpha = 0.92f),
+                    tonalElevation = 0.dp,
+                    shadowElevation = 10.dp,
+                    border = BorderStroke(
+                        FishPiTheme.borderWidth,
+                        FishPiTheme.outline.copy(alpha = 0.18f),
+                    ),
+                ) {
+                    Column(Modifier.fillMaxSize()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -174,6 +184,7 @@ internal fun VisitorVerifyDialog(
                 }
             }
         }
+    }
     }
 
     DisposableEffect(Unit) {

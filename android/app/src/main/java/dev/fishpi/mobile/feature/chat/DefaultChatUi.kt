@@ -2639,14 +2639,18 @@ private fun ChatTopicEditorDialog(
 ) {
     val trimmed = value.trim()
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = 460.dp),
-            shape = RoundedCornerShape(18.dp),
-            color = FishPiTheme.surface,
-            border = BorderStroke(FishPiTheme.borderWidth, FishPiTheme.outline.copy(alpha = 0.16f)),
-            shadowElevation = 0.dp,
+                .widthIn(max = 460.dp)
+                .fishPiGlassSurface(
+                    backdrop = LocalFishPiGlassBackdrop.current,
+                    shape = RoundedCornerShape(18.dp),
+                    containerColor = FishPiTheme.surface.copy(alpha = 0.82f),
+                    borderColor = FishPiTheme.outline.copy(alpha = 0.18f),
+                    borderWidth = FishPiTheme.borderWidth,
+                    role = FishPiGlassRole.Floating,
+                ),
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -3528,11 +3532,17 @@ private fun FavoriteEmojiSelectorSheet(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxWidth(0.85f)
-                .clip(RoundedCornerShape(12.dp)),
-            color = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
+                .fishPiGlassSurface(
+                    backdrop = LocalFishPiGlassBackdrop.current,
+                    shape = RoundedCornerShape(12.dp),
+                    containerColor = FishPiTheme.surface.copy(alpha = 0.78f),
+                    borderColor = FishPiTheme.outline.copy(alpha = 0.18f),
+                    borderWidth = FishPiTheme.borderWidth,
+                    role = FishPiGlassRole.Floating,
+                ),
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),

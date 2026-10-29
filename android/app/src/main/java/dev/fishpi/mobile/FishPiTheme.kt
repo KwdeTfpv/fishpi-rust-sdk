@@ -214,15 +214,15 @@ internal val IslandFishPiPalette = IslandFishPiThemeTokens.toPalette()
 internal val DeepBlueNeonFishPiPalette = DeepBlueNeonFishPiThemeTokens.toPalette()
 
 internal val ClassicFishPiGlassTokens = FishPiGlassTokens(
-    surfaceAlpha = 0.56f,
-    elevatedAlpha = 0.64f,
-    floatingAlpha = 0.64f,
-    blurRadius = 10f,
-    refractionHeight = 18f,
-    refractionAmount = 34f,
+    surfaceAlpha = 0.30f,
+    elevatedAlpha = 0.38f,
+    floatingAlpha = 0.44f,
+    blurRadius = 24f,
+    refractionHeight = 14f,
+    refractionAmount = 22f,
     chromaticAberration = false,
-    shadowAlpha = 0.24f,
-    innerShadowRadius = 7f,
+    shadowAlpha = 0.18f,
+    innerShadowRadius = 10f,
 )
 
 internal val LocalFishPiPalette = compositionLocalOf { IslandFishPiPalette }

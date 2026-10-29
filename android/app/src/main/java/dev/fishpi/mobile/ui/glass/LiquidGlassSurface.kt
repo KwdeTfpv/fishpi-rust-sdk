@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
@@ -29,6 +30,12 @@ internal enum class FishPiGlassRole {
     Floating,
 }
 
+private fun softSheenBrush(): Brush = Brush.verticalGradient(
+    0f to Color.White.copy(alpha = 0.10f),
+    0.34f to Color.Transparent,
+    1f to Color.Black.copy(alpha = 0.06f),
+)
+
 @Composable
 internal fun Modifier.fishPiGlassSurface(
     backdrop: Backdrop?,
@@ -46,11 +53,12 @@ internal fun Modifier.fishPiGlassSurface(
     role: FishPiGlassRole = FishPiGlassRole.Control,
     exportedBackdrop: LayerBackdrop? = null,
 ): Modifier {
-    val shouldDrawBackdrop = backdrop != null && role == FishPiGlassRole.Floating
+    val shouldDrawBackdrop = backdrop != null && role != FishPiGlassRole.Control
     val glass = if (!shouldDrawBackdrop) {
         Modifier
             .clip(shape)
             .background(containerColor)
+            .background(softSheenBrush())
     } else {
         Modifier.drawBackdrop(
             backdrop = backdrop,
@@ -74,13 +82,24 @@ internal fun Modifier.fishPiGlassSurface(
                 )
             },
             exportedBackdrop = exportedBackdrop,
-            onDrawSurface = { drawRect(containerColor) },
+            onDrawSurface = {
+                drawRect(containerColor)
+                drawRect(brush = softSheenBrush())
+            },
         )
     }
     return then(glass)
         .then(
             if (borderWidth > 0.dp) {
-                Modifier.border(borderWidth, borderColor, shape)
+                Modifier.border(
+                    width = borderWidth,
+                    brush = Brush.verticalGradient(
+                        0f to Color.White.copy(alpha = 0.24f),
+                        0.45f to borderColor,
+                        1f to Color.Black.copy(alpha = 0.10f),
+                    ),
+                    shape = shape,
+                )
             } else {
                 Modifier
             },

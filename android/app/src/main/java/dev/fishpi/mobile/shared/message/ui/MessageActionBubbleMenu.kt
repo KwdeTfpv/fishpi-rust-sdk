@@ -145,8 +145,8 @@ internal fun MessageActionBubbleMenu(
             modifier = Modifier
                 .fillMaxSize()
                 .silentTap(onDismiss),
-            overlayColor = Color.Black.copy(alpha = 0.10f),
-            blurRadius = 18f,
+            overlayColor = Color.Black.copy(alpha = 0.08f),
+            blurRadius = 18.dp,
         ) {
             Box(
                 modifier = Modifier
