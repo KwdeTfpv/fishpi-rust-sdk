@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddAPhoto
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.PhotoLibrary
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -294,7 +295,11 @@ private fun PrivateSessionList(
         error?.let {
             Text(text = it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = FishPiTheme.spacingPage))
         }
-        if (!isLoading && sessions.isEmpty()) {
+        if (isLoading && sessions.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else if (!isLoading && sessions.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(text = "还没有私聊会话")
             }
