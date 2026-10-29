@@ -1,3 +1,4 @@
+use crate::handles::HandleRegistry;
 use crate::jni_utils::{emit_callback, string_arg, to_jstring};
 use crate::mappers::*;
 use crate::runtime::{runtime_json, shared_runtime};
@@ -8,13 +9,19 @@ use jni::JNIEnv;
 use jni::objects::{JClass, JObject, JString};
 use jni::sys::{jboolean, jlong, jstring};
 use serde_json::{Value, json};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use tokio::time::timeout;
 
 struct AndroidNoticeConnection {
     _runtime: tokio::runtime::Runtime,
     connection: Mutex<NoticeConnection>,
+}
+
+static NOTICE_HANDLES: OnceLock<HandleRegistry<AndroidNoticeConnection>> = OnceLock::new();
+
+fn handles() -> &'static HandleRegistry<AndroidNoticeConnection> {
+    NOTICE_HANDLES.get_or_init(HandleRegistry::new)
 }
 
 #[unsafe(no_mangle)]
@@ -162,11 +169,11 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_connectNotice(
             Ok::<NoticeConnection, String>(connection)
         })?;
 
-        let handle = Box::new(AndroidNoticeConnection {
+        let handle = AndroidNoticeConnection {
             _runtime: runtime,
             connection: Mutex::new(connection),
-        });
-        Ok(Box::into_raw(handle) as jlong)
+        };
+        Ok(handles().insert(handle))
     })();
 
     match result {
@@ -195,11 +202,12 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_disconnectNotice
         return;
     }
 
-    let connection = unsafe { Box::from_raw(handle as *mut AndroidNoticeConnection) };
+    let Some(connection) = handles().remove(handle) else {
+        return;
+    };
     if let Ok(mut conn) = connection.connection.lock() {
         conn.disconnect();
     }
-    drop(connection);
 }
 
 #[unsafe(no_mangle)]
@@ -211,7 +219,9 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_reconnectNotice(
     if handle == 0 {
         return 0;
     }
-    let connection = unsafe { &*(handle as *mut AndroidNoticeConnection) };
+    let Some(connection) = handles().get(handle) else {
+        return 0;
+    };
     let result = (|| {
         let mut conn = connection
             .connection

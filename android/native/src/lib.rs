@@ -2,6 +2,7 @@ mod article;
 mod breezemoon;
 mod chatroom;
 mod emoji;
+mod handles;
 mod jni_utils;
 mod mappers;
 mod media;

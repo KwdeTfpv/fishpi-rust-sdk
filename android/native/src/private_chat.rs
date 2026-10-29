@@ -1,3 +1,4 @@
+use crate::handles::HandleRegistry;
 use crate::jni_utils::{emit_callback, string_arg, to_jstring};
 use crate::mappers::*;
 use crate::runtime::runtime_json;
@@ -7,13 +8,20 @@ use jni::JNIEnv;
 use jni::objects::{JClass, JObject, JString};
 use jni::sys::{jboolean, jlong, jstring};
 use serde_json::{Value, json};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use tokio::time::timeout;
 
 struct AndroidPrivateChatConnection {
     _runtime: tokio::runtime::Runtime,
     chat: Mutex<ChatConnection>,
+}
+
+static PRIVATE_CHAT_HANDLES: OnceLock<HandleRegistry<AndroidPrivateChatConnection>> =
+    OnceLock::new();
+
+fn handles() -> &'static HandleRegistry<AndroidPrivateChatConnection> {
+    PRIVATE_CHAT_HANDLES.get_or_init(HandleRegistry::new)
 }
 
 #[unsafe(no_mangle)]
@@ -153,7 +161,9 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendPrivateChatM
             return Err("私聊未连接".to_string());
         }
         let text = string_arg(&mut env, content)?;
-        let connection = unsafe { &*(handle as *mut AndroidPrivateChatConnection) };
+        let Some(connection) = handles().get(handle) else {
+            return Err("私聊未连接".to_string());
+        };
         let chat = connection
             .chat
             .lock()
@@ -307,17 +317,17 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_connectPrivateCh
             Ok::<ChatConnection, String>(chat)
         })?;
 
-        let handle = Box::new(AndroidPrivateChatConnection {
+        let handle = AndroidPrivateChatConnection {
             _runtime: runtime,
             chat: Mutex::new(chat),
-        });
+        };
         emit_callback(
             &java_vm,
             &callback,
             json!({ "event": "status", "message": "私聊已连接" }),
         );
 
-        Ok(Box::into_raw(handle) as jlong)
+        Ok(handles().insert(handle))
     })();
 
     match result {
@@ -346,7 +356,9 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_reconnectPrivate
         return 0;
     }
 
-    let connection = unsafe { &*(handle as *mut AndroidPrivateChatConnection) };
+    let Some(connection) = handles().get(handle) else {
+        return 0;
+    };
     let result = (|| {
         let mut chat = connection
             .chat
@@ -372,9 +384,10 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_disconnectPrivat
         return;
     }
 
-    let connection = unsafe { Box::from_raw(handle as *mut AndroidPrivateChatConnection) };
+    let Some(connection) = handles().remove(handle) else {
+        return;
+    };
     if let Ok(mut chat) = connection.chat.lock() {
         chat.disconnect();
     }
-    drop(connection);
 }

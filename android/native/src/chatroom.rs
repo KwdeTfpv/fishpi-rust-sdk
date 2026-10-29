@@ -1,3 +1,4 @@
+use crate::handles::HandleRegistry;
 use crate::jni_utils::{emit_callback, string_arg, to_jstring};
 use crate::mappers::*;
 use crate::runtime::runtime_json;
@@ -37,6 +38,12 @@ struct AndroidChatRoomConnection {
     connection: Mutex<ChatRoomConnection>,
     java_vm: Arc<jni::JavaVM>,
     callback: jni::objects::GlobalRef,
+}
+
+static CHAT_ROOM_HANDLES: OnceLock<HandleRegistry<AndroidChatRoomConnection>> = OnceLock::new();
+
+fn handles() -> &'static HandleRegistry<AndroidChatRoomConnection> {
+    CHAT_ROOM_HANDLES.get_or_init(HandleRegistry::new)
 }
 
 /// 拼接消息来源标识（`客户端/版本`），任一为空返回 None。
@@ -384,19 +391,19 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_connectChatRoom(
             Ok::<ChatRoomConnection, String>(connection)
         })?;
 
-        let handle = Box::new(AndroidChatRoomConnection {
+        let handle = AndroidChatRoomConnection {
             _runtime: runtime,
             connection: Mutex::new(connection),
             java_vm: Arc::clone(&java_vm),
             callback: callback.clone(),
-        });
+        };
         emit_callback(
             &java_vm,
             &callback,
             json!({ "event": "status", "message": "聊天室已连接" }),
         );
 
-        Ok(Box::into_raw(handle) as jlong)
+        Ok(handles().insert(handle))
     })();
 
     match result {
@@ -425,11 +432,12 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_disconnectChatRo
         return;
     }
 
-    let handle = unsafe { Box::from_raw(handle as *mut AndroidChatRoomConnection) };
+    let Some(handle) = handles().remove(handle) else {
+        return;
+    };
     if let Ok(mut connection) = handle.connection.lock() {
         connection.disconnect();
     }
-    drop(handle);
 }
 
 #[unsafe(no_mangle)]
@@ -442,7 +450,9 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_reconnectChatRoo
         return 0;
     }
 
-    let handle = unsafe { &*(handle as *mut AndroidChatRoomConnection) };
+    let Some(handle) = handles().get(handle) else {
+        return 0;
+    };
     let result = (|| {
         let mut connection = handle
             .connection
