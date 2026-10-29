@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import java.util.Locale
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -46,6 +47,7 @@ import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -234,6 +236,9 @@ internal fun MainShell(
     var updateInfo by remember { mutableStateOf<ReleaseUpdateInfo?>(null) }
     var updateDismissed by remember { mutableStateOf(false) }
     var isDownloadingUpdate by remember { mutableStateOf(false) }
+    var updateDownloadedBytes by remember { mutableStateOf(0L) }
+    var updateTotalBytes by remember { mutableStateOf(-1L) }
+    var updateDownloadError by remember { mutableStateOf<String?>(null) }
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var showVisitorVerify by remember { mutableStateOf(false) }
     val visitorVerifyVisible by rememberUpdatedState(showVisitorVerify)
@@ -807,7 +812,7 @@ internal fun MainShell(
     if (pendingUpdate != null && !updateDismissed) {
         AlertDialog(
             onDismissRequest = {
-                updateDismissed = true
+                if (!isDownloadingUpdate) updateDismissed = true
             },
             containerColor = FishPiTheme.surface,
             tonalElevation = 0.dp,
@@ -821,8 +826,38 @@ internal fun MainShell(
                         .heightIn(max = 360.dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
+                    if (isDownloadingUpdate) {
+                        Text(
+                            text = "正在下载 ${formatBytes(updateDownloadedBytes)}" +
+                                if (updateTotalBytes > 0) " / ${formatBytes(updateTotalBytes)}" else "",
+                        )
+                        if (updateTotalBytes > 0) {
+                            LinearProgressIndicator(
+                                progress = {
+                                    (updateDownloadedBytes.toFloat() / updateTotalBytes.toFloat()).coerceIn(0f, 1f)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
+                            )
+                        }
+                    }
+                    updateDownloadError?.let {
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
                     Text(
                         text = pendingUpdate.changelog.ifBlank { "此版本暂无更新日志。" },
+                        modifier = Modifier.padding(top = if (isDownloadingUpdate || updateDownloadError != null) 8.dp else 0.dp),
                     )
                 }
             },
@@ -846,7 +881,9 @@ internal fun MainShell(
                             return@TextButton
                         }
                         isDownloadingUpdate = true
-                        updateDismissed = true
+                        updateDownloadError = null
+                        updateDownloadedBytes = 0L
+                        updateTotalBytes = -1L
                         scope.launch {
                             val downloaded = runCatching {
                                 withContext(Dispatchers.IO) {
@@ -854,10 +891,17 @@ internal fun MainShell(
                                         context = context,
                                         urls = pendingUpdate.urls,
                                         expectedSha256 = pendingUpdate.sha256,
+                                        onProgress = { downloadedBytes, totalBytes ->
+                                            scope.launch(Dispatchers.Main.immediate) {
+                                                updateDownloadedBytes = downloadedBytes
+                                                updateTotalBytes = totalBytes
+                                            }
+                                        },
                                     )
                                 }
                             }
                             downloaded.onSuccess { apk ->
+                                updateDismissed = true
                                 store.saveUpdateDownloadAt(System.currentTimeMillis())
                                 val started = runCatching {
                                     withContext(Dispatchers.IO) { UpdateInstaller.install(context, apk) }
@@ -869,6 +913,7 @@ internal fun MainShell(
                                     store.saveUpdateDownloadResult("已拉起安装器")
                                 }
                             }.onFailure {
+                                updateDownloadError = it.message ?: "下载失败"
                                 store.saveUpdateDownloadAt(System.currentTimeMillis())
                                 store.saveUpdateDownloadResult("下载失败：${it.message ?: "未知错误"}")
                                 FishPiNotifier.error(it.message ?: "下载失败")
@@ -877,16 +922,23 @@ internal fun MainShell(
                         }
                     },
                 ) {
-                    Text(if (isDownloadingUpdate) "下载中..." else "立即更新")
+                    Text(
+                        when {
+                            isDownloadingUpdate -> "下载中..."
+                            updateDownloadError != null -> "重试"
+                            else -> "立即更新"
+                        },
+                    )
                 }
             },
             dismissButton = {
                 TextButton(
+                    enabled = !isDownloadingUpdate,
                     onClick = {
                         updateDismissed = true
                     },
                 ) {
-                    Text("稍后")
+                    Text(if (isDownloadingUpdate) "下载中" else "稍后")
                 }
             },
         )
@@ -1288,4 +1340,11 @@ private fun LiquidNavItem(
                 .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.72f) else Color.Transparent),
         )
     }
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes < 1024L) return "$bytes B"
+    val kb = bytes / 1024.0
+    if (kb < 1024.0) return String.format(Locale.US, "%.1f KB", kb)
+    return String.format(Locale.US, "%.1f MB", kb / 1024.0)
 }
