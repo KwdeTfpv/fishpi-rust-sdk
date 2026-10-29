@@ -42,7 +42,6 @@ internal class PrivateChatController(
     private val apiKey: String,
     private val selfUsername: String,
     private val api: FishPiApiClient = FishPiApiClient.shared,
-    private val overviewRealtime: PrivateChatRealtimeClient = PrivateChatRealtimeClient(),
     private val conversationRealtime: PrivateChatRealtimeClient = PrivateChatRealtimeClient(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) : UiController<PrivateChatState, PrivateChatAction> {
@@ -55,6 +54,7 @@ internal class PrivateChatController(
     private val uploadQueue = AttachmentUploadQueue.shared(context)
 
     private var historyJob: Job? = null
+    private var sessionsJob: Job? = null
     private var markReadJob: Job? = null
     private var conversationGeneration = 0L
     private var realtimeEnabled = false
@@ -101,9 +101,11 @@ internal class PrivateChatController(
         }
     }
 
-    fun refreshSessions() {
+    fun refreshSessions(force: Boolean = false) {
+        if (!force && sessionsJob?.isActive == true) return
+        sessionsJob?.cancel()
         _state.update { it.copy(isLoadingSessions = true, error = null) }
-        scope.launch {
+        sessionsJob = scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
                     withTimeout(16_000) {
@@ -113,24 +115,12 @@ internal class PrivateChatController(
             }.onSuccess { sessions ->
                 setSessions(sessions)
                 _state.update { it.copy(isLoadingSessions = false, error = null) }
-            }.onFailure {
-                setError(it.message ?: "加载私聊会话失败")
+            }.onFailure { error ->
+                if (error is CancellationException) return@onFailure
+                setError(error.message ?: "加载私聊会话失败")
                 _state.update { state -> state.copy(isLoadingSessions = false) }
             }
         }
-    }
-
-    fun connectOverview(enabled: Boolean) {
-        if (!enabled) {
-            overviewRealtime.disconnect()
-            return
-        }
-        overviewRealtime.connectOverview(
-            apiKey = apiKey,
-            selfUsername = selfUsername,
-            onNotice = { notice -> applyNotice(notice, notify = true) },
-            onStatus = {},
-        )
     }
 
     fun connectConversation(enabled: Boolean) {
@@ -156,8 +146,8 @@ internal class PrivateChatController(
 
     fun close() {
         historyJob?.cancel()
+        sessionsJob?.cancel()
         markReadJob?.cancel()
-        overviewRealtime.disconnect()
         conversationRealtime.disconnect()
         scope.cancel()
     }
@@ -238,7 +228,7 @@ internal class PrivateChatController(
         conversationRealtime.disconnect()
         _state.update { it.copy(conversation = PrivateConversationState()) }
         emitDetailActive(false)
-        refreshSessions()
+        refreshSessions(force = true)
     }
 
     private fun loadMoreHistory() {
