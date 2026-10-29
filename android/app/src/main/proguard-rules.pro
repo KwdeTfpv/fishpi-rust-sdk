@@ -1,5 +1,7 @@
 -keepattributes *Annotation*
 
+-dontwarn org.commonmark.ext.gfm.strikethrough.Strikethrough
+
 -keep class dev.fishpi.mobile.data.FishPiNative { *; }
 
 -keepclassmembers class * {
