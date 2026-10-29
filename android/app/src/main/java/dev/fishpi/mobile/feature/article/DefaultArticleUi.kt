@@ -2470,6 +2470,7 @@ private fun ArticleCommentRow(
                 replyTo?.let {
                     ArticleReplyContext(reply = it)
                 }
+                val htmlImageUrls = remember(comment.content) { comment.content.htmlCommentImageUrls() }
                 ArticleMarkdownContent(
                     source = comment.content.withResolvedArticleImageUrls(comment.imageUrls),
                     contentKey = "article-comment|${comment.id}|${comment.content.hashCode()}|${comment.imageUrls.hashCode()}",
@@ -2484,6 +2485,16 @@ private fun ArticleCommentRow(
                     onLinkClick = onLinkClick,
                     onVideoClick = onVideoClick,
                 )
+                if (htmlImageUrls.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        htmlImageUrls.forEachIndexed { index, url ->
+                            ArticleInlineImage(
+                                url = url,
+                                onClick = { onImageClick(htmlImageUrls, index) },
+                            )
+                        }
+                    }
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -3001,6 +3012,24 @@ private fun String.articlePreviewRangeTokens(
 }
 
 private operator fun List<IntRange>.contains(index: Int): Boolean = any { index in it }
+
+private val HtmlCommentImageTagRegex = Regex("<img\\b[^>]*>", RegexOption.IGNORE_CASE)
+private val HtmlCommentImageSrcRegex = Regex("""<img\b[^>]*\bsrc\s*=\s*(['"])(.*?)\1[^>]*>""", RegexOption.IGNORE_CASE)
+private val HtmlCommentEmojiClassRegex = Regex("""\bclass\s*=\s*(['"])[^'"]*\bemoji\b[^'"]*\1""", RegexOption.IGNORE_CASE)
+
+private fun String.htmlCommentImageUrls(): List<String> =
+    HtmlCommentImageTagRegex.findAll(this)
+        .filterNot { tag -> HtmlCommentEmojiClassRegex.containsMatchIn(tag.value) }
+        .mapNotNull { tag ->
+            HtmlCommentImageSrcRegex.find(tag.value)
+                ?.groupValues
+                ?.getOrNull(2)
+                ?.cleanMarkdownUrl()
+                ?.normalizeWebUrl()
+        }
+        .filter(String::isNotBlank)
+        .distinct()
+        .toList()
 
 private fun String.withResolvedArticleImageUrls(imageUrls: List<String>): String {
     if (isBlank() || imageUrls.isEmpty()) return this
