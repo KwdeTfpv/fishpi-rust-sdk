@@ -8,7 +8,7 @@ internal data class PrivateChatState(
     val sessions: List<PrivateSessionUiModel> = emptyList(),
     val rawSessions: List<PrivateChatSession> = emptyList(),
     val isLoadingSessions: Boolean = true,
-    val error: String? = null,
+    val sessionsError: String? = null,
     val conversation: PrivateConversationState = PrivateConversationState(),
     val totalUnread: Long = 0,
 )

@@ -97,14 +97,16 @@ internal class PrivateChatController(
             PrivateChatAction.DismissLinkPreview -> updateConversation { it.copy(previewLinkUrl = null) }
             PrivateChatAction.KeepPositionConsumed -> updateConversation { it.copy(keepPositionAfterPrependCount = 0) }
             is PrivateChatAction.ShowError -> showTransientError(action.message)
-            PrivateChatAction.ClearError -> _state.update { it.copy(error = null) }
+            PrivateChatAction.ClearError -> _state.update {
+                it.copy(sessionsError = null, conversation = it.conversation.copy(error = null))
+            }
         }
     }
 
     fun refreshSessions(force: Boolean = false) {
         if (!force && sessionsJob?.isActive == true) return
         sessionsJob?.cancel()
-        _state.update { it.copy(isLoadingSessions = true, error = null) }
+        _state.update { it.copy(isLoadingSessions = true, sessionsError = null) }
         sessionsJob = scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -114,10 +116,10 @@ internal class PrivateChatController(
                 }
             }.onSuccess { sessions ->
                 setSessions(sessions)
-                _state.update { it.copy(isLoadingSessions = false, error = null) }
+                _state.update { it.copy(isLoadingSessions = false, sessionsError = null) }
             }.onFailure { error ->
                 if (error is CancellationException) return@onFailure
-                setError(error.message ?: "加载私聊会话失败")
+                setSessionsError(error.message ?: "加载私聊会话失败")
                 _state.update { state -> state.copy(isLoadingSessions = false) }
             }
         }
@@ -183,7 +185,7 @@ internal class PrivateChatController(
             selectedPeerAvatar = session.avatar,
             isLoading = true,
         )
-        _state.update { it.copy(conversation = nextConversation, error = null) }
+        _state.update { it.copy(conversation = nextConversation) }
         if (samePeer && realtimeEnabled && !conversationRealtime.hasActiveHandle()) {
             connectConversation(true)
         }
@@ -204,6 +206,7 @@ internal class PrivateChatController(
                     it.copy(
                         messages = merged,
                         isLoading = false,
+                        error = null,
                         nextHistoryPage = 2,
                         hasMoreHistory = history.size >= PrivateHistoryPageSize,
                         scrollToBottomRequest = if (merged.isNotEmpty()) it.scrollToBottomRequest + 1 else it.scrollToBottomRequest,
@@ -215,7 +218,7 @@ internal class PrivateChatController(
                 if (error is CancellationException) return@onFailure
                 if (generation != conversationGeneration) return@onFailure
                 if (_state.value.conversation.selectedPeer != peer) return@onFailure
-                setError(error.message ?: "加载私聊历史失败")
+                setConversationError(error.message ?: "加载私聊历史失败")
                 updateConversation { state -> state.copy(isLoading = false) }
             }
         }
@@ -265,12 +268,12 @@ internal class PrivateChatController(
                         keepPositionAfterPrependCount = unique.size,
                     )
                 }
-                _state.update { it.copy(error = null) }
+                updateConversation { it.copy(error = null) }
             }.onFailure { error ->
                 if (error is CancellationException) return@onFailure
                 if (generation != conversationGeneration) return@onFailure
                 if (_state.value.conversation.selectedPeer != peer) return@onFailure
-                setError(error.message ?: "加载更早私聊失败")
+                setConversationError(error.message ?: "加载更早私聊失败")
                 updateConversation { state -> state.copy(isLoadingMore = false) }
             }
         }
@@ -350,7 +353,7 @@ internal class PrivateChatController(
                 val reason = settled.items.firstOrNull { it.error != null }?.error
                     ?: "没有可发送的内容"
                 updateConversation { it.copy(attachments = settled, isSending = false) }
-                setError(reason)
+                setConversationError(reason)
                 return@launch
             }
             val failed = settled.items.filter {
@@ -413,9 +416,9 @@ internal class PrivateChatController(
                         isSending = false,
                     )
                 }
-                _state.update { it.copy(error = null) }
+                updateConversation { it.copy(error = null) }
             }.onFailure {
-                setError(it.message ?: "私聊发送失败")
+                setConversationError(it.message ?: "私聊发送失败")
                 updateConversation { state ->
                     val restoreInput = state.input.isBlank()
                     state.copy(
@@ -566,7 +569,7 @@ internal class PrivateChatController(
             }.onSuccess {
                 onRealtimeRevoke(message.oId)
             }.onFailure {
-                setError(it.message ?: "私聊撤回失败")
+                setConversationError(it.message ?: "私聊撤回失败")
             }
         }
     }
@@ -625,8 +628,13 @@ internal class PrivateChatController(
         _state.update { it.copy(conversation = transform(it.conversation)) }
     }
 
-    private fun setError(reason: String) {
-        _state.update { it.copy(error = reason) }
+    private fun setSessionsError(reason: String) {
+        _state.update { it.copy(sessionsError = reason) }
+        emitEffect(PrivateChatEffect.ShowError(reason))
+    }
+
+    private fun setConversationError(reason: String) {
+        updateConversation { it.copy(error = reason) }
         emitEffect(PrivateChatEffect.ShowError(reason))
     }
 

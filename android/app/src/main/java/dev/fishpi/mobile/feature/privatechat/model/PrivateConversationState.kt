@@ -12,6 +12,7 @@ internal data class PrivateConversationState(
     val messages: List<ChatRoomMessage> = emptyList(),
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
+    val error: String? = null,
     val nextHistoryPage: Int = 2,
     val hasMoreHistory: Boolean = true,
     val status: String = "私聊未连接",

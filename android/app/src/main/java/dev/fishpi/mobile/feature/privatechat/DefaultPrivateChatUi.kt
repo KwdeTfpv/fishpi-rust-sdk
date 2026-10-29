@@ -155,7 +155,7 @@ internal fun DefaultPrivateChatUi(
         PrivateSessionList(
             sessions = state.sessions,
             isLoading = state.isLoadingSessions,
-            error = state.error,
+            error = state.sessionsError,
             onOpen = { dispatch(PrivateChatAction.OpenSession(it.toPrivateChatSession())) },
             listHeader = environment.listHeader,
         )
@@ -174,7 +174,7 @@ internal fun DefaultPrivateChatUi(
             attachments = conversation.attachments.items,
             cursorRequest = conversation.cursorRequest,
             status = conversation.status,
-            error = state.error,
+            error = conversation.error,
             selfUsername = environment.session.user.userName,
             scrollToBottomRequest = conversation.scrollToBottomRequest,
             keepPositionAfterPrependCount = conversation.keepPositionAfterPrependCount,
