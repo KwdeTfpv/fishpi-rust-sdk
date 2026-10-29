@@ -25,6 +25,14 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicLong
 
+enum class RealtimeStatus {
+    Connecting,
+    Connected,
+    Reconnecting,
+    Failed,
+    Disconnected,
+}
+
 // 聊天室实时事件，扇出给 UI 渲染与通知两个消费者
 sealed interface ChatRoomEvent {
     data class Message(val message: ChatRoomMessage) : ChatRoomEvent
@@ -34,7 +42,7 @@ sealed interface ChatRoomEvent {
     data class Online(val count: Int, val topic: String, val users: List<ChatOnlineUser>) : ChatRoomEvent
     data class DiscussChanged(val topic: String) : ChatRoomEvent
     data class NodeChanged(val nodeName: String) : ChatRoomEvent
-    data class Status(val status: String) : ChatRoomEvent
+    data class Status(val status: RealtimeStatus, val label: String) : ChatRoomEvent
 }
 
 data class RealtimeSession(val apiKey: String, val username: String)
@@ -120,9 +128,10 @@ object RealtimeConnectionManager {
             onOnline = { count, topic, users -> emitChat(ChatRoomEvent.Online(count, topic, users)) },
             onDiscussChanged = { emitChat(ChatRoomEvent.DiscussChanged(it)) },
             onNodeChanged = { emitChat(ChatRoomEvent.NodeChanged(it)) },
-            onStatus = {
-                _connected.value = isConnectedStatus(it)
-                emitChat(ChatRoomEvent.Status(it))
+            onStatus = { raw ->
+                val status = classifyChatStatus(raw)
+                _connected.value = status == RealtimeStatus.Connected
+                emitChat(chatStatusEvent(raw))
             },
         )
         connectPrivateOverview(next)
@@ -170,18 +179,18 @@ object RealtimeConnectionManager {
         notice.disconnect()
     }
 
-    fun reconnectChatRoom(onStatus: (String) -> Unit) {
+    fun reconnectChatRoom(onStatus: (ChatRoomEvent.Status) -> Unit) {
         if (!chatRoom.hasActiveHandle()) {
             val current = session
             if (current == null) {
-                onStatus("聊天室未连接")
+                onStatus(chatStatusEvent("聊天室未连接"))
                 return
             }
-            onStatus("聊天室正在重连...")
+            onStatus(chatStatusEvent("聊天室正在重连..."))
             start(current)
             return
         }
-        chatRoom.reconnect(onStatus)
+        chatRoom.reconnect { raw -> onStatus(chatStatusEvent(raw)) }
     }
 
     fun pauseChatEvents() = chatRoom.pauseEvents()
@@ -209,9 +218,36 @@ object RealtimeConnectionManager {
 
     fun droppedPrivateNoticeCount(): Long = droppedPrivateNotices.get()
 
-    private fun isConnectedStatus(raw: String): Boolean {
-        val text = raw.lowercase()
-        return (text.contains("connected") || raw.contains("已连接") || raw.contains("已恢复")) &&
-            !text.contains("disconnect") && !raw.contains("中断") && !raw.contains("失败")
+    private fun chatStatusEvent(raw: String): ChatRoomEvent.Status =
+        ChatRoomEvent.Status(classifyChatStatus(raw), chatStatusLabel(raw))
+
+    private fun classifyChatStatus(raw: String): RealtimeStatus {
+        val text = raw.trim()
+        val lower = text.lowercase()
+        return when {
+            lower.contains("reconnect failed") || text.contains("重连失败") -> RealtimeStatus.Reconnecting
+            lower.contains("reconnecting") || text.contains("正在重连") || text.contains("重连中") -> RealtimeStatus.Reconnecting
+            lower.contains("reconnected") || text.contains("已重连") || text.contains("已恢复") -> RealtimeStatus.Connected
+            lower.contains("disconnected") || lower.contains("disconnect") || lower.contains("not connected") ||
+                text.contains("中断") || text.contains("断开") || text.contains("未连接") ||
+                text.contains("暂停") -> RealtimeStatus.Disconnected
+            lower.contains("connected") || text.contains("已连接") -> RealtimeStatus.Connected
+            lower.contains("failed") || text.contains("失败") -> RealtimeStatus.Failed
+            text.contains("正在连接") || lower.contains("connecting") -> RealtimeStatus.Connecting
+            else -> RealtimeStatus.Connecting
+        }
+    }
+
+    private fun chatStatusLabel(raw: String): String {
+        val text = raw.trim()
+        return when {
+            text.contains("WebSocket reconnecting in", ignoreCase = true) -> "聊天室连接中断，正在重连..."
+            text.contains("WebSocket reconnect failed", ignoreCase = true) -> "聊天室重连失败，继续重试中..."
+            text.contains("WebSocket reconnected", ignoreCase = true) -> "聊天室连接已恢复"
+            text.contains("WebSocket disconnected", ignoreCase = true) -> "聊天室连接中断"
+            text.equals("WebSocket connected", ignoreCase = true) -> "聊天室已连接"
+            text == "聊天室已重连" -> "聊天室连接已恢复"
+            else -> text
+        }
     }
 }

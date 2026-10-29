@@ -11,6 +11,7 @@ import dev.fishpi.mobile.data.ChatReactionUpdate
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.realtime.ChatRoomEvent
 import dev.fishpi.mobile.realtime.RealtimeConnectionManager
+import dev.fishpi.mobile.realtime.RealtimeStatus
 import dev.fishpi.mobile.data.EmojiGroupView
 import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.data.FishPiApiClient
@@ -284,7 +285,7 @@ internal class ChatController(
             is ChatRoomEvent.Online -> onOnline(event.count, event.topic, event.users)
             is ChatRoomEvent.DiscussChanged -> onDiscussChanged(event.topic)
             is ChatRoomEvent.NodeChanged -> onNodeChanged(event.nodeName)
-            is ChatRoomEvent.Status -> onStatus(event.status)
+            is ChatRoomEvent.Status -> onStatus(event)
         }
     }
 
@@ -293,7 +294,7 @@ internal class ChatController(
         chatEventJob?.cancel()
         chatEventJob = null
         if (markPaused && !_state.value.isLoading) {
-            updateConnectionStatus("聊天室实时连接已暂停")
+            updateConnectionStatus(RealtimeStatus.Disconnected, "聊天室实时连接已暂停")
         }
     }
 
@@ -799,12 +800,9 @@ internal class ChatController(
         _state.update { it.copy(connection = it.connection.copy(nodeName = nodeName.trim())) }
     }
 
-    private fun onStatus(status: String) {
-        val mappedStatus = mapChatRealtimeStatus(status)
-        if (isChatConnectionStatus(status, mappedStatus)) {
-            updateConnectionStatus(mappedStatus)
-        }
-        if (shouldRefreshAfterStatus(status, mappedStatus)) {
+    private fun onStatus(event: ChatRoomEvent.Status) {
+        updateConnectionStatus(event.status, event.label)
+        if (event.status == RealtimeStatus.Connected) {
             val now = System.currentTimeMillis()
             if (now - lastRealtimeRefreshAtMs > 2500L && !_state.value.isLoading) {
                 lastRealtimeRefreshAtMs = now
@@ -813,52 +811,23 @@ internal class ChatController(
         }
     }
 
-    private fun updateConnectionStatus(label: String) {
+    private fun updateConnectionStatus(status: RealtimeStatus, label: String) {
         _state.update {
             it.copy(
                 connection = it.connection.copy(
-                    status = label.toConnectionStatus(),
+                    status = status.toChatConnectionStatus(),
                     label = label,
                 ),
             )
         }
     }
 
-    private fun mapChatRealtimeStatus(raw: String): String = when {
-        raw.contains("WebSocket reconnecting in", ignoreCase = true) -> "聊天室连接中断，正在重连..."
-        raw.contains("WebSocket reconnect failed", ignoreCase = true) -> "聊天室重连失败，继续重试中..."
-        raw.contains("WebSocket reconnected", ignoreCase = true) -> "聊天室连接已恢复"
-        raw.contains("WebSocket disconnected", ignoreCase = true) -> "聊天室连接中断"
-        else -> raw
-    }
-
-    private fun isChatConnectionStatus(raw: String, mapped: String): Boolean {
-        val text = "$raw $mapped"
-        return text.contains("聊天室") ||
-            text.contains("WebSocket", ignoreCase = true) ||
-            text.contains("chatroom", ignoreCase = true)
-    }
-
-    private fun shouldRefreshAfterStatus(raw: String, mapped: String): Boolean {
-        val normalizedRaw = raw.trim().lowercase()
-        val normalizedMapped = mapped.trim().lowercase()
-        return (
-            normalizedRaw.contains("websocket reconnected") ||
-                normalizedRaw.contains("websocket connected") ||
-                normalizedRaw.contains("chatroom connected") ||
-                raw.contains("聊天室已连接") ||
-                normalizedMapped.contains("连接已恢复")
-            ) &&
-            !normalizedRaw.contains("reconnecting") &&
-            !raw.contains("正在连接")
-    }
-
-    private fun String.toConnectionStatus(): ChatConnectionStatus = when {
-        contains("正在连接") || contains("重连", ignoreCase = true) -> ChatConnectionStatus.Reconnecting
-        contains("已恢复") || contains("已连接") || contains("connected", ignoreCase = true) -> ChatConnectionStatus.Connected
-        contains("失败") -> ChatConnectionStatus.Failed
-        contains("中断") || contains("暂停") || contains("未连接") -> ChatConnectionStatus.Disconnected
-        else -> ChatConnectionStatus.Connecting
+    private fun RealtimeStatus.toChatConnectionStatus(): ChatConnectionStatus = when (this) {
+        RealtimeStatus.Connecting -> ChatConnectionStatus.Connecting
+        RealtimeStatus.Connected -> ChatConnectionStatus.Connected
+        RealtimeStatus.Reconnecting -> ChatConnectionStatus.Reconnecting
+        RealtimeStatus.Failed -> ChatConnectionStatus.Failed
+        RealtimeStatus.Disconnected -> ChatConnectionStatus.Disconnected
     }
 
     private fun sendText(content: String) {
