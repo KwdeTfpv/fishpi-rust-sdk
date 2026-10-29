@@ -5,6 +5,9 @@
 !settings.gradle.kts
 !build.gradle.kts
 !gradle.properties
+!gradle/
+gradle/*
+!gradle/libs.versions.toml
 !src/
 !src/**
 src/main.rs
