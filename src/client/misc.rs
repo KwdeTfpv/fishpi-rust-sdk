@@ -5,6 +5,17 @@ use crate::model::misc::{Log, PreRegisterInfo, RegisterInfo, Report, UploadResul
 use crate::utils::error::Error;
 use crate::utils::{build_http_path, request_upload_ticket, upload_files};
 
+fn ensure_register_success(value: Value, fallback: &str) -> Result<Value, Error> {
+    if value.get("code").and_then(Value::as_i64) == Some(0) {
+        return Ok(value);
+    }
+    let msg = value
+        .get("msg")
+        .and_then(Value::as_str)
+        .unwrap_or(fallback);
+    Err(Error::business(-1, msg.to_string()))
+}
+
 impl FishPi {
     pub async fn captcha(&self) -> Result<Vec<u8>, Error> {
         self.get_bytes("captcha").await
@@ -12,7 +23,8 @@ impl FishPi {
 
     /// 预注册（发送手机验证码等）。
     pub async fn pre_register(&self, data: &PreRegisterInfo) -> Result<(), Error> {
-        self.post_raw("register", data).await?;
+        let value = self.post_raw("register", data).await?;
+        ensure_register_success(value, "发送短信验证码失败")?;
         Ok(())
     }
 
@@ -20,6 +32,7 @@ impl FishPi {
     pub async fn verify(&self, code: &str) -> Result<String, Error> {
         let url = build_http_path("verify", &[("code", code.to_string())]);
         let rsp = self.get_raw(&url).await?;
+        let rsp = ensure_register_success(rsp, "短信验证码校验失败")?;
         Ok(rsp["userId"].as_str().unwrap_or_default().to_string())
     }
 
@@ -29,7 +42,8 @@ impl FishPi {
             Some(r) => build_http_path("register2", &[("r", r.to_string())]),
             None => "register2".to_string(),
         };
-        self.post_raw(&path, data).await?;
+        let value = self.post_raw(&path, data).await?;
+        ensure_register_success(value, "注册失败")?;
         Ok(())
     }
 

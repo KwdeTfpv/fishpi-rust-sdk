@@ -86,7 +86,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_preRegister(
                 let data = PreRegisterInfo {
                     username: username.trim().to_string(),
                     phone: phone.trim().to_string(),
-                    invitecode: None,
+                    invitecode: Some(String::new()),
                     captcha: captcha.trim().to_string(),
                 };
                 client
