@@ -54,6 +54,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 
@@ -82,6 +84,8 @@ internal class ChatController(
     val legacyMessages: StateFlow<List<ChatRoomMessage>> = rawMessages.asStateFlow()
 
     private val renderReducer = ChatRenderModelReducer()
+    private val renderMutex = Mutex()
+    private var renderJob: Job? = null
     private var currentFilters = ChatFilterConfig()
     private val _renderModel = MutableStateFlow(ChatRenderModel())
     val renderModel: StateFlow<ChatRenderModel> = _renderModel.asStateFlow()
@@ -93,15 +97,25 @@ internal class ChatController(
     }
 
     private fun refreshRenderModel() {
-        _renderModel.value = renderReducer.recompute(rawMessages.value, currentFilters)
+        scheduleRenderModel { filters -> renderReducer.recompute(rawMessages.value, filters) }
     }
 
     private fun appendRenderModel(appended: ChatRoomMessage) {
-        _renderModel.value = renderReducer.onAppended(rawMessages.value, appended, currentFilters)
+        scheduleRenderModel { filters -> renderReducer.onAppended(rawMessages.value, appended, filters) }
     }
 
     private fun replaceRenderModel(oId: String) {
-        _renderModel.value = renderReducer.onReplaced(rawMessages.value, oId, currentFilters)
+        scheduleRenderModel { filters -> renderReducer.onReplaced(rawMessages.value, oId, filters) }
+    }
+
+    private fun scheduleRenderModel(compute: (ChatFilterConfig) -> ChatRenderModel) {
+        val filters = currentFilters
+        renderJob?.cancel()
+        renderJob = scope.launch(Dispatchers.Default) {
+            renderMutex.withLock {
+                _renderModel.value = compute(filters)
+            }
+        }
     }
 
     private val _legacyComposerState = MutableStateFlow(ChatLegacyComposerState())
@@ -263,16 +277,19 @@ internal class ChatController(
         }
     }
 
-    private fun handleChatEvent(event: ChatRoomEvent) {
+    private suspend fun handleChatEvent(event: ChatRoomEvent) {
         val config = realtimeConnectConfig
         when (event) {
             is ChatRoomEvent.Message -> {
                 val incoming = event.message
                 val isOwnMessage = incoming.userName.equals(currentUsername, ignoreCase = true)
                 val followBottom = _state.value.shouldFollowBottom
+                val blocked = withContext(Dispatchers.Default) {
+                    config?.shouldBlockMessage?.invoke(incoming) ?: false
+                }
                 onMessage(
                     incoming = incoming,
-                    blocked = config?.shouldBlockMessage?.invoke(incoming) ?: false,
+                    blocked = blocked,
                     keepFollowing = (config?.isRoomVisible?.invoke() ?: true) &&
                         (isOwnMessage || followBottom || (config?.shouldFollowBottom?.invoke() ?: false)),
                     maxRetained = config?.maxRetainedMessages ?: 520,
@@ -307,6 +324,8 @@ internal class ChatController(
         chatEventJob = null
         livenessPollingJob?.cancel()
         livenessPollingJob = null
+        renderJob?.cancel()
+        renderJob = null
     }
 
     private fun startLivenessPolling() {
