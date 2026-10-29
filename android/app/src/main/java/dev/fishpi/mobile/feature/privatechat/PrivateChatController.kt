@@ -111,7 +111,7 @@ internal class PrivateChatController(
                 }
             }.onSuccess { sessions ->
                 setSessions(sessions)
-                _state.update { it.copy(isLoadingSessions = false) }
+                _state.update { it.copy(isLoadingSessions = false, error = null) }
             }.onFailure {
                 setError(it.message ?: "加载私聊会话失败")
                 _state.update { state -> state.copy(isLoadingSessions = false) }
@@ -274,6 +274,7 @@ internal class PrivateChatController(
                         keepPositionAfterPrependCount = unique.size,
                     )
                 }
+                _state.update { it.copy(error = null) }
             }.onFailure { error ->
                 if (error is CancellationException) return@onFailure
                 if (generation != conversationGeneration) return@onFailure
@@ -390,6 +391,7 @@ internal class PrivateChatController(
                         isSending = false,
                     )
                 }
+                _state.update { it.copy(error = null) }
             }.onFailure {
                 setError(it.message ?: "私聊发送失败")
                 updateConversation { state -> state.copy(isSending = false) }

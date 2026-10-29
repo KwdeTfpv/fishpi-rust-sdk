@@ -547,11 +547,17 @@ private fun PrivateConversation(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
+                            val connectionColor = when {
+                                status.contains("已连接") -> FishPiTheme.accent
+                                status.contains("失败") -> FishPiTheme.error
+                                status.contains("断开") || status.contains("暂停") -> FishPiTheme.warning
+                                else -> FishPiTheme.warning
+                            }
                             Box(
                                 modifier = Modifier
                                     .size(6.dp)
                                     .clip(CircleShape)
-                                    .background(FishPiTheme.accent),
+                                    .background(connectionColor),
                             )
                             Text(
                                 text = status.ifBlank { "私聊" },
