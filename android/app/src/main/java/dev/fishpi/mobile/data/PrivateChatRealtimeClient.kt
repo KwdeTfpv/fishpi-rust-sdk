@@ -70,8 +70,8 @@ internal class PrivateChatRealtimeClient : NativeRealtimeClient() {
             raw.equals("WebSocket connected", ignoreCase = true) -> "私聊已连接"
             raw.equals("WebSocket disconnected", ignoreCase = true) -> "私聊已断开"
             raw.equals("Disconnected", ignoreCase = true) -> "私聊已断开"
-            raw.contains("connected", ignoreCase = true) -> "私聊已连接"
             raw.contains("disconnect", ignoreCase = true) -> "私聊已断开"
+            raw.contains("connected", ignoreCase = true) -> "私聊已连接"
             else -> raw
         }
     }

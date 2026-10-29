@@ -71,6 +71,12 @@ internal fun PrivateChatRoute(
         }
     }
 
+    DisposableEffect(controller) {
+        onDispose {
+            controller.close()
+        }
+    }
+
     DisposableEffect(controller, realtimeEnabled, state.conversation.selectedPeer) {
         controller.connectConversation(realtimeEnabled)
         onDispose {

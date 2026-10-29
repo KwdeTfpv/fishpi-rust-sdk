@@ -258,9 +258,6 @@ internal fun MainShell(
     fun goToTab(next: FishTab) {
         focusManager.clearFocus(force = true)
         keyboardController?.hide()
-        if (next == FishTab.Chat) {
-            privateUnread = 0
-        }
         navigator.selectTab(next)
     }
 

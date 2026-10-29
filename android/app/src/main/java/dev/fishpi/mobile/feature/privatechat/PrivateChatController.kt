@@ -24,6 +24,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -52,7 +54,9 @@ internal class PrivateChatController(
     private val uploadQueue = AttachmentUploadQueue.shared(context)
 
     private var historyJob: Job? = null
+    private var markReadJob: Job? = null
     private var conversationGeneration = 0L
+    private var realtimeEnabled = false
 
     init {
         observeAttachmentUploads()
@@ -101,7 +105,9 @@ internal class PrivateChatController(
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    api.getPrivateChatSessions(apiKey, selfUsername).sortedByLatest()
+                    withTimeout(16_000) {
+                        api.getPrivateChatSessions(apiKey, selfUsername).sortedByLatest()
+                    }
                 }
             }.onSuccess { sessions ->
                 setSessions(sessions)
@@ -127,6 +133,7 @@ internal class PrivateChatController(
     }
 
     fun connectConversation(enabled: Boolean) {
+        realtimeEnabled = enabled
         val peer = _state.value.conversation.selectedPeer
         if (!enabled || peer.isNullOrBlank()) {
             conversationRealtime.disconnect()
@@ -147,8 +154,11 @@ internal class PrivateChatController(
     }
 
     fun close() {
+        historyJob?.cancel()
+        markReadJob?.cancel()
         overviewRealtime.disconnect()
         conversationRealtime.disconnect()
+        scope.cancel()
     }
 
     private fun openPeer(peer: String) {
@@ -173,14 +183,19 @@ internal class PrivateChatController(
         conversationGeneration += 1
         val generation = conversationGeneration
         historyJob?.cancel()
-        conversationRealtime.disconnect()
+        val samePeer = _state.value.conversation.selectedPeer.equals(peer, ignoreCase = true)
+        if (!samePeer) {
+            conversationRealtime.disconnect()
+        }
         val nextConversation = PrivateConversationState(
             selectedPeer = peer,
             selectedPeerAvatar = session.avatar,
             isLoading = true,
         )
         _state.update { it.copy(conversation = nextConversation, error = null) }
-        clearUnread(peer)
+        if (samePeer && realtimeEnabled && !conversationRealtime.hasActiveHandle()) {
+            connectConversation(true)
+        }
         emitDetailActive(true)
         historyJob = scope.launch {
             runCatching {
@@ -203,11 +218,8 @@ internal class PrivateChatController(
                         scrollToBottomRequest = if (merged.isNotEmpty()) it.scrollToBottomRequest + 1 else it.scrollToBottomRequest,
                     )
                 }
-                scope.launch {
-                    runCatching {
-                        withContext(Dispatchers.IO) { api.markPrivateChatRead(apiKey, peer) }
-                    }
-                }
+                clearUnread(peer)
+                scheduleMarkRead(peer)
             }.onFailure { error ->
                 if (error is CancellationException) return@onFailure
                 if (generation != conversationGeneration) return@onFailure
@@ -221,6 +233,7 @@ internal class PrivateChatController(
     private fun closeConversation() {
         conversationGeneration += 1
         historyJob?.cancel()
+        markReadJob?.cancel()
         conversationRealtime.disconnect()
         _state.update { it.copy(conversation = PrivateConversationState()) }
         emitDetailActive(false)
@@ -287,6 +300,9 @@ internal class PrivateChatController(
                 sort = System.currentTimeMillis(),
             ),
         )
+        if (activePeer.equals(peer, ignoreCase = true)) {
+            scheduleMarkRead(peer)
+        }
         if (notify) {
             emitEffect(PrivateChatEffect.NotifyPrivateMessage(notice))
         }
@@ -313,6 +329,7 @@ internal class PrivateChatController(
             avatar = incoming.userAvatarURL.takeIf { incoming.userName.equals(peer, ignoreCase = true) }.orEmpty(),
             unread = 0,
         )
+        scheduleMarkRead(peer)
     }
 
     private fun onRealtimeRevoke(messageId: String) {
@@ -558,6 +575,16 @@ internal class PrivateChatController(
                 if (it.peer.equals(peer, ignoreCase = true)) it.copy(unread = 0) else it
             },
         )
+    }
+
+    private fun scheduleMarkRead(peer: String) {
+        markReadJob?.cancel()
+        markReadJob = scope.launch {
+            delay(400)
+            runCatching {
+                withContext(Dispatchers.IO) { api.markPrivateChatRead(apiKey, peer) }
+            }
+        }
     }
 
     private fun updateConversation(transform: (PrivateConversationState) -> PrivateConversationState) {

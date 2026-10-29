@@ -8,6 +8,7 @@ internal abstract class NativeRealtimeClient {
     @Volatile
     private var nativeHandle: Long = 0
     private val connectionToken = AtomicLong(0L)
+    private val handleLock = Any()
     protected val mainHandler = Handler(Looper.getMainLooper())
 
     protected abstract fun disconnectNative(handle: Long)
@@ -25,14 +26,20 @@ internal abstract class NativeRealtimeClient {
         val token = connectionToken.incrementAndGet()
         Thread {
             val handle = connectNative()
-            if (token != connectionToken.get()) {
+            val stale = synchronized(handleLock) {
+                if (token != connectionToken.get()) {
+                    true
+                } else {
+                    nativeHandle = handle
+                    false
+                }
+            }
+            if (stale) {
                 if (handle != 0L) {
                     disconnectNative(handle)
                 }
                 return@Thread
             }
-            // Publish as early as possible to shrink the race window.
-            nativeHandle = handle
             mainHandler.post {
                 if (handle == 0L && failedStatus != null) {
                     onStatus?.invoke(failedStatus)
@@ -42,9 +49,12 @@ internal abstract class NativeRealtimeClient {
     }
 
     fun disconnect() {
-        connectionToken.incrementAndGet()
-        val handle = nativeHandle
-        nativeHandle = 0
+        val handle = synchronized(handleLock) {
+            connectionToken.incrementAndGet()
+            val current = nativeHandle
+            nativeHandle = 0
+            current
+        }
         if (handle != 0L) {
             Thread {
                 disconnectNative(handle)
