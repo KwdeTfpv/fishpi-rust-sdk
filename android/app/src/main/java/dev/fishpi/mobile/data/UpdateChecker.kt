@@ -231,8 +231,11 @@ object UpdateChecker {
             }
             ?: throw IOException("无法创建网络连接")
 
-    private fun releasesUrl(path: String): String =
-        "https://github.com/${BuildConfig.UPDATE_REPO_OWNER}/${BuildConfig.UPDATE_REPO_NAME}/releases/$path"
+    private fun releasesUrl(path: String): String {
+        val base =
+            "https://github.com/${BuildConfig.UPDATE_REPO_OWNER}/${BuildConfig.UPDATE_REPO_NAME}/releases"
+        return if (path == "atom") "$base.atom" else "$base/$path"
+    }
 
     private fun buildApkUrl(tagName: String): String =
         releasesUrl("download/$tagName/$DefaultApkAssetName")
