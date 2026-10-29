@@ -1,14 +1,32 @@
 name: Android Release
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'android/version.properties'
   workflow_dispatch:
     inputs:
+      channel:
+        description: 'rc or stable'
+        required: true
+        default: rc
+        type: choice
+        options:
+          - rc
+          - stable
+      bump:
+        description: 'patch, minor, major, or none'
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - none
+      base_version:
+        description: 'Explicit base version X.Y.Z'
+        required: false
+        default: ''
       dry_run:
-        description: 'Build and verify signing without creating a tag or GitHub Release'
+        description: 'Build without tag or release'
         required: true
         default: true
         type: boolean
@@ -17,7 +35,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: android-release-${{ github.ref }}
+  group: android-release
   cancel-in-progress: false
 
 jobs:
@@ -31,79 +49,79 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Check release version
-        id: release-gate
+      - name: Resolve version
+        id: version
         shell: bash
+        env:
+          INPUT_CHANNEL: ${{ inputs.channel }}
+          INPUT_BUMP: ${{ inputs.bump }}
+          INPUT_BASE: ${{ inputs.base_version }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
+          git fetch --tags --force
 
-          version_file="android/version.properties"
-          version_name="$(grep '^versionName=' "$version_file" | cut -d= -f2- | tr -d '\r')"
-          version_code="$(grep '^versionCode=' "$version_file" | cut -d= -f2- | tr -d '\r')"
+          base="$INPUT_BASE"
+          if [[ -z "$base" ]]; then
+            latest="$(git tag --list 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)"
+            if [[ -z "$latest" ]]; then
+              echo "::error::No stable tag found."
+              exit 1
+            fi
+            latest="${latest#v}"
+            IFS=. read -r major minor patch <<< "$latest"
+            case "$INPUT_BUMP" in
+              major) major=$((major + 1)); minor=0; patch=0 ;;
+              minor) minor=$((minor + 1)); patch=0 ;;
+              patch) patch=$((patch + 1)) ;;
+              none) ;;
+              *) echo "::error::Unknown bump value."; exit 1 ;;
+            esac
+            base="${major}.${minor}.${patch}"
+          fi
 
-          if [[ -z "$version_name" || -z "$version_code" ]]; then
-            echo "::error::android/version.properties must define versionName and versionCode."
+          if ! [[ "$base" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::base_version must be X.Y.Z."
             exit 1
           fi
-          if ! [[ "$version_code" =~ ^[0-9]+$ ]]; then
-            echo "::error::versionCode must be a positive integer, got '$version_code'."
-            exit 1
+
+          IFS=. read -r major minor patch <<< "$base"
+          version_code=$((major * 10000 + minor * 100 + patch))
+
+          if [[ "$INPUT_CHANNEL" == "rc" ]]; then
+            last_rc="$(git tag --list "v${base}-rc.*" | sed -E 's/^.*-rc\.([0-9]+)$/\1/' | sort -n | tail -n1)"
+            rc=$(( ${last_rc:-0} + 1 ))
+            version_name="${base}-rc.${rc}"
+          else
+            version_name="${base}"
           fi
 
           tag="v${version_name}"
-          dry_run="${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}"
-          previous_tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD 2>/dev/null || true)"
-          previous_code="0"
-          if [[ -n "$previous_tag" ]]; then
-            previous_props="$(git show "${previous_tag}:android/version.properties" 2>/dev/null || true)"
-            previous_code="$(printf '%s\n' "$previous_props" | grep '^versionCode=' | cut -d= -f2- | tr -d '\r' || true)"
-            if ! [[ "$previous_code" =~ ^[0-9]+$ ]]; then
-              previous_code="0"
-            fi
-          fi
-
-          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
-          echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "previous_tag=$previous_tag" >> "$GITHUB_OUTPUT"
-          echo "previous_code=$previous_code" >> "$GITHUB_OUTPUT"
-          echo "dry_run=$dry_run" >> "$GITHUB_OUTPUT"
-
-          if [[ "$dry_run" == "true" ]]; then
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
-            echo "Dry run enabled; building and verifying signing without publishing ${tag}."
-            exit 0
-          fi
-
-          if (( version_code <= previous_code )); then
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-            echo "versionCode ${version_code} is not greater than previous release code ${previous_code}; skipping release."
-            exit 0
-          fi
-
           if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "::error::Tag ${tag} already exists. Bump android/version.properties before releasing."
+            echo "::error::Tag ${tag} already exists."
             exit 1
           fi
 
-          echo "should_release=true" >> "$GITHUB_OUTPUT"
-          echo "Preparing release ${tag} with versionCode ${version_code}."
+          {
+            echo "version_name=${version_name}"
+            echo "version_code=${version_code}"
+            echo "tag=${tag}"
+            echo "base=${base}"
+            echo "dry_run=${INPUT_DRY_RUN}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK
-        if: steps.release-gate.outputs.should_release == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Android SDK
-        if: steps.release-gate.outputs.should_release == 'true'
         uses: android-actions/setup-android@v3
         with:
           packages: ''
 
       - name: Install Android SDK packages
-        if: steps.release-gate.outputs.should_release == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -111,19 +129,16 @@ jobs:
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/28.2.13676358" >> "$GITHUB_ENV"
 
       - name: Set up Rust
-        if: steps.release-gate.outputs.should_release == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
 
       - name: Set up Gradle
-        if: steps.release-gate.outputs.should_release == 'true'
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14.3'
 
       - name: Restore signing key
-        if: steps.release-gate.outputs.should_release == 'true'
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.FISHPI_RELEASE_KEYSTORE_BASE64 }}
@@ -149,61 +164,67 @@ jobs:
           echo "FISHPI_RELEASE_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
 
       - name: Build release APK
-        if: steps.release-gate.outputs.should_release == 'true'
         shell: bash
-        run: gradle :android:app:assembleRelease --no-configuration-cache
-
-      - name: Generate release notes
-        if: steps.release-gate.outputs.should_release == 'true'
-        shell: bash
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
         run: |
           set -euo pipefail
+          gradle :android:app:assembleRelease --no-configuration-cache \
+            -PfishpiVersionName="$VERSION_NAME" \
+            -PfishpiVersionCode="$VERSION_CODE"
 
-          previous_tag="${{ steps.release-gate.outputs.previous_tag }}"
-          version_code="${{ steps.release-gate.outputs.version_code }}"
-          version_name="${{ steps.release-gate.outputs.version_name }}"
-
+      - name: Generate release notes
+        shell: bash
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+        run: |
+          set -euo pipefail
+          previous_tag="$(git tag --list 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)"
           if [[ -n "$previous_tag" ]]; then
-            commit_notes="$(git log "${previous_tag}..HEAD" --pretty=format:"- %s")"
+            notes="$(git log "${previous_tag}..HEAD" --pretty=format:'- %s')"
           else
-            commit_notes="$(git log HEAD --pretty=format:"- %s")"
+            notes="$(git log HEAD --pretty=format:'- %s')"
           fi
-          if [[ -z "$commit_notes" ]]; then
-            commit_notes="- ${version_name}"
+          if [[ -z "$notes" ]]; then
+            notes="- ${VERSION_NAME}"
           fi
+          printf '%s\n' "$notes" > release-notes.md
 
-          {
-            echo "versionCode: ${version_code}"
-            echo "---"
-            printf '%s\n' "$commit_notes"
-          } > release-notes.md
-
-      - name: Publish GitHub Release
-        if: steps.release-gate.outputs.should_release == 'true' && steps.release-gate.outputs.dry_run != 'true'
+      - name: Publish release
+        if: steps.version.outputs.dry_run != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          CHANNEL: ${{ inputs.channel }}
         run: |
           set -euo pipefail
-
-          tag="${{ steps.release-gate.outputs.tag }}"
-          version_name="${{ steps.release-gate.outputs.version_name }}"
-          apk_path="android/app/build/outputs/apk/release/app-release.apk"
-
-          if [[ ! -f "$apk_path" ]]; then
-            echo "::error::APK not found at ${apk_path}."
+          apk="android/app/build/outputs/apk/release/app-release.apk"
+          if [[ ! -f "$apk" ]]; then
+            echo "::error::APK not found."
             exit 1
           fi
+          git tag "$TAG"
+          git push origin "$TAG"
+          if [[ "$CHANNEL" == "rc" ]]; then
+            gh release create "$TAG" "$apk" \
+              --title "FishPi ${VERSION_NAME}" \
+              --notes-file release-notes.md \
+              --prerelease
+          else
+            gh release create "$TAG" "$apk" \
+              --title "FishPi ${VERSION_NAME}" \
+              --notes-file release-notes.md \
+              --latest
+          fi
 
-          git tag "$tag"
-          git push origin "$tag"
-          gh release create "$tag" "$apk_path" --title "FishPi ${version_name}" --notes-file release-notes.md
-
-      - name: Upload dry run APK artifact
-        if: steps.release-gate.outputs.should_release == 'true' && steps.release-gate.outputs.dry_run == 'true'
+      - name: Upload dry run artifacts
+        if: steps.version.outputs.dry_run == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: fishpi-${{ steps.release-gate.outputs.version_name }}-${{ steps.release-gate.outputs.version_code }}-dry-run
+          name: fishpi-${{ steps.version.outputs.version_name }}
           path: |
             android/app/build/outputs/apk/release/app-release.apk
             release-notes.md

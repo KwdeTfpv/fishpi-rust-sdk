@@ -13,6 +13,9 @@ if (versionFile.exists()) {
     versionFile.inputStream().use { versionProps.load(it) }
 }
 
+val versionNameOverride = providers.gradleProperty("fishpiVersionName").orNull
+val versionCodeOverride = providers.gradleProperty("fishpiVersionCode").orNull?.toIntOrNull()
+
 val signingProps = Properties()
 val signingFile = project.projectDir.resolve("signing.properties")
 if (signingFile.exists()) {
@@ -41,8 +44,11 @@ android {
         applicationId = "dev.fishpi.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = (versionProps.getProperty("versionCode") ?: "1").toInt()
-        versionName = versionProps.getProperty("versionName") ?: "0.1.0"
+        versionCode = versionCodeOverride
+            ?: (versionProps.getProperty("versionCode") ?: "1").toInt()
+        versionName = versionNameOverride
+            ?: versionProps.getProperty("versionName")
+            ?: "0.1.0"
         val updateRepoOwner = (project.findProperty("updateRepoOwner") as String?) ?: "KwdeTfpv"
         val updateRepoName = (project.findProperty("updateRepoName") as String?) ?: "fishpi-rust-sdk"
         buildConfigField("String", "UPDATE_REPO_OWNER", "\"$updateRepoOwner\"")
