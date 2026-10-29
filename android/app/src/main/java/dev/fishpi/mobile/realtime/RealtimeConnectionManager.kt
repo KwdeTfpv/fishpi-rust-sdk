@@ -14,6 +14,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.atomic.AtomicLong
 
 // 聊天室实时事件，扇出给 UI 渲染与通知两个消费者
 sealed interface ChatRoomEvent {
@@ -49,12 +52,25 @@ object RealtimeConnectionManager {
     @Volatile
     private var privateOverviewReconnectJob: Job? = null
 
+    private val droppedChatEvents = AtomicLong()
+    private val droppedPrivateNotices = AtomicLong()
+
+    private val chatEventQueue = Channel<ChatRoomEvent>(
+        capacity = 128,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        onUndeliveredElement = { droppedChatEvents.incrementAndGet() },
+    )
     private val _chatEvents = MutableSharedFlow<ChatRoomEvent>(
         replay = 0,
         extraBufferCapacity = 128,
     )
     val chatEvents: SharedFlow<ChatRoomEvent> = _chatEvents.asSharedFlow()
 
+    private val privateNoticeQueue = Channel<PrivateChatNotice>(
+        capacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        onUndeliveredElement = { droppedPrivateNotices.incrementAndGet() },
+    )
     private val _privateNotices = MutableSharedFlow<PrivateChatNotice>(
         replay = 0,
         extraBufferCapacity = 64,
@@ -64,8 +80,14 @@ object RealtimeConnectionManager {
     private val _noticeEvents = MutableSharedFlow<Unit>(
         replay = 0,
         extraBufferCapacity = 16,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
     val noticeEvents: SharedFlow<Unit> = _noticeEvents.asSharedFlow()
+
+    init {
+        scope.launch { for (event in chatEventQueue) _chatEvents.emit(event) }
+        scope.launch { for (notice in privateNoticeQueue) _privateNotices.emit(notice) }
+    }
 
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
@@ -174,14 +196,18 @@ object RealtimeConnectionManager {
         privateOverview.connectOverview(
             apiKey = current.apiKey,
             selfUsername = current.username,
-            onNotice = { notice -> _privateNotices.tryEmit(notice) },
+            onNotice = { notice -> privateNoticeQueue.trySend(notice) },
             onStatus = {},
         )
     }
 
     private fun emitChat(event: ChatRoomEvent) {
-        _chatEvents.tryEmit(event)
+        chatEventQueue.trySend(event)
     }
+
+    fun droppedChatEventCount(): Long = droppedChatEvents.get()
+
+    fun droppedPrivateNoticeCount(): Long = droppedPrivateNotices.get()
 
     private fun isConnectedStatus(raw: String): Boolean {
         val text = raw.lowercase()
