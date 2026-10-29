@@ -192,7 +192,6 @@ internal class ChatController(
             ChatAction.ClearGestureRedPacket -> updateInteraction { it.copy(gestureRedPacket = null) }
             ChatAction.ClearRedPacketResult -> updateInteraction { it.copy(redPacketResult = null, redPacketResultSource = null) }
             ChatAction.ClearRedPacketJumpTarget -> _state.update { it.copy(redPacketJumpTargetId = null) }
-            else -> Unit
         }
     }
 

@@ -19,21 +19,12 @@ sealed interface ChatAction {
     data class RemoveAttachment(val index: Int) : ChatAction
     data class RetryAttachment(val index: Int) : ChatAction
 
-    data class OpenUserProfile(val username: String) : ChatAction
-    data class OpenImagePreview(val url: String) : ChatAction
-    data class OpenLinkPreview(val url: String) : ChatAction
-    data class OpenVideoPreview(val url: String) : ChatAction
-    data object DismissOverlay : ChatAction
-
-    data class QuoteMessage(val messageId: String) : ChatAction
     data class RevokeMessage(val message: ChatRoomMessage) : ChatAction
     data class ReactToMessage(val message: ChatRoomMessage, val reaction: String) : ChatAction
     data class RepeatMessage(val message: ChatRoomMessage) : ChatAction
 
     data class NotifyPluginMessage(val message: ChatRoomMessage, val eventType: String) : ChatAction
 
-    data object OpenAttachmentPanel : ChatAction
-    data object CloseAttachmentPanel : ChatAction
     data object ToggleEmoji : ChatAction
     data object OpenEmojiPanel : ChatAction
     data object CloseEmojiPanel : ChatAction
