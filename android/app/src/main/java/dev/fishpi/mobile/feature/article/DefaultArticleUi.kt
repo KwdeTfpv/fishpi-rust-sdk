@@ -1301,13 +1301,13 @@ private fun ArticleDetailPage(
                 }
                 val shownComments = remember(detail.comments, commentSort) {
                     when (commentSort) {
-                        CommentSort.Earliest -> detail.comments
-                        CommentSort.Latest -> detail.comments.asReversed()
+                        CommentSort.Earliest -> detail.comments.asReversed()
+                        CommentSort.Latest -> detail.comments
                     }
                 }
                 val hasMoreComments = when (commentSort) {
-                    CommentSort.Earliest -> detail.commentPage < detail.commentPageCount
-                    CommentSort.Latest -> detail.commentPage > 1
+                    CommentSort.Earliest -> detail.commentPage > 1
+                    CommentSort.Latest -> detail.commentPage < detail.commentPageCount
                 }
                 HorizontalPager(
                     state = pagerState,

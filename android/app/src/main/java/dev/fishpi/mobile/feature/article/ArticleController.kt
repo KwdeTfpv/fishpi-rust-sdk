@@ -319,7 +319,7 @@ internal class ArticleController(
             }.onSuccess { loaded ->
                 if (_state.value.selected?.id != articleId) return@onSuccess
                 val needsLastPage =
-                    _state.value.commentSort == CommentSort.Latest && loaded.commentPageCount > 1
+                    _state.value.commentSort == CommentSort.Earliest && loaded.commentPageCount > 1
                 _state.update {
                     it.copy(
                         detail = if (needsLastPage) loaded.copy(comments = emptyList()) else loaded,
@@ -345,8 +345,8 @@ internal class ArticleController(
         commentGeneration += 1
         val detail = _state.value.detail
         val targetPage = when (sort) {
-            CommentSort.Earliest -> 1
-            CommentSort.Latest -> detail?.commentPageCount ?: 1
+            CommentSort.Earliest -> detail?.commentPageCount ?: 1
+            CommentSort.Latest -> 1
         }
         val needsReload = detail != null &&
             detail.commentPageCount > 1 &&
@@ -365,7 +365,6 @@ internal class ArticleController(
 
     private fun loadCommentPage(articleId: String, page: Int, replace: Boolean) {
         val generation = commentGeneration
-        val sort = _state.value.commentSort
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) { api.getArticleDetail(apiKey, articleId, page) }
@@ -376,7 +375,7 @@ internal class ArticleController(
                 val merged = if (replace) {
                     loaded.comments
                 } else {
-                    mergeComments(current.comments, loaded.comments, sort)
+                    mergeComments(current.comments, loaded.comments)
                 }
                 _state.update {
                     it.copy(
@@ -399,13 +398,8 @@ internal class ArticleController(
     private fun mergeComments(
         loadedComments: List<dev.fishpi.mobile.data.ArticleCommentView>,
         incoming: List<dev.fishpi.mobile.data.ArticleCommentView>,
-        sort: CommentSort,
     ): List<dev.fishpi.mobile.data.ArticleCommentView> {
-        val combined = when (sort) {
-            CommentSort.Earliest -> loadedComments + incoming
-            CommentSort.Latest -> incoming + loadedComments
-        }
-        return combined.distinctBy { it.id }
+        return (loadedComments + incoming).distinctBy { it.id }
     }
 
     private fun reloadDetail(articleId: String) {
@@ -416,7 +410,7 @@ internal class ArticleController(
             }.onSuccess { loaded ->
                 if (_state.value.selected?.id != articleId) return@onSuccess
                 val needsLastPage =
-                    _state.value.commentSort == CommentSort.Latest && loaded.commentPageCount > 1
+                    _state.value.commentSort == CommentSort.Earliest && loaded.commentPageCount > 1
                 _state.update { it.copy(detail = loaded, isLoadingDetail = needsLastPage) }
                 if (needsLastPage) {
                     loadCommentPage(articleId, loaded.commentPageCount, replace = true)
@@ -434,8 +428,8 @@ internal class ArticleController(
         val current = _state.value.detail ?: return
         if (_state.value.isLoadingDetail) return
         val nextPage = when (_state.value.commentSort) {
-            CommentSort.Earliest -> current.commentPage + 1
-            CommentSort.Latest -> current.commentPage - 1
+            CommentSort.Earliest -> current.commentPage - 1
+            CommentSort.Latest -> current.commentPage + 1
         }
         if (nextPage < 1 || nextPage > current.commentPageCount) return
         _state.update { it.copy(isLoadingDetail = true) }
