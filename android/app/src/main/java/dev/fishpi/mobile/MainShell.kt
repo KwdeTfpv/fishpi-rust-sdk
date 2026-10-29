@@ -113,6 +113,7 @@ import dev.fishpi.mobile.data.SavedAccount
 import dev.fishpi.mobile.data.SessionStore
 import dev.fishpi.mobile.data.UpdateChecker
 import dev.fishpi.mobile.data.UpdateDownloader
+import dev.fishpi.mobile.data.UpdateInstaller
 import dev.fishpi.mobile.auth.VisitorVerificationEvents
 import dev.fishpi.mobile.feature.article.ArticleRoute
 import dev.fishpi.mobile.feature.breezemoon.BreezemoonRoute
@@ -841,7 +842,7 @@ internal fun MainShell(
                             downloaded.onSuccess { apk ->
                                 store.saveUpdateDownloadAt(System.currentTimeMillis())
                                 val started = runCatching {
-                                    UpdateDownloader.installDownloadedApk(context, apk)
+                                    withContext(Dispatchers.IO) { UpdateInstaller.install(context, apk) }
                                 }.getOrDefault(false)
                                 if (!started) {
                                     store.saveUpdateDownloadResult("安装启动失败")
