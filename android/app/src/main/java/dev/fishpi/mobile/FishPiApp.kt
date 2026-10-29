@@ -16,6 +16,7 @@ import dev.fishpi.mobile.auth.isVisitorVerificationRequired
 import dev.fishpi.mobile.data.FishPiApiClient
 import dev.fishpi.mobile.data.SavedAccount
 import dev.fishpi.mobile.data.SessionStore
+import dev.fishpi.mobile.realtime.RealtimeLifecycleController
 import dev.fishpi.mobile.ui.overlay.ImageViewerHost
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -129,6 +130,12 @@ fun FishPiApp() {
         var isBooting by remember { mutableStateOf(true) }
         var bootError by remember { mutableStateOf<String?>(null) }
         var pendingVisitorRetry by remember { mutableStateOf<VisitorRetryAction?>(null) }
+
+        LaunchedEffect(session?.apiKey) {
+            if (session == null) {
+                RealtimeLifecycleController.onSession(null)
+            }
+        }
 
         fun refreshSavedAccounts() {
             savedAccounts = store.getAccounts()
