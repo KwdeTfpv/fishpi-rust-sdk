@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.fishpi.mobile.shared.message.native.MessageActionAnchor
-import dev.fishpi.mobile.ui.blur.FishPiBlurOverlay
 import dev.fishpi.mobile.ui.glass.FishPiGlassRole
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
@@ -141,12 +140,11 @@ internal fun MessageActionBubbleMenu(
             decorFitsSystemWindows = false,
         ),
     ) {
-        FishPiBlurOverlay(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.12f))
                 .silentTap(onDismiss),
-            overlayColor = Color.Black.copy(alpha = 0.08f),
-            blurRadius = 18.dp,
         ) {
             Box(
                 modifier = Modifier
