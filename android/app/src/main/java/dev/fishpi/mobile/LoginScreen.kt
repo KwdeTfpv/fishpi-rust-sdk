@@ -24,7 +24,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mail
-import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
@@ -93,7 +92,6 @@ internal fun LoginScreen(
     val mfaFocus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     var showQrScanner by remember { mutableStateOf(false) }
-    var showRegister by remember { mutableStateOf(false) }
 
     // Auto-dismiss error after user starts typing
     LaunchedEffect(nameOrEmail, password) {
@@ -414,21 +412,6 @@ internal fun LoginScreen(
                         Spacer(Modifier.width(6.dp))
                         Text("扫码登录", fontSize = 14.sp)
                     }
-
-                    OutlinedButton(
-                        onClick = { showRegister = true },
-                        modifier = Modifier.fillMaxWidth().height(44.dp),
-                        enabled = !isLoading,
-                        shape = RoundedCornerShape(14.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.PersonAdd,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text("注册账号", fontSize = 14.sp)
-                    }
                 }
             }
 
@@ -520,12 +503,6 @@ internal fun LoginScreen(
                 onDismiss = { showVisitorVerify = false },
             )
         }
-        if (showRegister) {
-            RegisterScreen(
-                onClose = { showRegister = false },
-            )
-        }
-
     }
 }
 
