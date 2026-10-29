@@ -51,6 +51,7 @@ internal class HomeController(
     val effects: SharedFlow<HomeEffect> = _effects.asSharedFlow()
 
     private var initialized = false
+    private var pollingActive = false
     private var activitySyncJob: Job? = null
     private var activitySyncRequest: Job? = null
 
@@ -98,9 +99,28 @@ internal class HomeController(
         }
     }
 
+    fun setActive(active: Boolean) {
+        if (pollingActive == active) return
+        pollingActive = active
+        if (active) {
+            if (initialized) {
+                syncHomeActivity()
+                startActivitySync()
+            }
+        } else {
+            activitySyncJob?.cancel()
+            activitySyncJob = null
+            activitySyncRequest?.cancel()
+            activitySyncRequest = null
+        }
+    }
+
     fun close() {
+        pollingActive = false
         activitySyncJob?.cancel()
+        activitySyncJob = null
         activitySyncRequest?.cancel()
+        activitySyncRequest = null
     }
 
     private fun initialize() {
@@ -109,6 +129,12 @@ internal class HomeController(
         loadQuote()
         loadRecommendedArticles(page = 1, append = false)
         syncHomeActivity()
+        startActivitySync()
+    }
+
+    private fun startActivitySync() {
+        if (!pollingActive) return
+        activitySyncJob?.cancel()
         activitySyncJob = scope.launch {
             while (true) {
                 delay(HomeActivitySyncIntervalMs)
@@ -118,6 +144,7 @@ internal class HomeController(
     }
 
     private fun syncHomeActivity() {
+        if (!pollingActive) return
         if (activitySyncRequest?.isActive == true) return
         activitySyncRequest = scope.launch {
             val cachedActivity = store.getHomeActivity(apiKey)?.takeIf { it.isToday() }

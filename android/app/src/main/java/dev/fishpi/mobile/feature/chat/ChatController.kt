@@ -125,10 +125,22 @@ internal class ChatController(
         get() = pluginManager.menuActions
     private var realtimeConnectConfig: RealtimeConnectConfig? = null
     private var chatEventJob: Job? = null
+    private var pollingActive = false
 
     init {
         startLivenessPolling()
         observeAttachmentUploads()
+    }
+
+    fun setPollingActive(active: Boolean) {
+        if (pollingActive == active) return
+        pollingActive = active
+        if (active) {
+            startLivenessPolling()
+        } else {
+            livenessPollingJob?.cancel()
+            livenessPollingJob = null
+        }
     }
 
     override fun dispatch(action: ChatAction) {
@@ -315,6 +327,7 @@ internal class ChatController(
     }
 
     fun close() {
+        pollingActive = false
         chatEventJob?.cancel()
         chatEventJob = null
         livenessPollingJob?.cancel()
@@ -324,6 +337,7 @@ internal class ChatController(
     }
 
     private fun startLivenessPolling() {
+        if (!pollingActive) return
         livenessPollingJob?.cancel()
         livenessPollingJob = scope.launch {
             while (true) {

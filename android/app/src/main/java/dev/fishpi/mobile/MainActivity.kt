@@ -3,7 +3,6 @@ package dev.fishpi.mobile
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
-import android.view.Display
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -20,7 +19,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         FishPiNative.setChatRoomClientType("Rust", BuildConfig.VERSION_NAME)
         handleNavIntent(intent)
-        preferHighestRefreshRate()
 
         setContent {
             val darkMode = isSystemInDarkTheme()
@@ -58,50 +56,5 @@ class MainActivity : ComponentActivity() {
         val target = RealtimeNavTarget.fromIntent(intent) ?: return
         RealtimeNavTarget.clear(intent)
         PendingRealtimeNavigation.submit(target)
-    }
-
-    override fun onResume() {
-        super.onResume()
-        preferHighestRefreshRate()
-    }
-
-    private fun preferHighestRefreshRate() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return
-        }
-        val modes = currentDisplayModes()
-        val currentMode = currentDisplayMode()
-        val sameSizeModes = modes.filter {
-            currentMode == null || (it.physicalWidth == currentMode.physicalWidth && it.physicalHeight == currentMode.physicalHeight)
-        }
-        val bestMode = (sameSizeModes.ifEmpty { modes })
-            .filter { it.modeId != 0 }
-            .maxByOrNull { it.refreshRate }
-            ?: return
-
-        val attrs = window.attributes
-        if (attrs.preferredDisplayModeId != bestMode.modeId) {
-            attrs.preferredDisplayModeId = bestMode.modeId
-            window.attributes = attrs
-        }
-
-    }
-
-    private fun currentDisplayMode(): Display.Mode? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            display?.mode
-        } else {
-            @Suppress("DEPRECATION")
-            windowManager.defaultDisplay.mode
-        }
-    }
-
-    private fun currentDisplayModes(): List<Display.Mode> {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            display?.supportedModes
-        } else {
-            @Suppress("DEPRECATION")
-            windowManager.defaultDisplay.supportedModes
-        }?.toList().orEmpty()
     }
 }

@@ -427,6 +427,10 @@ internal fun MainShell(
         }
     }
 
+    LaunchedEffect(appInForeground, chatController) {
+        chatController.setPollingActive(appInForeground)
+    }
+
     // 登录态交给进程级连接管理器；连接与前台服务由 RealtimeLifecycleController 托管
     DisposableEffect(session.apiKey, session.user.userName) {
         RealtimeLifecycleController.onSession(

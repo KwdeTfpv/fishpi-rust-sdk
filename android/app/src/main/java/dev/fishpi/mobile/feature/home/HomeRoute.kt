@@ -7,6 +7,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleStartEffect
 import dev.fishpi.mobile.AppSession
 import dev.fishpi.mobile.FishPiNotifier
 
@@ -59,6 +60,11 @@ internal fun HomeRoute(
         onDispose {
             controller.close()
         }
+    }
+
+    LifecycleStartEffect(controller) {
+        controller.setActive(true)
+        onStopOrDispose { controller.setActive(false) }
     }
 
     DefaultHomeUi(
