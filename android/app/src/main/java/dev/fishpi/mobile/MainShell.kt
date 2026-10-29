@@ -189,6 +189,10 @@ internal fun MainShell(
         )
     }
 
+    DisposableEffect(chatController) {
+        onDispose { chatController.close() }
+    }
+
     val navigator = rememberShellNavigator()
     val pagerState = rememberPagerState(
         initialPage = FishTab.Home.ordinal,
