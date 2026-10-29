@@ -5,7 +5,6 @@ import dev.fishpi.mobile.shared.message.ChatQuote
 import dev.fishpi.mobile.shared.message.renderSource
 import dev.fishpi.mobile.shared.message.repeatableDraftContent
 import dev.fishpi.mobile.core.ui.UiController
-import dev.fishpi.mobile.core.ui.UiLoadState
 import dev.fishpi.mobile.data.AtUserCandidate
 import dev.fishpi.mobile.data.ChatReactionUpdate
 import dev.fishpi.mobile.data.ChatRoomMessage
@@ -25,17 +24,13 @@ import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.feature.chat.render.ChatRenderModel
 import dev.fishpi.mobile.feature.chat.render.ChatRenderModelReducer
 import dev.fishpi.mobile.feature.chat.barrage.ChatBarrageUiModel
-import dev.fishpi.mobile.feature.chat.model.ChatComposerState
 import dev.fishpi.mobile.feature.chat.model.ChatConnectionState
 import dev.fishpi.mobile.feature.chat.model.ChatConnectionStatus
-import dev.fishpi.mobile.feature.chat.model.ChatMentionCandidateUiModel
 import dev.fishpi.mobile.feature.redpacket.DefaultRedPacketMessage
 import dev.fishpi.mobile.feature.redpacket.RedPacketFormState
 import dev.fishpi.mobile.feature.redpacket.RedPacketFormValidator
-import dev.fishpi.mobile.feature.redpacket.RedPacketState
 import dev.fishpi.mobile.feature.redpacket.RedPacketTypeRockPaperScissors
 import dev.fishpi.mobile.feature.redpacket.defaultRedPacketMessage
-import dev.fishpi.mobile.feature.redpacket.toRedPacketResultUiModel
 import dev.fishpi.mobile.plugin.PluginManager
 import dev.fishpi.mobile.plugin.PluginMenuAction
 import dev.fishpi.mobile.plugin.PluginToolbarEntry
@@ -365,23 +360,13 @@ internal class ChatController(
                 focusInputAfterQuote = quote != null,
             )
         }
-        updateComposer {
-            it.copy(
-                quote = quote?.let { item ->
-                    dev.fishpi.mobile.feature.chat.model.ChatQuoteUiModel(
-                        text = item.preview,
-                        imageUrls = item.imageUrls,
-                    )
-                },
-            )
-        }
     }
 
     fun favoriteEmoji(url: String) {
         val link = url.trim()
         if (link.isBlank()) return
         _legacyComposerState.update { it.copy(favoriteEmojiUrl = link) }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
         if (_legacyComposerState.value.emojiGroups.isEmpty()) {
             loadEmojiGroups()
         }
@@ -390,7 +375,7 @@ internal class ChatController(
     fun dismissFavoriteEmoji() {
         if (_legacyComposerState.value.favoriteEmojiUrl == null) return
         _legacyComposerState.update { it.copy(favoriteEmojiUrl = null, isFavoritingEmoji = false) }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
     }
 
     fun refreshEmojiGroups() {
@@ -402,7 +387,7 @@ internal class ChatController(
         val target = groupId.trim()
         if (link.isBlank() || target.isBlank() || _legacyComposerState.value.isFavoritingEmoji) return
         _legacyComposerState.update { it.copy(isFavoritingEmoji = true) }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -410,12 +395,12 @@ internal class ChatController(
                 }
             }.onSuccess {
                 _legacyComposerState.update { it.copy(favoriteEmojiUrl = null, isFavoritingEmoji = false) }
-                syncComposerFromLegacy()
+                syncErrorFromLegacy()
                 emitEffect(ChatEffect.ShowMessage("已收藏到表情包"))
                 refreshEmojiGroups()
             }.onFailure { throwable ->
                 _legacyComposerState.update { it.copy(isFavoritingEmoji = false) }
-                syncComposerFromLegacy()
+                syncErrorFromLegacy()
                 emitEffect(ChatEffect.ShowError(throwable.message ?: "收藏表情失败"))
             }
         }
@@ -436,12 +421,12 @@ internal class ChatController(
 
     fun openAttachmentPanel() {
         _legacyComposerState.update { it.copy(attachmentPanelOpen = true, emojiPanelOpen = false) }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
     }
 
     fun closeAttachmentPanel() {
         _legacyComposerState.update { it.copy(attachmentPanelOpen = false) }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
     }
 
     fun selectMentionCandidate(nextInput: String) {
@@ -453,7 +438,7 @@ internal class ChatController(
                 atCandidates = emptyList(),
             )
         }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
     }
 
     fun clearSynthesizedMessages() {
@@ -487,7 +472,7 @@ internal class ChatController(
         onFinally: () -> Unit = {},
     ) {
         if (skipIfLoaded && rawMessages.value.isNotEmpty()) {
-            _state.update { it.copy(isLoading = false, loadState = UiLoadState.Idle) }
+            _state.update { it.copy(isLoading = false) }
             onFinally()
             return
         }
@@ -497,7 +482,6 @@ internal class ChatController(
         _state.update {
             it.copy(
                 isLoading = true,
-                loadState = UiLoadState.Loading,
                 duplicateHistoryPageStreak = 0,
                 error = null,
             )
@@ -543,7 +527,6 @@ internal class ChatController(
                 _state.update {
                     it.copy(
                         isLoading = false,
-                        loadState = UiLoadState.Idle,
                         nextHistoryPage = 2,
                         hasMoreHistory = history.isNotEmpty(),
                         duplicateHistoryPageStreak = 0,
@@ -558,7 +541,6 @@ internal class ChatController(
                 _state.update {
                     it.copy(
                         isLoading = false,
-                        loadState = UiLoadState.Error(reason),
                         error = reason,
                     )
                 }
@@ -590,7 +572,6 @@ internal class ChatController(
         _state.update {
             it.copy(
                 isLoadingMore = true,
-                historyLoadState = UiLoadState.LoadingMore,
                 error = null,
             )
         }
@@ -614,7 +595,6 @@ internal class ChatController(
                 _state.update {
                     it.copy(
                         isLoadingMore = false,
-                        historyLoadState = UiLoadState.Idle,
                         nextHistoryPage = page + 1,
                         hasMoreHistory = if (duplicateStreak > 0) {
                             duplicateStreak < MaxDuplicateHistoryPageStreak
@@ -632,7 +612,6 @@ internal class ChatController(
                 _state.update {
                     it.copy(
                         isLoadingMore = false,
-                        historyLoadState = UiLoadState.Error(reason),
                         error = reason,
                     )
                 }
@@ -870,7 +849,6 @@ internal class ChatController(
                 isSending = true,
             )
         }
-        updateComposer { it.copy(isSending = true) }
         scope.launch {
             uploadQueue.awaitSettled(pendingIds)
             val settled = restoreAttachments.syncFrom(uploadQueue.uploads.value)
@@ -889,8 +867,7 @@ internal class ChatController(
                         isSending = false,
                     )
                 }
-                updateComposer { it.copy(isSending = false) }
-                syncComposerFromLegacy()
+                syncErrorFromLegacy()
                 emitEffect(ChatEffect.ShowError(reason))
                 return@launch
             }
@@ -913,7 +890,6 @@ internal class ChatController(
             }.onSuccess {
                 uploadQueue.remove(settled.allUploadIds)
                 _legacyComposerState.update { it.copy(isSending = false) }
-                _state.update { it.copy(composer = ChatComposerState()) }
             }.onFailure { throwable ->
                 removeOptimisticMessage(optimisticId)
                 val reason = throwable.message ?: "发送失败"
@@ -927,12 +903,7 @@ internal class ChatController(
                         isSending = false,
                     )
                 }
-                _state.update {
-                    it.copy(
-                        error = reason,
-                        composer = it.composer.copy(isSending = false),
-                    )
-                }
+                _state.update { it.copy(error = reason) }
             }
         }
     }
@@ -978,7 +949,7 @@ internal class ChatController(
 
     private fun openBarragerComposer() {
         _legacyComposerState.update { it.copy(attachmentPanelOpen = false, emojiPanelOpen = false) }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
         _state.update {
             it.copy(
                 barrageComposer = it.barrageComposer.copy(
@@ -1107,7 +1078,7 @@ internal class ChatController(
                 inputResetKey = it.inputResetKey + 1,
             )
         }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
     }
 
     private fun removeAttachment(index: Int) {
@@ -1122,7 +1093,7 @@ internal class ChatController(
                 inputResetKey = it.inputResetKey + 1,
             )
         }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
     }
 
     private fun retryAttachment(index: Int) {
@@ -1138,7 +1109,7 @@ internal class ChatController(
                 val synced = current.attachments.syncFrom(uploads)
                 if (synced == current.attachments) return@collect
                 _legacyComposerState.update { it.copy(attachments = synced) }
-                syncComposerFromLegacy()
+                syncErrorFromLegacy()
                 synced.items
                     .filter { it.status == AttachmentUpload.Status.Failed && it.error != null }
                     .forEach { failed ->
@@ -1160,7 +1131,7 @@ internal class ChatController(
                 attachmentPanelOpen = if (targetOpen) false else it.attachmentPanelOpen,
             )
         }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
         if (targetOpen && _legacyComposerState.value.emojiGroups.isEmpty()) {
             loadEmojiGroups()
         }
@@ -1174,12 +1145,12 @@ internal class ChatController(
 
     private fun closeEmojiPanel() {
         _legacyComposerState.update { it.copy(emojiPanelOpen = false) }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
     }
 
     private fun loadEmojiGroups() {
         _legacyComposerState.update { it.copy(isLoadingEmojiPack = true, emojiPackError = null) }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -1193,7 +1164,7 @@ internal class ChatController(
                         isLoadingEmojiPack = firstGroupId != null,
                     )
                 }
-                syncComposerFromLegacy()
+                syncErrorFromLegacy()
                 if (firstGroupId != null) {
                     loadEmojiGroup(firstGroupId)
                 }
@@ -1205,7 +1176,7 @@ internal class ChatController(
                         isLoadingEmojiPack = false,
                     )
                 }
-                syncComposerFromLegacy()
+                syncErrorFromLegacy()
             }
         }
     }
@@ -1219,7 +1190,7 @@ internal class ChatController(
                 emojiPackError = null,
             )
         }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -1232,7 +1203,7 @@ internal class ChatController(
                         isLoadingEmojiPack = false,
                     )
                 }
-                syncComposerFromLegacy()
+                syncErrorFromLegacy()
             }.onFailure { throwable ->
                 val reason = throwable.message ?: "加载表情包失败"
                 _legacyComposerState.update {
@@ -1241,7 +1212,7 @@ internal class ChatController(
                         isLoadingEmojiPack = false,
                     )
                 }
-                syncComposerFromLegacy()
+                syncErrorFromLegacy()
             }
         }
     }
@@ -1259,7 +1230,7 @@ internal class ChatController(
                 atCandidates = if (anchor == null || query.isNullOrBlank()) emptyList() else it.atCandidates,
             )
         }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
         val keyword = query?.takeIf(String::isNotBlank) ?: return
         scope.launch {
             runCatching {
@@ -1274,12 +1245,12 @@ internal class ChatController(
                         it
                     }
                 }
-                syncComposerFromLegacy()
+                syncErrorFromLegacy()
             }.onFailure {
                 _legacyComposerState.update {
                     it.copy(atAnchor = null, atQuery = null, atCandidates = emptyList())
                 }
-                syncComposerFromLegacy()
+                syncErrorFromLegacy()
             }
         }
     }
@@ -1295,7 +1266,6 @@ internal class ChatController(
         when {
             isMine && (packet.openable || packet.finished) -> openRedPacket(message)
             packet.openable && packet.needGesture -> {
-                _state.update { it.copy(overlay = dev.fishpi.mobile.feature.chat.model.ChatOverlayState.GestureRedPacket(message.oId)) }
                 updateInteraction { it.copy(gestureRedPacket = message) }
             }
             packet.openable || packet.finished -> openRedPacket(message)
@@ -1312,7 +1282,6 @@ internal class ChatController(
                     api.openRedPacket(apiKey, message.oId, gesture)
                 }
             }.onSuccess { result ->
-                _state.update { it.copy(overlay = dev.fishpi.mobile.feature.chat.model.ChatOverlayState.RedPacketResult(message.oId)) }
                 updateInteraction {
                     it.copy(
                         gestureRedPacket = null,
@@ -1328,7 +1297,6 @@ internal class ChatController(
 
     private fun showUnavailableRedPacket(message: ChatRoomMessage) {
         val packet = message.redPacket ?: return
-        _state.update { it.copy(overlay = dev.fishpi.mobile.feature.chat.model.ChatOverlayState.RedPacketResult(message.oId)) }
         updateInteraction {
             it.copy(
                 redPacketResultSource = message,
@@ -1351,7 +1319,6 @@ internal class ChatController(
             reason.contains("已领完") ||
             reason.contains("不可领取")
         ) {
-            _state.update { it.copy(overlay = dev.fishpi.mobile.feature.chat.model.ChatOverlayState.RedPacketResult(source.oId)) }
             updateInteraction {
                 it.copy(
                     redPacketResultSource = source,
@@ -1402,7 +1369,6 @@ internal class ChatController(
                 }
             }.onSuccess {
                 updateInteraction { it.copy(isSendingRedPacket = false, redPacketComposerOpen = false) }
-                _state.update { it.copy(overlay = dev.fishpi.mobile.feature.chat.model.ChatOverlayState.None) }
             }.onFailure { throwable ->
                 updateInteraction { it.copy(isSendingRedPacket = false) }
                 setError(throwable.message ?: "发送红包失败")
@@ -1473,14 +1439,12 @@ internal class ChatController(
     private fun openRedPacketComposer() {
         updateInteraction { it.copy(attachmentPanelOpen = false, redPacketComposerOpen = true) }
         _legacyComposerState.update { it.copy(attachmentPanelOpen = false) }
-        syncComposerFromLegacy()
-        _state.update { it.copy(overlay = dev.fishpi.mobile.feature.chat.model.ChatOverlayState.RedPacketComposer) }
+        syncErrorFromLegacy()
         loadRedPacketBalance()
     }
 
     private fun dismissRedPacketComposer() {
         updateInteraction { if (it.isSendingRedPacket) it else it.copy(redPacketComposerOpen = false) }
-        _state.update { it.copy(overlay = dev.fishpi.mobile.feature.chat.model.ChatOverlayState.None) }
     }
 
     private fun changeRedPacketType(value: String) {
@@ -1516,8 +1480,6 @@ internal class ChatController(
 
     private fun updateInteraction(transform: (ChatLegacyInteractionState) -> ChatLegacyInteractionState) {
         _legacyInteractionState.update(transform)
-        val interaction = _legacyInteractionState.value
-        _state.update { it.copy(redPacket = interaction.toRedPacketState(currentUsername)) }
     }
 
     private fun setError(reason: String) {
@@ -1538,41 +1500,12 @@ internal class ChatController(
                 inputResetKey = if (resetInput) it.inputResetKey + 1 else it.inputResetKey,
             )
         }
-        syncComposerFromLegacy()
+        syncErrorFromLegacy()
     }
 
-    private fun updateComposer(transform: (ChatComposerState) -> ChatComposerState) {
-        _state.update { it.copy(composer = transform(it.composer)) }
-    }
-
-    private fun syncComposerFromLegacy() {
-        val legacy = _legacyComposerState.value
-        _state.update {
-            it.copy(
-                error = legacy.error,
-                composer = it.composer.copy(
-                    input = legacy.input,
-                    cursorPosition = legacy.cursorPosition,
-                    isSending = legacy.isSending,
-                    isUploadingAttachment = legacy.attachments.hasPendingUpload,
-                    emojiPanelOpen = legacy.emojiPanelOpen,
-                    attachmentPanelOpen = legacy.attachmentPanelOpen,
-                    isLoadingEmojiPack = legacy.isLoadingEmojiPack,
-                    emojiPackError = legacy.emojiPackError,
-                    attachments = legacy.attachments.items,
-                    mentionAnchor = legacy.atAnchor,
-                    mentionQuery = legacy.atQuery,
-                    mentionCandidates = legacy.atCandidates.map { candidate ->
-                        ChatMentionCandidateUiModel(
-                            username = candidate.userName,
-                            displayName = candidate.userName,
-                            avatarUrl = candidate.avatarUrl,
-                        )
-                    },
-                    selectedEmojiGroupId = legacy.selectedEmojiGroupId,
-                ),
-            )
-        }
+    private fun syncErrorFromLegacy() {
+        val error = _legacyComposerState.value.error
+        _state.update { if (it.error == error) it else it.copy(error = error) }
     }
 
     private fun applyAtCandidate(input: String, anchor: Int, username: String): String {
@@ -1665,21 +1598,6 @@ internal data class ChatLegacyInteractionState(
             receiversError = redPacketReceiversError,
         )
 
-    fun toRedPacketState(selfUsername: String): RedPacketState =
-        RedPacketState(
-            composerOpen = redPacketComposerOpen,
-            form = toRedPacketFormState(),
-            gestureTargetMessageId = gestureRedPacket?.oId,
-            selectedGesture = gestureRedPacket?.redPacket?.gesture,
-            result = redPacketResult?.toRedPacketResultUiModel(
-                senderName = redPacketResultSource?.userName.orEmpty(),
-                senderAvatar = redPacketResultSource?.userAvatarURL.orEmpty(),
-                packetMessage = redPacketResultSource?.redPacket?.message.orEmpty(),
-                selfUsername = selfUsername,
-                finished = redPacketResultSource?.redPacket?.finished == true ||
-                    (redPacketResult.count > 0L && redPacketResult.got >= redPacketResult.count),
-            ),
-        )
 }
 
 private data class RealtimeConnectConfig(
