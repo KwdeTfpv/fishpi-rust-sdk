@@ -30,7 +30,7 @@ object UpdateChecker {
     private const val ConnectTimeoutMs = 6000
     private const val ReadTimeoutMs = 8000
     private const val DefaultApkAssetName = "app-release.apk"
-    private val SemverRegex = Regex("""^v?(\d+)\.(\d+)\.(\d+)$""")
+    private val VersionRegex = Regex("""^v?(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$""")
     private val VersionCodeRegex = Regex("""(?m)^versionCode:\s*(\d+)""")
 
     fun check(): ReleaseUpdateInfo? {
@@ -40,7 +40,7 @@ object UpdateChecker {
     fun checkForUpdate(channel: UpdateChannel = UpdateChannel.Stable): ReleaseUpdateCheckResult {
         val manifest = runCatching { fetchManifest(channel) }.getOrNull()
         if (manifest != null) {
-            return if (compareSemver(manifest.versionName, BuildConfig.VERSION_NAME) <= 0) {
+            return if (!shouldUpdate(manifest.versionName, manifest.versionCode)) {
                 ReleaseUpdateCheckResult(updateInfo = null, latestTagName = manifest.versionName)
             } else {
                 ReleaseUpdateCheckResult(updateInfo = manifest, latestTagName = manifest.versionName)
@@ -94,7 +94,7 @@ object UpdateChecker {
             UpdateChannel.Stable -> releases.firstOrNull { !it.tagName.contains("-rc.") }
         }
         if (release != null) {
-            if (compareSemver(release.tagName, BuildConfig.VERSION_NAME) <= 0) {
+            if (!shouldUpdate(release.tagName, release.versionCode)) {
                 return ReleaseUpdateCheckResult(updateInfo = null, latestTagName = release.tagName)
             }
             return ReleaseUpdateCheckResult(
@@ -108,7 +108,7 @@ object UpdateChecker {
 
         val latestTag = requestLatestTagNameByRedirect()
             ?: throw IOException("无法读取最新版本")
-        if (compareSemver(latestTag, BuildConfig.VERSION_NAME) <= 0) {
+        if (!shouldUpdate(latestTag, -1)) {
             return ReleaseUpdateCheckResult(updateInfo = null, latestTagName = latestTag)
         }
         val apkUrl = buildApkUrl(latestTag)
@@ -237,23 +237,42 @@ object UpdateChecker {
     private fun buildApkUrl(tagName: String): String =
         releasesUrl("download/$tagName/$DefaultApkAssetName")
 
-    private fun compareSemver(left: String, right: String): Int {
-        val l = parseSemver(left) ?: return 0
-        val r = parseSemver(right) ?: return 0
-        return when {
-            l.first != r.first -> l.first - r.first
-            l.second != r.second -> l.second - r.second
-            else -> l.third - r.third
-        }
+    private fun shouldUpdate(versionName: String, versionCode: Int): Boolean {
+        val currentName = BuildConfig.VERSION_NAME
+        val currentCode = BuildConfig.VERSION_CODE
+        val ordered = compareVersions(versionName, currentName)
+        if (ordered != 0) return ordered > 0
+        if (versionCode >= 0 && currentCode > 0) return versionCode > currentCode
+        return false
     }
 
-    private fun parseSemver(raw: String): Triple<Int, Int, Int>? {
-        val match = SemverRegex.matchEntire(raw.trim()) ?: return null
+    private fun compareVersions(left: String, right: String): Int {
+        val l = parseVersion(left) ?: return 0
+        val r = parseVersion(right) ?: return 0
+        if (l.major != r.major) return l.major - r.major
+        if (l.minor != r.minor) return l.minor - r.minor
+        if (l.patch != r.patch) return l.patch - r.patch
+        if (l.rc == null && r.rc == null) return 0
+        if (l.rc == null) return 1
+        if (r.rc == null) return -1
+        return l.rc - r.rc
+    }
+
+    private fun parseVersion(raw: String): ParsedVersion? {
+        val match = VersionRegex.matchEntire(raw.trim()) ?: return null
         val major = match.groupValues.getOrNull(1)?.toIntOrNull() ?: return null
         val minor = match.groupValues.getOrNull(2)?.toIntOrNull() ?: return null
         val patch = match.groupValues.getOrNull(3)?.toIntOrNull() ?: return null
-        return Triple(major, minor, patch)
+        val rc = match.groupValues.getOrNull(4)?.takeIf { it.isNotBlank() }?.toIntOrNull()
+        return ParsedVersion(major, minor, patch, rc)
     }
+
+    private data class ParsedVersion(
+        val major: Int,
+        val minor: Int,
+        val patch: Int,
+        val rc: Int?,
+    )
 
     private data class AtomRelease(
         val tagName: String,
