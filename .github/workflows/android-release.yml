@@ -1,34 +1,18 @@
 name: Android Release
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       channel:
-        description: 'rc or stable'
         required: true
-        default: rc
-        type: choice
-        options:
-          - rc
-          - stable
-      bump:
-        description: 'patch, minor, major, or none'
-        required: true
-        default: patch
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-          - none
-      base_version:
-        description: 'Explicit base version X.Y.Z'
+        type: string
+      promote:
         required: false
-        default: ''
+        default: false
+        type: boolean
       dry_run:
-        description: 'Build without tag or release'
-        required: true
-        default: true
+        required: false
+        default: false
         type: boolean
 
 permissions:
@@ -54,38 +38,70 @@ jobs:
         shell: bash
         env:
           INPUT_CHANNEL: ${{ inputs.channel }}
-          INPUT_BUMP: ${{ inputs.bump }}
-          INPUT_BASE: ${{ inputs.base_version }}
+          INPUT_PROMOTE: ${{ inputs.promote }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
           git fetch --tags --force
 
-          base="$INPUT_BASE"
-          if [[ -z "$base" ]]; then
-            latest="$(git tag --list 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)"
-            if [[ -z "$latest" ]]; then
-              echo "::error::No stable tag found."
+          if [[ "$INPUT_CHANNEL" != "rc" && "$INPUT_CHANNEL" != "stable" ]]; then
+            echo "::error::channel must be rc or stable."
+            exit 1
+          fi
+
+          source_tag=""
+          if [[ "$INPUT_CHANNEL" == "stable" ]]; then
+            if [[ "$INPUT_PROMOTE" != "true" ]]; then
+              echo "::error::Stable release must promote the latest RC."
               exit 1
             fi
-            latest_version="${latest#v}"
-            file_version="$(sed -n 's/^versionName=//p' android/version.properties | tr -d '\r' | head -n1)"
-            if [[ "$file_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && [[ "$(printf '%s\n%s\n' "$latest_version" "$file_version" | sort -V | tail -n1)" == "$file_version" ]]; then
-              latest_version="$file_version"
+            latest_rc="$(git tag --merged HEAD --list 'v[0-9]*-rc.*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$' | sort -V | tail -n1 || true)"
+            if [[ -z "$latest_rc" ]]; then
+              echo "::error::No RC tag found to promote."
+              exit 1
             fi
-            IFS=. read -r major minor patch <<< "$latest_version"
-            case "$INPUT_BUMP" in
-              major) major=$((major + 1)); minor=0; patch=0 ;;
-              minor) minor=$((minor + 1)); patch=0 ;;
-              patch) patch=$((patch + 1)) ;;
-              none) ;;
-              *) echo "::error::Unknown bump value."; exit 1 ;;
-            esac
-            base="${major}.${minor}.${patch}"
+            base="${latest_rc#v}"
+            base="${base%-rc.*}"
+            source_tag="$latest_rc"
+          else
+            latest_any="$(git tag --merged HEAD --list 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$' | sort -V | tail -n1 || true)"
+            if [[ -n "$latest_any" && "$latest_any" == *-rc.* ]]; then
+              base="${latest_any#v}"
+              base="${base%-rc.*}"
+              if git rev-parse -q --verify "refs/tags/v${base}" >/dev/null; then
+                base=""
+              fi
+            fi
+            if [[ -z "${base:-}" ]]; then
+              latest="$(git tag --merged HEAD --list 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)"
+              if [[ -z "$latest" ]]; then
+                echo "::error::No stable tag found."
+                exit 1
+              fi
+              latest_version="${latest#v}"
+              file_version="$(sed -n 's/^versionName=//p' android/version.properties | tr -d '\r' | head -n1)"
+              if [[ "$file_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && [[ "$(printf '%s\n%s\n' "$latest_version" "$file_version" | sort -V | tail -n1)" == "$file_version" ]]; then
+                latest_version="$file_version"
+              fi
+              commits="$(git log "${latest}..HEAD" --pretty=format:'%s%n%b' || true)"
+              bump="patch"
+              if grep -qE '(^|[[:space:]])BREAKING CHANGE:' <<< "$commits" || grep -qE '^[A-Za-z]+(\([^)]*\))?!:' <<< "$commits"; then
+                bump="major"
+              elif grep -qE '^feat(\([^)]*\))?:' <<< "$commits"; then
+                bump="minor"
+              fi
+              IFS=. read -r major minor patch <<< "$latest_version"
+              case "$bump" in
+                major) major=$((major + 1)); minor=0; patch=0 ;;
+                minor) minor=$((minor + 1)); patch=0 ;;
+                patch) patch=$((patch + 1)) ;;
+              esac
+              base="${major}.${minor}.${patch}"
+            fi
           fi
 
           if ! [[ "$base" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::base_version must be X.Y.Z."
+            echo "::error::base version must be X.Y.Z."
             exit 1
           fi
 
@@ -111,8 +127,16 @@ jobs:
             echo "version_code=${version_code}"
             echo "tag=${tag}"
             echo "base=${base}"
+            echo "source_tag=${source_tag}"
             echo "dry_run=${INPUT_DRY_RUN}"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout promoted RC
+        if: inputs.channel == 'stable'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout "${{ steps.version.outputs.source_tag }}"
 
       - name: Set up JDK
         uses: actions/setup-java@v4

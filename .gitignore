@@ -28,6 +28,8 @@ docs/.vitepress/*
 .github/workflows/*
 !.github/workflows/deploy-docs.yml
 !.github/workflows/android-release.yml
+!.github/workflows/android-release-rc.yml
+!.github/workflows/android-release-stable.yml
 
 # android app source
 !android/

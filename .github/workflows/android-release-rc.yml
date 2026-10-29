@@ -1,0 +1,18 @@
+name: Android Release RC
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    uses: ./.github/workflows/android-release.yml
+    with:
+      channel: rc
+    secrets: inherit
