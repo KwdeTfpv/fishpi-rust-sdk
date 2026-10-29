@@ -364,6 +364,19 @@ class SessionStore(context: Context) {
         prefs.edit().putString(KEY_UPDATE_CHECK_RESULT, value).apply()
     }
 
+    fun getUpdateDownloadAt(): Long = prefs.getLong(KEY_UPDATE_DOWNLOAD_AT, 0L)
+
+    fun saveUpdateDownloadAt(value: Long) {
+        prefs.edit().putLong(KEY_UPDATE_DOWNLOAD_AT, value).apply()
+    }
+
+    fun getUpdateDownloadResult(): String =
+        prefs.getString(KEY_UPDATE_DOWNLOAD_RESULT, "").orEmpty()
+
+    fun saveUpdateDownloadResult(value: String) {
+        prefs.edit().putString(KEY_UPDATE_DOWNLOAD_RESULT, value).apply()
+    }
+
     fun getNotificationPrefs(): NotificationPrefs {
         val raw = prefs.getString(KEY_NOTIFICATION_PREFS, "").orEmpty()
         if (raw.isBlank()) return NotificationPrefs()
@@ -408,6 +421,8 @@ class SessionStore(context: Context) {
         const val KEY_UPDATE_CHANNEL = "update_channel"
         const val KEY_UPDATE_CHECK_AT = "update_check_at"
         const val KEY_UPDATE_CHECK_RESULT = "update_check_result"
+        const val KEY_UPDATE_DOWNLOAD_AT = "update_download_at"
+        const val KEY_UPDATE_DOWNLOAD_RESULT = "update_download_result"
     }
 }
 

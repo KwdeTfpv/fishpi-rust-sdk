@@ -2,8 +2,11 @@ package dev.fishpi.mobile
 
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -809,6 +812,20 @@ internal fun MainShell(
                     enabled = !isDownloadingUpdate,
                     onClick = {
                         if (isDownloadingUpdate) return@TextButton
+                        if (!context.packageManager.canRequestPackageInstalls()) {
+                            store.saveUpdateDownloadAt(System.currentTimeMillis())
+                            store.saveUpdateDownloadResult("未允许安装未知应用")
+                            FishPiNotifier.error("请先允许安装未知应用")
+                            runCatching {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                        Uri.parse("package:${context.packageName}"),
+                                    ),
+                                )
+                            }
+                            return@TextButton
+                        }
                         isDownloadingUpdate = true
                         updateDismissed = true
                         scope.launch {
@@ -822,13 +839,19 @@ internal fun MainShell(
                                 }
                             }
                             downloaded.onSuccess { apk ->
+                                store.saveUpdateDownloadAt(System.currentTimeMillis())
                                 val started = runCatching {
                                     UpdateDownloader.installDownloadedApk(context, apk)
                                 }.getOrDefault(false)
                                 if (!started) {
+                                    store.saveUpdateDownloadResult("安装启动失败")
                                     FishPiNotifier.error("安装启动失败，请手动安装")
+                                } else {
+                                    store.saveUpdateDownloadResult("已拉起安装器")
                                 }
                             }.onFailure {
+                                store.saveUpdateDownloadAt(System.currentTimeMillis())
+                                store.saveUpdateDownloadResult("下载失败：${it.message ?: "未知错误"}")
                                 FishPiNotifier.error(it.message ?: "下载失败")
                             }
                             isDownloadingUpdate = false

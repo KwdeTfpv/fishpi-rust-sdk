@@ -5,6 +5,7 @@ import dev.fishpi.mobile.shared.message.copyToClipboard
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -125,6 +126,11 @@ internal fun AboutAcknowledgementsWorkspace(
     var updateChannel by remember { mutableStateOf(store.getUpdateChannel()) }
     val lastCheckAt = store.getUpdateCheckAt()
     val lastCheckResult = store.getUpdateCheckResult()
+    val lastDownloadAt = store.getUpdateDownloadAt()
+    val lastDownloadResult = store.getUpdateDownloadResult()
+    val canInstallPackages = context.packageManager.canRequestPackageInstalls()
+    val releasesUrl =
+        "https://github.com/${BuildConfig.UPDATE_REPO_OWNER}/${BuildConfig.UPDATE_REPO_NAME}/releases"
     AppFullScreenWorkspace(
         title = "关于与鸣谢",
         subtitle = "FishPi $versionName ($versionCode)",
@@ -166,6 +172,36 @@ internal fun AboutAcknowledgementsWorkspace(
                             "尚未检查"
                         },
                         fallback = "",
+                    )
+                    AboutInfoRow(
+                        title = "最近下载",
+                        value = if (lastDownloadAt > 0) {
+                            "${formatUpdateCheckTime(lastDownloadAt)} · ${lastDownloadResult.ifBlank { "无结果" }}"
+                        } else {
+                            "尚未下载"
+                        },
+                        fallback = "",
+                    )
+                    AboutInfoRow(
+                        title = "安装权限",
+                        value = if (canInstallPackages) "已允许" else "未允许",
+                        fallback = "",
+                        onClick = {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                        Uri.parse("package:${context.packageName}"),
+                                    ),
+                                )
+                            }
+                        },
+                    )
+                    AboutInfoRow(
+                        title = "打开发布页",
+                        value = releasesUrl,
+                        fallback = "",
+                        onClick = { openOrCopyAboutValue(context, "发布页", releasesUrl) },
                     )
                 }
             }
