@@ -63,7 +63,9 @@ import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.ui.components.ChatInputBar
 import dev.fishpi.mobile.ui.components.uiPageBrush
 import dev.fishpi.mobile.ui.bottomBarContentPadding
+import dev.fishpi.mobile.feature.chat.render.renderHintCacheKey
 import dev.fishpi.mobile.shared.message.ChatListItem
+import dev.fishpi.mobile.shared.message.ChatMessageRenderHints
 import dev.fishpi.mobile.shared.message.ChatQuote
 import dev.fishpi.mobile.ui.components.PlainBackButton
 import dev.fishpi.mobile.ui.overlay.LocalImageViewer
@@ -476,12 +478,17 @@ private fun PrivateConversation(
     val profileClickable = remember(peer) {
         !peer.isFileTransferPeer()
     }
+    val renderHintsCache = remember { mutableMapOf<String, ChatMessageRenderHints>() }
     val listItems = remember(messages) {
+        if (renderHintsCache.size > 400) {
+            renderHintsCache.clear()
+        }
         messages.mapIndexed { index, message ->
+            val key = message.renderHintCacheKey()
             ChatListItem(
                 message = message,
                 separator = messageTimeSeparator(messages.getOrNull(index - 1), message),
-                renderHints = message.toRenderHints(),
+                renderHints = renderHintsCache.getOrPut(key) { message.toRenderHints() },
             )
         }
     }
