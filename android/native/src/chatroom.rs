@@ -10,6 +10,8 @@ use jni::objects::{JClass, JObject, JString};
 use jni::sys::{jboolean, jlong, jstring};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
+use tokio::time::timeout;
 
 /// App 侧配置的消息来源标识（`客户端/版本`）。
 static CLIENT_TAG: OnceLock<Mutex<Option<String>>> = OnceLock::new();
@@ -61,11 +63,15 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getChatRoomHisto
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let client = current_user(&token).await?;
-                let mut history = client
-                    .chatroom()
-                    .history(page.max(1) as u32, ChatContentType::Html)
-                    .await
-                    .map_err(|err| format!("加载历史失败: {err}"))?;
+                let mut history = timeout(
+                    Duration::from_secs(15),
+                    client
+                        .chatroom()
+                        .history(page.max(1) as u32, ChatContentType::Html),
+                )
+                .await
+                .map_err(|_| "加载聊天室历史超时".to_string())?
+                .map_err(|err| format!("加载历史失败: {err}"))?;
                 history.reverse();
                 let messages = history
                     .into_iter()
@@ -120,10 +126,9 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendChatRoomMess
                     Some(tag) => base.with_client_tag(tag),
                     None => base,
                 };
-                client
-                    .chatroom()
-                    .send(text)
+                timeout(Duration::from_secs(15), client.chatroom().send(text))
                     .await
+                    .map_err(|_| "发送聊天室消息超时".to_string())?
                     .map_err(|err| format!("发送失败: {err}"))?;
                 Ok(Value::Null)
             })
@@ -147,10 +152,9 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendChatRoomMess
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let client = with_stored_tag(current_user(&token).await?);
-                client
-                    .chatroom()
-                    .send(text)
+                timeout(Duration::from_secs(15), client.chatroom().send(text))
                     .await
+                    .map_err(|_| "发送聊天室消息超时".to_string())?
                     .map_err(|err| format!("发送失败: {err}"))?;
                 Ok(Value::Null)
             })
@@ -206,11 +210,13 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendChatRoomBarr
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let client = with_stored_tag(current_user(&token).await?);
-                let message = client
-                    .chatroom()
-                    .barrager(text, Some(barrage_color.as_str()))
-                    .await
-                    .map_err(|err| format!("弹幕发送失败: {err}"))?;
+                let message = timeout(
+                    Duration::from_secs(15),
+                    client.chatroom().barrager(text, Some(barrage_color.as_str())),
+                )
+                .await
+                .map_err(|_| "弹幕发送超时".to_string())?
+                .map_err(|err| format!("弹幕发送失败: {err}"))?;
                 Ok(json!({ "message": message }))
             })
         }))
@@ -231,10 +237,9 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getChatRoomBarra
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let client = current_user(&token).await?;
-                let cost = client
-                    .chatroom()
-                    .barrage_cost()
+                let cost = timeout(Duration::from_secs(10), client.chatroom().barrage_cost())
                     .await
+                    .map_err(|_| "获取弹幕花费超时".to_string())?
                     .map_err(|err| format!("获取弹幕花费失败: {err}"))?;
                 Ok(json!({
                     "cost": cost.cost,
@@ -262,10 +267,9 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_revokeChatRoomMe
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let client = current_user(&token).await?;
-                let revoked = client
-                    .chatroom()
-                    .revoke(id)
+                let revoked = timeout(Duration::from_secs(10), client.chatroom().revoke(id))
                     .await
+                    .map_err(|_| "撤回超时".to_string())?
                     .map_err(|err| format!("撤回失败: {err}"))?;
                 Ok(json!({ "msg": revoked }))
             })
@@ -291,11 +295,13 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_reactChatRoomMes
         Ok(runtime_json(|rt| {
             rt.block_on(async {
                 let client = current_user(&token).await?;
-                let result = client
-                    .reaction()
-                    .chat_room(id, reaction_value)
-                    .await
-                    .map_err(|err| format!("贴表情失败: {err}"))?;
+                let result = timeout(
+                    Duration::from_secs(10),
+                    client.reaction().chat_room(id, reaction_value),
+                )
+                .await
+                .map_err(|_| "贴表情超时".to_string())?
+                .map_err(|err| format!("贴表情失败: {err}"))?;
                 Ok(json!({
                     "targetId": result.target_id,
                     "targetType": result.target_type,
