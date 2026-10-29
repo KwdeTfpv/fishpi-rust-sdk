@@ -79,8 +79,8 @@ internal fun LoginScreen(
     val api = remember { FishPiApiClient.shared }
     val scope = rememberCoroutineScope()
     var nameOrEmail by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    var mfaCode by rememberSaveable { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var mfaCode by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(initialError) }
     var isLoading by remember { mutableStateOf(false) }
     var showVisitorVerify by remember { mutableStateOf(false) }
