@@ -21,6 +21,7 @@ import dev.fishpi.mobile.feature.article.model.RecentArticleFilters
 import dev.fishpi.mobile.feature.article.model.TaggedArticleFilters
 import dev.fishpi.mobile.feature.article.model.articleFiltersForTag
 import dev.fishpi.mobile.utils.appendDraftBlock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -52,6 +53,9 @@ internal class ArticleController(
     private val requestedPages = mutableSetOf<Int>()
     private var commentGeneration = 0
     private var heatJob: Job? = null
+    private var detailJob: Job? = null
+    private var commentJob: Job? = null
+    private var commentSortJob: Job? = null
     private val uploadQueue = AttachmentUploadQueue.shared(context)
 
     init {
@@ -134,6 +138,12 @@ internal class ArticleController(
     fun close() {
         disconnectRealtime()
         heatJob?.cancel()
+        detailJob?.cancel()
+        commentJob?.cancel()
+        commentSortJob?.cancel()
+        detailJob = null
+        commentJob = null
+        commentSortJob = null
     }
 
     fun connectArticleRealtime(enabled: Boolean) {
@@ -252,8 +262,10 @@ internal class ArticleController(
         }
     }
 
-    private fun openArticle(article: ArticleSummary) {
+    private fun openArticle(article: ArticleSummary, replaceSummary: Boolean = false) {
         commentGeneration += 1
+        commentJob?.cancel()
+        commentSortJob?.cancel()
         disconnectRealtime()
         _state.update {
             it.copy(
@@ -267,7 +279,7 @@ internal class ArticleController(
                 error = null,
             )
         }
-        loadDetail(article.id, replaceSummary = false)
+        loadDetail(article.id, replaceSummary)
     }
 
     private fun openArticleById(articleId: String) {
@@ -288,12 +300,14 @@ internal class ArticleController(
             avatar = "",
             thumbnail = "",
         )
-        openArticle(placeholder)
-        loadDetail(id, replaceSummary = true)
+        openArticle(placeholder, replaceSummary = true)
     }
 
     private fun closeDetail() {
         commentGeneration += 1
+        detailJob?.cancel()
+        commentJob?.cancel()
+        commentSortJob?.cancel()
         disconnectRealtime()
         _state.update {
             it.copy(
@@ -313,7 +327,8 @@ internal class ArticleController(
     }
 
     private fun loadDetail(articleId: String, replaceSummary: Boolean = false) {
-        scope.launch {
+        detailJob?.cancel()
+        detailJob = scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) { api.getArticleDetail(apiKey, articleId) }
             }.onSuccess { loaded ->
@@ -331,9 +346,10 @@ internal class ArticleController(
                 if (needsLastPage) {
                     loadCommentPage(articleId, loaded.commentPageCount, replace = true)
                 }
-            }.onFailure {
+            }.onFailure { error ->
+                if (error is CancellationException) return@onFailure
                 if (_state.value.selected?.id == articleId) {
-                    setError(it.message ?: "加载帖子详情失败")
+                    setError(error.message ?: "加载帖子详情失败")
                     _state.update { state -> state.copy(isLoadingDetail = false) }
                 }
             }
@@ -343,6 +359,9 @@ internal class ArticleController(
     private fun changeCommentSort(sort: CommentSort) {
         if (_state.value.commentSort == sort) return
         commentGeneration += 1
+        commentSortJob?.cancel()
+        commentJob?.cancel()
+        commentSortJob = null
         val detail = _state.value.detail
         val targetPage = when (sort) {
             CommentSort.Earliest -> detail?.commentPageCount ?: 1
@@ -359,13 +378,17 @@ internal class ArticleController(
             )
         }
         if (needsReload) {
-            loadCommentPage(detail.id, targetPage, replace = true)
+            commentSortJob = scope.launch {
+                delay(180)
+                loadCommentPage(detail.id, targetPage, replace = true)
+            }
         }
     }
 
     private fun loadCommentPage(articleId: String, page: Int, replace: Boolean) {
         val generation = commentGeneration
-        scope.launch {
+        commentJob?.cancel()
+        commentJob = scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) { api.getArticleDetail(apiKey, articleId, page) }
             }.onSuccess { loaded ->
@@ -387,9 +410,10 @@ internal class ArticleController(
                         isLoadingDetail = false,
                     )
                 }
-            }.onFailure {
+            }.onFailure { error ->
+                if (error is CancellationException) return@onFailure
                 if (generation != commentGeneration) return@onFailure
-                if (_state.value.detail?.id == articleId) setError(it.message ?: "加载评论失败")
+                if (_state.value.detail?.id == articleId) setError(error.message ?: "加载评论失败")
                 _state.update { it.copy(isLoadingDetail = false) }
             }
         }
@@ -404,7 +428,10 @@ internal class ArticleController(
 
     private fun reloadDetail(articleId: String) {
         commentGeneration += 1
-        scope.launch {
+        commentJob?.cancel()
+        commentSortJob?.cancel()
+        detailJob?.cancel()
+        detailJob = scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) { api.getArticleDetail(apiKey, articleId) }
             }.onSuccess { loaded ->
@@ -415,9 +442,10 @@ internal class ArticleController(
                 if (needsLastPage) {
                     loadCommentPage(articleId, loaded.commentPageCount, replace = true)
                 }
-            }.onFailure {
+            }.onFailure { error ->
+                if (error is CancellationException) return@onFailure
                 if (_state.value.selected?.id == articleId) {
-                    setError(it.message ?: "刷新帖子详情失败")
+                    setError(error.message ?: "刷新帖子详情失败")
                     _state.update { state -> state.copy(isLoadingDetail = false) }
                 }
             }
