@@ -147,6 +147,10 @@ val cargoBuildArm64 = tasks.register<Exec>("cargoBuildArm64") {
     environment("PATH", "${clangBin.absolutePath}${File.pathSeparator}${System.getenv("PATH")}")
     environment("CC_aarch64_linux_android", linker.absolutePath)
     environment("CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER", linker.absolutePath)
+    environment(
+        "CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS",
+        "-C link-arg=-Wl,-z,max-page-size=16384 -C link-arg=-Wl,-z,common-page-size=16384",
+    )
     commandLine("cargo", "build", "--release", "--target", "aarch64-linux-android")
 }
 
