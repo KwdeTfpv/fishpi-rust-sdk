@@ -2,7 +2,7 @@ package dev.fishpi.mobile.feature.home
 
 import dev.fishpi.mobile.ui.components.FishPiPillButton
 import dev.fishpi.mobile.ui.components.ControlSurface
-import dev.fishpi.mobile.ui.components.uiPageBrush
+import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.bottomBarContentPadding
 import dev.fishpi.mobile.ui.glass.FishPiGlassRole
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
@@ -95,7 +95,7 @@ private fun HomeSoftDefaultUi(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(uiPageBrush())
+            .background(rememberUiPageBrush())
             .statusBarsPadding(),
         contentPadding = PaddingValues(start = FishPiTheme.spacingPage, top = FishPiTheme.spacingControl, end = FishPiTheme.spacingPage, bottom = bottomBarContentPadding()),
         verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),

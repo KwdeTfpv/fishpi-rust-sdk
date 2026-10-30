@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.chat
 
+import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.components.*
 import dev.fishpi.mobile.ui.bottomBarContentPadding
 import dev.fishpi.mobile.feature.chat.ui.ChatLivenessFloatingOrb
@@ -367,13 +368,11 @@ private fun DefaultChatUiContent(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val imageLoader = rememberFishPiImageLoader()
-    val input = bridge.input
     val messages = bridge.messages
     val isLoading = bridge.isLoading
     val isLoadingMore = bridge.isLoadingMore
     val hasMoreHistory = bridge.hasMoreHistory
     val duplicateHistoryPageStreak = bridge.duplicateHistoryPageStreak
-    val isSending = bridge.isSending
     val connectionLabel = bridge.connectionLabel
     val chatNodeName = bridge.chatNodeName
     val chatTopic = bridge.chatTopic
@@ -408,14 +407,8 @@ private fun DefaultChatUiContent(
     }
     val actionMessage = bridge.actionMessage
     val quote = bridge.quote
-    val focusInputAfterQuote = bridge.focusInputAfterQuote
-    val inputResetKey = bridge.inputResetKey
     val emojiPanelOpen = bridge.emojiPanelOpen
     val emojiGroups = bridge.emojiGroups
-    val emojiItems = bridge.emojiItems
-    val selectedEmojiGroupId = bridge.selectedEmojiGroupId
-    val isLoadingEmojiPack = bridge.isLoadingEmojiPack
-    val emojiPackError = bridge.emojiPackError
     val attachmentPanelOpen = bridge.attachmentPanelOpen
     val redPacketComposerOpen = bridge.redPacketComposerOpen
     val redPacketType = bridge.redPacketType
@@ -430,18 +423,13 @@ private fun DefaultChatUiContent(
     val redPacketCountError = bridge.redPacketCountError
     val redPacketReceiversError = bridge.redPacketReceiversError
 
-    val isUploadingAttachment = bridge.isUploadingAttachment
-    val atCandidates = bridge.atCandidates
     val gestureRedPacket = bridge.gestureRedPacket
     val redPacketResult = bridge.redPacketResult
     val redPacketResultSource = bridge.redPacketResultSource
-    val attachments = bridge.attachments
-    val composerCursorRequest = bridge.composerCursorRequest
     val blockedMessagesOpen = bridge.blockedMessagesOpen
     var chatListNearBottom by remember { mutableStateOf(true) }
     var chatListNearTop by remember { mutableStateOf(false) }
-    var inputCursorPositionRequest by remember { mutableStateOf<Int?>(null) }
-    var inputCursorPosition by remember { mutableStateOf(input.length) }
+    val composerCursor = remember { ChatComposerCursorState() }
     var actionAnchor by remember { mutableStateOf<MessageActionAnchor?>(null) }
     var pluginToolbarDismissRequest by remember { mutableStateOf(0) }
     val scrollToBottomRequest = bridge.scrollToBottomRequest
@@ -737,16 +725,7 @@ private fun DefaultChatUiContent(
         }
     }
 
-    LaunchedEffect(input) {
-        val at = extractAtQuery(input)
-        if (at == null || at.second.isBlank()) {
-            dispatch(ChatAction.SearchMention(at?.first, at?.second))
-            return@LaunchedEffect
-        }
-
-        delay(220)
-        dispatch(ChatAction.SearchMention(at.first, at.second))
-    }
+    ChatMentionQueryEffect(bridge = bridge, dispatch = dispatch)
 
     Column(
         modifier = Modifier
@@ -777,7 +756,7 @@ private fun DefaultChatUiContent(
                     noticeUnread = noticeUnread,
                     onlineUsers = chatOnlineUsers,
                     onQuoteTopic = {
-                        bridge.replaceDraft(appendTopicReferenceDraft(input, chatTopic), requestFocus = true, resetInput = true)
+                        bridge.replaceDraft(appendTopicReferenceDraft(bridge.input, chatTopic), requestFocus = true, resetInput = true)
                     },
                     onRefresh = { refresh() },
                     onReconnect = { dispatch(ChatAction.Reconnect) },
@@ -842,10 +821,10 @@ private fun DefaultChatUiContent(
                         onLongPress = { anchor -> actionAnchor = anchor },
                         onAvatarClick = { openUserProfile(it) },
                         onAvatarLongPress = { username ->
-                            val (nextInput, cursor) = insertMentionDraft(input, inputCursorPosition, username)
+                            val (nextInput, cursor) = insertMentionDraft(bridge.input, composerCursor.position.value, username)
                             bridge.replaceDraft(nextInput, requestFocus = true, resetInput = true)
-                            inputCursorPositionRequest = cursor
-                            inputCursorPosition = cursor
+                            composerCursor.request.value = cursor
+                            composerCursor.position.value = cursor
                         },
                         onRedPacketClick = { message ->
                             dispatch(ChatAction.ClickRedPacket(message))
@@ -966,75 +945,14 @@ private fun DefaultChatUiContent(
             }
         }
 
-        ChatInputBar(
-            input = input,
-            quote = quote,
-            focusInputAfterQuote = focusInputAfterQuote,
-            inputResetKey = inputResetKey,
-            isUploadingAttachment = isUploadingAttachment,
-            attachments = attachments,
-            atCandidates = atCandidates,
-            sendOnEnter = chatFilters.sendOnEnter,
-            emojiPanelOpen = emojiPanelOpen,
-            emojiGroups = emojiGroups,
-            emojiItems = emojiItems,
-            selectedEmojiGroupId = selectedEmojiGroupId,
-            isLoadingEmojiPack = isLoadingEmojiPack,
-            emojiPackError = emojiPackError,
-            toolPanelOpen = attachmentPanelOpen,
+        ChatComposerDock(
+            bridge = bridge,
+            dispatch = dispatch,
+            chatFilters = chatFilters,
+            cursor = composerCursor,
             toolActions = chatToolActions,
-            pluginToolbarEntries = bridge.pluginToolbarEntries,
             pluginToolbarDismissRequest = pluginToolbarDismissRequest,
-            currentTopicLabel = chatTopic.trim().takeIf { it.isNotBlank() && it != "暂无" }?.let { "#$it#" }.orEmpty(),
-            onInputChange = { dispatch(ChatAction.ChangeInput(it)) },
-            onCancelQuote = { bridge.setQuote(null) },
-            onRemoveAttachment = { attachment ->
-                dispatch(ChatAction.RemoveAttachment(attachment.index))
-            },
-            onRetryAttachment = { attachment ->
-                dispatch(ChatAction.RetryAttachment(attachment.index))
-            },
-            onInputFocused = { bridge.clearFocusInputRequest() },
-            onOpenTools = { bridge.openAttachmentPanel() },
-            onDismissToolPanel = { bridge.closeAttachmentPanel() },
-            onPluginToolbarAction = { entry, actionId ->
-                bridge.emitPluginToolbarAction(entry, actionId)
-            },
-            onPickCurrentTopic = {},
-            onToggleEmojiPanel = { dispatch(ChatAction.ToggleEmoji) },
-            onDismissEmojiPanel = { dispatch(ChatAction.CloseEmojiPanel) },
-            onPickEmojiGroup = { dispatch(ChatAction.SelectEmojiGroup(it)) },
-            onPickEmoji = { item ->
-                dispatch(ChatAction.PickEmoji(item.name, item.url))
-            },
-            onPickAtUser = { username ->
-                dispatch(ChatAction.PickMention(username))
-            },
-            onManageEmoji = { bridge.openEmojiManager() },
-            onCursorPositionChange = {
-                inputCursorPosition = it
-                dispatch(ChatAction.ChangeCursor(it))
-            },
-            inputCursorPositionRequest = composerCursorRequest ?: inputCursorPositionRequest,
-            onInputCursorPositionRequestHandled = {
-                inputCursorPositionRequest = null
-                bridge.clearCursorRequest()
-            },
-            onSend = { sendText ->
-                val content = normalizeTopicReferenceDraft(sendText).trim()
-                if (isSending || (content.isBlank() && attachments.none { it.referenced })) {
-                    return@ChatInputBar
-                }
-                dispatch(ChatAction.SendText(content))
-            },
-            modifier = Modifier
-                .padding(
-                    start = FishPiTheme.spacingPage,
-                    end = FishPiTheme.spacingPage,
-                    top = 2.dp,
-                    bottom = 8.dp,
-                )
-                .windowInsetsPadding(WindowInsets.imeAnimationTarget.union(WindowInsets.navigationBars)),
+            modifier = Modifier,
         )
     }
 
@@ -1106,7 +1024,7 @@ private fun DefaultChatUiContent(
                         val scannedText = raw.trim()
                         qrScannerOpen = false
                         if (scannedText.isNotBlank()) {
-                            val nextInput = appendDraftBlock(input, scannedText)
+                            val nextInput = appendDraftBlock(bridge.input, scannedText)
                             bridge.replaceDraft(nextInput, requestFocus = true, resetInput = true)
                         }
                     },
@@ -1142,7 +1060,7 @@ private fun DefaultChatUiContent(
                 context.copyToClipboard("用户名", anchor.message.userName.ifBlank { anchor.message.displayName })
             },
             onMentionUser = {
-                bridge.replaceDraft(appendMentionDraft(input, anchor.message.userName), requestFocus = true, resetInput = true)
+                bridge.replaceDraft(appendMentionDraft(bridge.input, anchor.message.userName), requestFocus = true, resetInput = true)
             },
             onQuote = { bridge.setQuote(anchor.message.toQuote()) },
             onReaction = { value ->
@@ -1185,7 +1103,7 @@ private fun DefaultChatUiContent(
                 context.copyToClipboard("用户名", message.userName.ifBlank { message.displayName })
             },
             onMentionUser = {
-                bridge.replaceDraft(appendMentionDraft(input, message.userName), requestFocus = true, resetInput = true)
+                bridge.replaceDraft(appendMentionDraft(bridge.input, message.userName), requestFocus = true, resetInput = true)
             },
             onQuote = {
                 bridge.setQuote(message.toQuote())
@@ -1372,10 +1290,10 @@ private fun DefaultChatUiContent(
                 },
                 onAvatarLongPress = { username ->
                     bridge.dismissBlockedMessages()
-                    val (nextInput, cursor) = insertMentionDraft(input, inputCursorPosition, username)
+                    val (nextInput, cursor) = insertMentionDraft(bridge.input, composerCursor.position.value, username)
                     bridge.replaceDraft(nextInput, requestFocus = true, resetInput = true)
-                    inputCursorPositionRequest = cursor
-                    inputCursorPosition = cursor
+                    composerCursor.request.value = cursor
+                    composerCursor.position.value = cursor
                 },
                 onRedPacketClick = { message ->
                     bridge.dismissBlockedMessages()
@@ -1592,7 +1510,7 @@ internal fun ChatFilterSettingsOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(uiPageBrush()),
+            .background(rememberUiPageBrush()),
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -1849,7 +1767,7 @@ private fun CapsuleSwitch(checked: Boolean) {
                 .padding(horizontal = 4.dp)
                 .size(24.dp)
                 .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
-                .background(uiPageBrush()),
+                .background(rememberUiPageBrush()),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -1954,7 +1872,7 @@ private fun BlockedMessagesOverlay(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(uiPageBrush())
+            .background(rememberUiPageBrush())
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
@@ -2212,7 +2130,7 @@ private fun BlockedMessageClientBadge(client: String) {
         fontSize = 9.sp,
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
-            .background(uiPageBrush())
+            .background(rememberUiPageBrush())
             .padding(horizontal = 5.dp, vertical = 1.dp),
     )
 }
@@ -2230,7 +2148,7 @@ internal fun ChatUserProfileOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(uiPageBrush()),
+            .background(rememberUiPageBrush()),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
@@ -2444,7 +2362,7 @@ private fun ChatOnlineUsersPage(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(uiPageBrush())
+                .background(rememberUiPageBrush())
                 .navigationBarsPadding(),
         ) {
             TopAppBar(
@@ -3665,3 +3583,112 @@ private fun FavoriteEmojiSelectorSheet(
     }
 }
 
+private class ChatComposerCursorState {
+    val position = mutableStateOf(0)
+    val request = mutableStateOf<Int?>(null)
+}
+
+@Composable
+private fun ChatMentionQueryEffect(
+    bridge: DefaultChatUiBridge,
+    dispatch: (ChatAction) -> Unit,
+) {
+    val input = bridge.input
+    LaunchedEffect(input) {
+        val at = extractAtQuery(input)
+        if (at == null || at.second.isBlank()) {
+            dispatch(ChatAction.SearchMention(at?.first, at?.second))
+            return@LaunchedEffect
+        }
+
+        delay(220)
+        dispatch(ChatAction.SearchMention(at.first, at.second))
+    }
+}
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+private fun ChatComposerDock(
+    bridge: DefaultChatUiBridge,
+    dispatch: (ChatAction) -> Unit,
+    chatFilters: ChatFilterConfig,
+    cursor: ChatComposerCursorState,
+    toolActions: List<ChatToolAction>,
+    pluginToolbarDismissRequest: Int,
+    modifier: Modifier = Modifier,
+) {
+    val input = bridge.input
+    val quote = bridge.quote
+    val attachments = bridge.attachments
+    val isSending = bridge.isSending
+    ChatInputBar(
+        input = input,
+        quote = quote,
+        focusInputAfterQuote = bridge.focusInputAfterQuote,
+        inputResetKey = bridge.inputResetKey,
+        isUploadingAttachment = bridge.isUploadingAttachment,
+        attachments = attachments,
+        atCandidates = bridge.atCandidates,
+        sendOnEnter = chatFilters.sendOnEnter,
+        emojiPanelOpen = bridge.emojiPanelOpen,
+        emojiGroups = bridge.emojiGroups,
+        emojiItems = bridge.emojiItems,
+        selectedEmojiGroupId = bridge.selectedEmojiGroupId,
+        isLoadingEmojiPack = bridge.isLoadingEmojiPack,
+        emojiPackError = bridge.emojiPackError,
+        toolPanelOpen = bridge.attachmentPanelOpen,
+        toolActions = toolActions,
+        pluginToolbarEntries = bridge.pluginToolbarEntries,
+        pluginToolbarDismissRequest = pluginToolbarDismissRequest,
+        currentTopicLabel = bridge.chatTopic.trim().takeIf { it.isNotBlank() && it != "暂无" }?.let { "#$it#" }.orEmpty(),
+        onInputChange = { dispatch(ChatAction.ChangeInput(it)) },
+        onCancelQuote = { bridge.setQuote(null) },
+        onRemoveAttachment = { attachment ->
+            dispatch(ChatAction.RemoveAttachment(attachment.index))
+        },
+        onRetryAttachment = { attachment ->
+            dispatch(ChatAction.RetryAttachment(attachment.index))
+        },
+        onInputFocused = { bridge.clearFocusInputRequest() },
+        onOpenTools = { bridge.openAttachmentPanel() },
+        onDismissToolPanel = { bridge.closeAttachmentPanel() },
+        onPluginToolbarAction = { entry, actionId ->
+            bridge.emitPluginToolbarAction(entry, actionId)
+        },
+        onPickCurrentTopic = {},
+        onToggleEmojiPanel = { dispatch(ChatAction.ToggleEmoji) },
+        onDismissEmojiPanel = { dispatch(ChatAction.CloseEmojiPanel) },
+        onPickEmojiGroup = { dispatch(ChatAction.SelectEmojiGroup(it)) },
+        onPickEmoji = { item ->
+            dispatch(ChatAction.PickEmoji(item.name, item.url))
+        },
+        onPickAtUser = { username ->
+            dispatch(ChatAction.PickMention(username))
+        },
+        onManageEmoji = { bridge.openEmojiManager() },
+        onCursorPositionChange = {
+            cursor.position.value = it
+            dispatch(ChatAction.ChangeCursor(it))
+        },
+        inputCursorPositionRequest = bridge.composerCursorRequest ?: cursor.request.value,
+        onInputCursorPositionRequestHandled = {
+            cursor.request.value = null
+            bridge.clearCursorRequest()
+        },
+        onSend = { sendText ->
+            val content = normalizeTopicReferenceDraft(sendText).trim()
+            if (isSending || (content.isBlank() && attachments.none { it.referenced })) {
+                return@ChatInputBar
+            }
+            dispatch(ChatAction.SendText(content))
+        },
+        modifier = modifier
+            .padding(
+                start = FishPiTheme.spacingPage,
+                end = FishPiTheme.spacingPage,
+                top = 2.dp,
+                bottom = 8.dp,
+            )
+            .windowInsetsPadding(WindowInsets.imeAnimationTarget.union(WindowInsets.navigationBars)),
+    )
+}

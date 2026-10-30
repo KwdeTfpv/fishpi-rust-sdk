@@ -66,7 +66,7 @@ import coil3.compose.SubcomposeAsyncImage
 import dev.fishpi.mobile.AppSession
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.ui.components.ChatInputBar
-import dev.fishpi.mobile.ui.components.uiPageBrush
+import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.bottomBarContentPadding
 import dev.fishpi.mobile.feature.chat.render.renderHintCacheKey
 import dev.fishpi.mobile.shared.message.ChatListItem
@@ -114,7 +114,8 @@ internal fun DefaultPrivateChatUi(
         onPicked = { uri, isVideo -> dispatch(PrivateChatAction.PickAttachment(uri, isVideo)) },
         onError = { dispatch(PrivateChatAction.ShowError(it)) },
     )
-    val privateToolActions = listOf(
+    val privateToolActions = remember(attachmentPicker, dispatch) {
+        listOf(
         ChatToolAction(
             id = "gallery",
             label = "相册",
@@ -145,7 +146,8 @@ internal fun DefaultPrivateChatUi(
                 attachmentPicker.openFile()
             },
         ),
-    )
+        )
+    }
 
     AnimatedContent(
         targetState = conversation.selectedPeer,
@@ -278,7 +280,7 @@ private fun PrivateSessionList(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(uiPageBrush()),
+            .background(rememberUiPageBrush()),
     ) {
         listHeader?.invoke(this)
         error?.let {
@@ -519,7 +521,7 @@ private fun PrivateConversation(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(uiPageBrush())
+            .background(rememberUiPageBrush())
             .windowInsetsPadding(WindowInsets.imeAnimationTarget.union(WindowInsets.navigationBars))
             .onGloballyPositioned { coordinates ->
                 val position = coordinates.positionInWindow()

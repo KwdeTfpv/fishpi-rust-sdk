@@ -93,6 +93,8 @@ internal fun NativeMessageList(
                 applyMessageListBackground(theme, imageLoader, drawBackground)
                 overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
                 itemAnimator = null
+                setItemViewCacheSize(12)
+                recycledViewPool.setMaxRecycledViews(0, 24)
                 clipToPadding = true
                 setPadding(0, contentTopPaddingDp.dp(context), 0, 0)
                 layoutManager = LinearLayoutManager(context).apply {

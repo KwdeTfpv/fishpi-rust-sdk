@@ -48,7 +48,7 @@ import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.ui.components.FishPiIconButton
 import dev.fishpi.mobile.ui.components.FishPiSettingsRow
 import dev.fishpi.mobile.ui.components.FishPiSettingsSection
-import dev.fishpi.mobile.ui.components.uiPageBrush
+import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.bottomBarContentPadding
 
 @Composable
@@ -88,7 +88,7 @@ internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(uiPageBrush()),
+            .background(rememberUiPageBrush()),
     ) {
         Row(
             modifier = Modifier

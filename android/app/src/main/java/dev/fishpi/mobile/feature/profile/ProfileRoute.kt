@@ -119,9 +119,10 @@ internal fun ProfileRoute(
         onDispose { controller.close() }
     }
 
+    val dispatch = remember(controller) { { action: ProfileAction -> controller.dispatch(action) } }
     DefaultProfileUi(
         state = state,
         active = active,
-        dispatch = controller::dispatch,
+        dispatch = dispatch,
     )
 }

@@ -2,6 +2,7 @@ package dev.fishpi.mobile.chatui
 
 import android.content.Context
 import android.graphics.Typeface
+import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextPaint
@@ -34,6 +35,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.commonmark.node.BlockQuote
+
+private val MarkdownSyntaxRegex =
+    Regex("""[*_`~\[\]#>|]|:[a-zA-Z0-9_+\-]+:|https?://|<\w+""")
 
 internal class MarkwonRendererCore(
     context: Context,
@@ -133,15 +137,15 @@ internal class MarkwonRendererCore(
     suspend fun renderToSpanned(source: String): Spanned = render(source)
 
     private suspend fun render(source: String): Spanned {
-        return markwonLock.withLock {
-            renderMarkdown(source)
-        }
-    }
-
-    private suspend fun renderMarkdown(source: String): Spanned {
         val markdown = source.renderFishPiEmojiShortcodes()
         kotlinx.coroutines.currentCoroutineContext().ensureActive()
-        return applyMentionAndWebUrlSpans(markwon.toMarkdown(markdown.trimEnd()))
+        if (!MarkdownSyntaxRegex.containsMatchIn(markdown)) {
+            return applyMentionAndWebUrlSpans(SpannableString(markdown))
+        }
+        val spanned = markwonLock.withLock {
+            markwon.toMarkdown(markdown.trimEnd())
+        }
+        return applyMentionAndWebUrlSpans(spanned)
     }
 
     private fun applyMentionAndWebUrlSpans(source: Spanned): Spanned {

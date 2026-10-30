@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.ui.components
 
+import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.components.silentTap
 
 import dev.fishpi.mobile.ui.components.consumeTaps
@@ -216,7 +217,7 @@ internal fun AppFullScreenWorkspace(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(uiPageBrush())
+            .background(rememberUiPageBrush())
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {

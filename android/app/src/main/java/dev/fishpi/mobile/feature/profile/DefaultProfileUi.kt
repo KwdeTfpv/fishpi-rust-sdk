@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.profile
 
+import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.components.*
 import dev.fishpi.mobile.ui.bottomBarContentPadding
 import dev.fishpi.mobile.ui.animal.AnimalIconButton
@@ -196,7 +197,7 @@ internal fun DefaultProfileUi(
                 state = profileListState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(uiPageBrush()),
+                    .background(rememberUiPageBrush()),
                 contentPadding = PaddingValues(
                     start = 12.dp,
                     end = 12.dp,
@@ -231,7 +232,7 @@ internal fun DefaultProfileUi(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(uiPageBrush()),
+                    .background(rememberUiPageBrush()),
                 contentPadding = PaddingValues(bottom = bottomBarContentPadding()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
@@ -439,7 +440,7 @@ private fun ProfileSettingsOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(uiPageBrush()),
+            .background(rememberUiPageBrush()),
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -706,7 +707,7 @@ private fun ThemeEditorOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(uiPageBrush()),
+            .background(rememberUiPageBrush()),
     ) {
         Column(
             modifier = Modifier

@@ -3,6 +3,10 @@ package dev.fishpi.mobile.ui.glass
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -24,16 +28,24 @@ import dev.fishpi.mobile.FishPiTheme
 internal val LocalFishPiGlassBackdrop =
     androidx.compose.runtime.staticCompositionLocalOf<Backdrop?> { null }
 
+internal val LocalGlassInMotion = staticCompositionLocalOf<(() -> Boolean)?> { null }
+
 internal enum class FishPiGlassRole {
     Content,
     Control,
     Floating,
 }
 
-private fun softSheenBrush(): Brush = Brush.verticalGradient(
+private val SoftSheenBrush: Brush = Brush.verticalGradient(
     0f to Color.White.copy(alpha = 0.10f),
     0.34f to Color.Transparent,
     1f to Color.Black.copy(alpha = 0.06f),
+)
+
+private fun glassBorderBrush(borderColor: Color): Brush = Brush.verticalGradient(
+    0f to Color.White.copy(alpha = 0.24f),
+    0.45f to borderColor,
+    1f to Color.Black.copy(alpha = 0.10f),
 )
 
 @Composable
@@ -54,59 +66,95 @@ internal fun Modifier.fishPiGlassSurface(
     exportedBackdrop: LayerBackdrop? = null,
 ): Modifier {
     val glassEnabled = FishPiTheme.glassEnabled
-    val shouldDrawBackdrop = glassEnabled && backdrop != null && role != FishPiGlassRole.Control
-    val glass = if (!shouldDrawBackdrop) {
-        Modifier
-            .clip(shape)
-            .background(containerColor)
-            .then(if (glassEnabled) Modifier.background(softSheenBrush()) else Modifier)
-    } else {
-        Modifier.drawBackdrop(
-            backdrop = backdrop,
-            shape = { shape },
-            effects = {
-                vibrancy()
-                blur(blurRadius.toPx())
-                lens(
-                    refractionHeight = refractionHeight.toPx(),
-                    refractionAmount = refractionAmount.toPx(),
-                    depthEffect = depthEffect,
-                    chromaticAberration = chromaticAberration,
-                )
-            },
-            highlight = { Highlight.Plain },
-            shadow = { Shadow(alpha = shadowAlpha) },
-            innerShadow = {
-                InnerShadow(
-                    radius = innerShadowRadius,
-                    alpha = shadowAlpha * 0.64f,
-                )
-            },
-            exportedBackdrop = exportedBackdrop,
-            onDrawSurface = {
-                drawRect(containerColor)
-                drawRect(brush = softSheenBrush())
-            },
-        )
+    val motionProbe = LocalGlassInMotion.current
+    val inMotion by remember(motionProbe) {
+        derivedStateOf { motionProbe?.invoke() == true }
     }
-    return then(glass)
-        .then(
-            if (borderWidth > 0.dp) {
-                if (glassEnabled) {
-                    Modifier.border(
-                        width = borderWidth,
-                        brush = Brush.verticalGradient(
-                            0f to Color.White.copy(alpha = 0.24f),
-                            0.45f to borderColor,
-                            1f to Color.Black.copy(alpha = 0.10f),
-                        ),
-                        shape = shape,
+    val shouldDrawBackdrop = glassEnabled && backdrop != null && role != FishPiGlassRole.Control
+    val glass = remember(
+        glassEnabled,
+        shouldDrawBackdrop,
+        inMotion,
+        backdrop,
+        shape,
+        containerColor,
+        borderWidth,
+        blurRadius,
+        refractionHeight,
+        refractionAmount,
+        depthEffect,
+        chromaticAberration,
+        shadowAlpha,
+        innerShadowRadius,
+        exportedBackdrop,
+    ) {
+        if (!shouldDrawBackdrop) {
+            Modifier
+                .clip(shape)
+                .background(containerColor)
+                .then(if (glassEnabled) Modifier.background(SoftSheenBrush) else Modifier)
+        } else if (inMotion) {
+            Modifier.drawBackdrop(
+                backdrop = backdrop,
+                shape = { shape },
+                effects = {
+                    vibrancy()
+                },
+                highlight = { Highlight.Plain },
+                shadow = { Shadow(alpha = 0f) },
+                innerShadow = {
+                    InnerShadow(radius = 0.dp, alpha = 0f)
+                },
+                exportedBackdrop = exportedBackdrop,
+                onDrawSurface = {
+                    drawRect(containerColor)
+                    drawRect(brush = SoftSheenBrush)
+                },
+            )
+        } else {
+            Modifier.drawBackdrop(
+                backdrop = backdrop,
+                shape = { shape },
+                effects = {
+                    vibrancy()
+                    blur(blurRadius.toPx())
+                    lens(
+                        refractionHeight = refractionHeight.toPx(),
+                        refractionAmount = refractionAmount.toPx(),
+                        depthEffect = depthEffect,
+                        chromaticAberration = chromaticAberration,
                     )
-                } else {
-                    Modifier.border(width = borderWidth, color = borderColor, shape = shape)
-                }
+                },
+                highlight = { Highlight.Plain },
+                shadow = { Shadow(alpha = shadowAlpha) },
+                innerShadow = {
+                    InnerShadow(
+                        radius = innerShadowRadius,
+                        alpha = shadowAlpha * 0.64f,
+                    )
+                },
+                exportedBackdrop = exportedBackdrop,
+                onDrawSurface = {
+                    drawRect(containerColor)
+                    drawRect(brush = SoftSheenBrush)
+                },
+            )
+        }
+    }
+    val border = remember(borderWidth, borderColor, glassEnabled, shape) {
+        if (borderWidth > 0.dp) {
+            if (glassEnabled) {
+                Modifier.border(
+                    width = borderWidth,
+                    brush = glassBorderBrush(borderColor),
+                    shape = shape,
+                )
             } else {
-                Modifier
-            },
-        )
+                Modifier.border(width = borderWidth, color = borderColor, shape = shape)
+            }
+        } else {
+            Modifier
+        }
+    }
+    return then(glass).then(border)
 }

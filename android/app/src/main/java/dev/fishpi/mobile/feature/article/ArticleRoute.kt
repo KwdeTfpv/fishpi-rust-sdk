@@ -153,14 +153,18 @@ internal fun ArticleRoute(
         label = "articlePublish",
     ) { publishOpen ->
         if (publishOpen) {
+            val publishDispatch = remember(publishController) {
+                { action: ArticlePublishAction -> publishController.dispatch(action) }
+            }
             DefaultArticlePublishUi(
                 state = publishState,
-                dispatch = publishController::dispatch,
+                dispatch = publishDispatch,
             )
         } else {
+            val dispatch = remember(controller) { { action: ArticleAction -> controller.dispatch(action) } }
             DefaultArticleUi(
                 state = state,
-                dispatch = controller::dispatch,
+                dispatch = dispatch,
                 pendingJump = pendingArticleJump,
                 pendingJumpSummary = if (pendingArticleJump && jumpSummary?.id == jumpArticleId) jumpSummary else null,
                 pluginToolbarEntries = controller.pluginToolbarEntries,

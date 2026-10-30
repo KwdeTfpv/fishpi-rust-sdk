@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -137,13 +138,14 @@ import dev.fishpi.mobile.ui.FloatingBottomBarClearance
 import dev.fishpi.mobile.ui.LocalBottomBarClearance
 import dev.fishpi.mobile.ui.animal.AnimalIslandBackground
 import dev.fishpi.mobile.ui.components.VisitorVerifyDialog
-import dev.fishpi.mobile.ui.components.uiPageBrush
+import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.motion.FishPiMotion
 import dev.fishpi.mobile.ui.components.statusSuccessColor
 import dev.fishpi.mobile.ui.glass.LiquidDragAnimation
 import dev.fishpi.mobile.ui.glass.LiquidInteractiveHighlight
 import dev.fishpi.mobile.ui.glass.FishPiGlassRole
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
+import dev.fishpi.mobile.ui.glass.LocalGlassInMotion
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -211,10 +213,11 @@ internal fun MainShell(
             navigator.selectTab(FishTab.entries[page])
         }
     }
-    LaunchedEffect(navigator.selectedTab) {
-        val target = navigator.selectedTab.ordinal
-        if (pagerState.currentPage != target) {
-            pagerState.animateScrollToPage(target)
+    LaunchedEffect(navigator, pagerState) {
+        snapshotFlow { navigator.selectedTab }.collectLatest { tab ->
+            if (pagerState.currentPage != tab.ordinal) {
+                pagerState.animateScrollToPage(tab.ordinal)
+            }
         }
     }
 
@@ -245,9 +248,8 @@ internal fun MainShell(
     var chatRoomCanFollowBottom by remember { mutableStateOf(true) }
     var chatRoomFollowBottomProbe by remember { mutableStateOf<(() -> Boolean)?>(null) }
 
-    val bottomNavSuppressed = WindowInsets.imeAnimationTarget.getBottom(density) > 0
+    val bottomNavSuppressed = imeVisibleNow()
 
-    val settledTab = FishTab.entries[pagerState.settledPage]
     val onMainLayer = navigator.onMainLayer
     val chatRoomOpen = navigator.overlays.any { it is ShellOverlay.ChatRoom }
     val secondaryBlocking = !onMainLayer || privateChatDetailActive || articleDetailActive
@@ -364,9 +366,11 @@ internal fun MainShell(
         }
     }
 
-    LaunchedEffect(session.apiKey, settledTab) {
-        if (settledTab == FishTab.Chat) {
-            refreshChatRoomHistory()
+    LaunchedEffect(pagerState, session.apiKey) {
+        snapshotFlow { pagerState.settledPage }.collect { page ->
+            if (FishTab.entries[page] == FishTab.Chat) {
+                refreshChatRoomHistory()
+            }
         }
     }
 
@@ -512,20 +516,23 @@ internal fun MainShell(
         }
     }
 
-    val shellBackdropBrush = uiPageBrush()
+    val pageBrush = rememberUiPageBrush()
     val shellBackdrop = rememberLayerBackdrop {
-        drawRect(brush = shellBackdropBrush)
+        drawRect(brush = pageBrush)
         drawContent()
     }
-    val bottomBarBackdropBrush = uiPageBrush()
     val bottomBarBackdrop = rememberLayerBackdrop {
-        drawRect(brush = bottomBarBackdropBrush)
+        drawRect(brush = pageBrush)
         drawContent()
+    }
+    val pagerInMotion: () -> Boolean = remember(pagerState) {
+        { pagerState.isScrollInProgress }
     }
 
     FishPiOverlayWindow {
         CompositionLocalProvider(
             LocalFishPiGlassBackdrop provides shellBackdrop,
+            LocalGlassInMotion provides pagerInMotion,
             LocalBottomBarClearance provides if (bottomNavHidden) 0.dp else FloatingBottomBarClearance,
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -559,83 +566,98 @@ internal fun MainShell(
                             onOpenProfile = { goToTab(FishTab.Me) },
                         )
 
-                        FishTab.Article -> Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-                            ArticleRoute(
-                                session = session,
-                                active = settledTab == FishTab.Article,
-                                onDetailActiveChange = { articleDetailActive = it },
-                                onOpenUserProfile = { username -> openProfileOverlay(username) },
-                            )
+                        FishTab.Article -> {
+                            val tabActive by remember {
+                                derivedStateOf { pagerState.settledPage == FishTab.Article.ordinal }
+                            }
+                            Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+                                ArticleRoute(
+                                    session = session,
+                                    active = tabActive,
+                                    onDetailActiveChange = { articleDetailActive = it },
+                                    onOpenUserProfile = { username -> openProfileOverlay(username) },
+                                )
+                            }
                         }
 
-                        FishTab.Chat -> Box(modifier = Modifier.fillMaxSize()) {
-                            PrivateChatRoute(
-                                session = session,
-                                realtimeEnabled = appInForeground,
-                                active = settledTab == FishTab.Chat,
-                                jumpPeer = privatePeerJump,
-                                jumpRequest = privatePeerJumpRequest,
-                                externalNotice = pendingPrivateNotice,
-                                externalNoticeVersion = pendingPrivateNoticeVersion,
-                                onNoticeHandled = { pendingPrivateNotice = null },
-                                onJumpHandled = { privatePeerJump = null },
-                                onOpenUserProfile = { username -> openProfileOverlay(username) },
-                                onDetailActiveChange = { privateChatDetailActive = it },
-                                onUnreadChange = { privateUnread = it },
-                                listHeader = {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .statusBarsPadding()
-                                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    ) {
-                                        Text(
-                                            text = "聊天",
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                        )
-                                        ChatRoomEntryCardHost(
-                                            chatController = chatController,
-                                            chatFilters = chatFilters,
-                                            onClick = { openChatRoomDetail() },
-                                        )
-                                    }
-                                },
-                            )
+                        FishTab.Chat -> {
+                            val tabActive by remember {
+                                derivedStateOf { pagerState.settledPage == FishTab.Chat.ordinal }
+                            }
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                PrivateChatRoute(
+                                    session = session,
+                                    realtimeEnabled = appInForeground,
+                                    active = tabActive,
+                                    jumpPeer = privatePeerJump,
+                                    jumpRequest = privatePeerJumpRequest,
+                                    externalNotice = pendingPrivateNotice,
+                                    externalNoticeVersion = pendingPrivateNoticeVersion,
+                                    onNoticeHandled = { pendingPrivateNotice = null },
+                                    onJumpHandled = { privatePeerJump = null },
+                                    onOpenUserProfile = { username -> openProfileOverlay(username) },
+                                    onDetailActiveChange = { privateChatDetailActive = it },
+                                    onUnreadChange = { privateUnread = it },
+                                    listHeader = {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .statusBarsPadding()
+                                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                                        ) {
+                                            Text(
+                                                text = "聊天",
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                            )
+                                            ChatRoomEntryCardHost(
+                                                chatController = chatController,
+                                                chatFilters = chatFilters,
+                                                onClick = { openChatRoomDetail() },
+                                            )
+                                        }
+                                    },
+                                )
+                            }
                         }
 
-                        FishTab.Me -> Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-                            ProfileRoute(
-                                session = session,
-                                active = settledTab == FishTab.Me,
-                                profileUsername = null,
-                                savedAccounts = savedAccounts,
-                                chatFilters = chatFilters,
-                                themeOptions = themeOptions,
-                                themeKey = themeKey,
-                                onSaveChatFilters = { saveChatFilters(it) },
-                                onThemeChange = onThemeChange,
-                                onImportThemePackage = onImportThemePackage,
-                                onSaveEditedTheme = onSaveEditedTheme,
-                                onDeleteCustomTheme = onDeleteCustomTheme,
-                                chatWallpaperUri = chatWallpaperUri,
-                                onChatWallpaperChange = onChatWallpaperChange,
-                                glassEffectsEnabled = glassEffectsEnabled,
-                                onGlassEffectsEnabledChange = onGlassEffectsEnabledChange,
-                                onOpenArticle = { articleId, summary ->
-                                    openArticleDetail(articleId, summary = summary)
-                                },
-                                onCloseProfile = { },
-                                onOpenPrivateChat = { username -> openPrivateChat(username) },
-                                noticeUnread = noticeUnread,
-                                onOpenNotice = { openNotice() },
-                                onCheckUpdate = { checkForUpdates(manual = true) },
-                                onSwitchAccount = onSwitchAccount,
-                                onAddAccount = onAddAccount,
-                                onLogout = onLogout,
-                            )
+                        FishTab.Me -> {
+                            val tabActive by remember {
+                                derivedStateOf { pagerState.settledPage == FishTab.Me.ordinal }
+                            }
+                            Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+                                ProfileRoute(
+                                    session = session,
+                                    active = tabActive,
+                                    profileUsername = null,
+                                    savedAccounts = savedAccounts,
+                                    chatFilters = chatFilters,
+                                    themeOptions = themeOptions,
+                                    themeKey = themeKey,
+                                    onSaveChatFilters = { saveChatFilters(it) },
+                                    onThemeChange = onThemeChange,
+                                    onImportThemePackage = onImportThemePackage,
+                                    onSaveEditedTheme = onSaveEditedTheme,
+                                    onDeleteCustomTheme = onDeleteCustomTheme,
+                                    chatWallpaperUri = chatWallpaperUri,
+                                    onChatWallpaperChange = onChatWallpaperChange,
+                                    glassEffectsEnabled = glassEffectsEnabled,
+                                    onGlassEffectsEnabledChange = onGlassEffectsEnabledChange,
+                                    onOpenArticle = { articleId, summary ->
+                                        openArticleDetail(articleId, summary = summary)
+                                    },
+                                    onCloseProfile = { },
+                                    onOpenPrivateChat = { username -> openPrivateChat(username) },
+                                    noticeUnread = noticeUnread,
+                                    onOpenNotice = { openNotice() },
+                                    onCheckUpdate = { checkForUpdates(manual = true) },
+                                    onSwitchAccount = onSwitchAccount,
+                                    onAddAccount = onAddAccount,
+                                    onLogout = onLogout,
+                                )
+                            }
                         }
                     }
                 }
@@ -656,7 +678,7 @@ internal fun MainShell(
                         ShellOverlay.ChatRoom -> Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(uiPageBrush())
+                                .background(pageBrush)
                                 .pointerInput(Unit) {},
                         ) {
                             ChatRoute(
@@ -679,7 +701,7 @@ internal fun MainShell(
                         ShellOverlay.Notice -> Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(uiPageBrush())
+                                .background(pageBrush)
                                 .pointerInput(Unit) {},
                         ) {
                             NoticeScreen(
@@ -700,7 +722,7 @@ internal fun MainShell(
                         is ShellOverlay.Profile -> Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(uiPageBrush())
+                                .background(pageBrush)
                                 .pointerInput(Unit) {},
                         ) {
                             ProfileRoute(
@@ -738,7 +760,7 @@ internal fun MainShell(
                         is ShellOverlay.HomePane -> Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(uiPageBrush())
+                                .background(pageBrush)
                                 .pointerInput(Unit) {},
                         ) {
                             when (overlay.pane) {
@@ -758,7 +780,7 @@ internal fun MainShell(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .statusBarsPadding()
-                                .background(uiPageBrush())
+                                .background(pageBrush)
                                 .pointerInput(Unit) {},
                         ) {
                             ArticleRoute(
@@ -783,7 +805,7 @@ internal fun MainShell(
                     contentAlignment = Alignment.BottomCenter,
                 ) {
                     NativeBottomNav(
-                        selected = navigator.selectedTab,
+                        selectedTab = { navigator.selectedTab },
                         onSelect = { goToTab(it) },
                         backdrop = bottomBarBackdrop,
                     )
@@ -1046,7 +1068,7 @@ private fun ChatRoomEntryCard(
 
 @Composable
 private fun NativeBottomNav(
-    selected: FishTab,
+    selectedTab: () -> FishTab,
     onSelect: (FishTab) -> Unit,
     backdrop: LayerBackdrop,
 ) {
@@ -1056,7 +1078,7 @@ private fun NativeBottomNav(
         FishTab.Chat to Icons.AutoMirrored.Rounded.Chat,
         FishTab.Me to Icons.Rounded.Person,
     )
-    val selectedIndex = tabs.indexOfFirst { it.first == selected }.coerceAtLeast(0)
+    val selectedIndex = tabs.indexOfFirst { it.first == selectedTab() }.coerceAtLeast(0)
     Box(
         modifier = Modifier
             .navigationBarsPadding()
@@ -1065,7 +1087,7 @@ private fun NativeBottomNav(
         contentAlignment = Alignment.Center,
     ) {
         LiquidBottomNavTrack(
-            selectedTabIndex = { selectedIndex },
+            selectedTabIndex = selectedIndex,
             onTabSelected = { index -> onSelect(tabs[index].first) },
             tabsCount = tabs.size,
             backdrop = backdrop,
@@ -1089,7 +1111,7 @@ private fun NativeBottomNav(
 
 @Composable
 private fun LiquidBottomNavTrack(
-    selectedTabIndex: () -> Int,
+    selectedTabIndex: Int,
     onTabSelected: (Int) -> Unit,
     tabsCount: Int,
     backdrop: Backdrop,
@@ -1115,13 +1137,13 @@ private fun LiquidBottomNavTrack(
         }
         val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
         val animationScope = rememberCoroutineScope()
-        var currentIndex by remember(selectedTabIndex) {
-            mutableIntStateOf(selectedTabIndex())
+        var currentIndex by remember {
+            mutableIntStateOf(selectedTabIndex)
         }
         val dragAnimation = remember(animationScope, tabsCount, tabWidth, isLtr) {
             LiquidDragAnimation(
                 animationScope = animationScope,
-                initialValue = selectedTabIndex().toFloat(),
+                initialValue = selectedTabIndex.toFloat(),
                 valueRange = 0f..(tabsCount - 1).toFloat(),
                 visibilityThreshold = 0.001f,
                 initialScale = 1f,
@@ -1146,11 +1168,10 @@ private fun LiquidBottomNavTrack(
             )
         }
         LaunchedEffect(selectedTabIndex) {
-            snapshotFlow { selectedTabIndex() }
-                .collectLatest { index ->
-                    currentIndex = index
-                    dragAnimation.animateToValue(index.toFloat())
-                }
+            if (currentIndex != selectedTabIndex) {
+                currentIndex = selectedTabIndex
+            }
+            dragAnimation.animateToValue(selectedTabIndex.toFloat())
         }
         LaunchedEffect(dragAnimation) {
             snapshotFlow { currentIndex }
@@ -1341,6 +1362,10 @@ private fun LiquidNavItem(
         )
     }
 }
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+private fun imeVisibleNow(): Boolean = WindowInsets.isImeVisible
 
 private fun formatBytes(bytes: Long): String {
     if (bytes < 1024L) return "$bytes B"

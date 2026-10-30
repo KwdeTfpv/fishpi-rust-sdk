@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.fishpi.mobile.FishPiPalette
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.LocalFishPiPalette
 import dev.fishpi.mobile.LocalFishPiThemeTokens
@@ -46,9 +48,7 @@ internal object UiLayerTokens {
     const val ZPreview = 100f
 }
 
-@Composable
-internal fun uiPageBrush(): Brush {
-    val palette = LocalFishPiPalette.current
+private fun pageBrushOf(palette: FishPiPalette): Brush {
     if (palette.wallpaperColors.size >= 4) {
         return Brush.linearGradient(
             colors = palette.wallpaperColors,
@@ -64,6 +64,15 @@ internal fun uiPageBrush(): Brush {
 }
 
 @Composable
+internal fun uiPageBrush(): Brush = pageBrushOf(LocalFishPiPalette.current)
+
+@Composable
+internal fun rememberUiPageBrush(): Brush {
+    val palette = LocalFishPiPalette.current
+    return remember(palette) { pageBrushOf(palette) }
+}
+
+@Composable
 internal fun UiLayerScaffold(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
@@ -71,7 +80,7 @@ internal fun UiLayerScaffold(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(uiPageBrush()),
+            .background(rememberUiPageBrush()),
         content = content,
     )
 }

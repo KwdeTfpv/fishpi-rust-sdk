@@ -7,6 +7,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import dev.fishpi.mobile.AppSession
 import dev.fishpi.mobile.FishPiNotifier
@@ -84,17 +85,18 @@ internal fun PrivateChatRoute(
         }
     }
 
-    ProvidePrivateChatUiEnvironment(
-        environment = PrivateChatUiEnvironment(
+    val dispatch = remember(controller) { { action: PrivateChatAction -> controller.dispatch(action) } }
+    val currentOnOpenUserProfile by rememberUpdatedState(onOpenUserProfile)
+    val currentListHeader by rememberUpdatedState(listHeader)
+    val environment = remember(session, active) {
+        PrivateChatUiEnvironment(
             session = session,
             active = active,
-            onOpenUserProfile = onOpenUserProfile,
-            listHeader = listHeader,
-        ),
-    ) {
-        DefaultPrivateChatUi(
-            state = state,
-            dispatch = controller::dispatch,
+            onOpenUserProfile = { username -> currentOnOpenUserProfile(username) },
+            listHeader = { currentListHeader?.invoke(this) },
         )
+    }
+    ProvidePrivateChatUiEnvironment(environment = environment) {
+        DefaultPrivateChatUi(state = state, dispatch = dispatch)
     }
 }

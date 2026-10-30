@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.article
 
+import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.components.*
 import dev.fishpi.mobile.ui.animal.AnimalStatusPill
 
@@ -27,6 +28,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -44,6 +46,7 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -98,6 +101,7 @@ import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.material3.DropdownMenu
@@ -496,49 +500,56 @@ private fun ArticleListPage(
                 }
             }
         }
-        if (!listState.isScrollInProgress) {
-            val buttonShape = RoundedCornerShape(20.dp)
-            val buttonBackdrop = LocalFishPiGlassBackdrop.current
-            val buttonTint = FishPiTheme.accent
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 18.dp, bottom = 108.dp)
-                    .size(56.dp)
-                    .then(
-                        if (buttonBackdrop == null) {
-                            Modifier.background(buttonTint.copy(alpha = 0.82f), buttonShape)
-                        } else {
-                            Modifier.drawBackdrop(
-                                backdrop = buttonBackdrop,
-                                shape = { buttonShape },
-                                effects = {
-                                    vibrancy()
-                                    blur(4.dp.toPx())
-                                    lens(16.dp.toPx(), 32.dp.toPx(), chromaticAberration = false)
-                                },
-                                highlight = { Highlight.Plain },
-                                shadow = { Shadow(alpha = 0.22f) },
-                                innerShadow = { InnerShadow(radius = 7.dp, alpha = 0.14f) },
-                                onDrawSurface = {
-                                    drawRect(buttonTint, blendMode = BlendMode.Hue)
-                                    drawRect(buttonTint.copy(alpha = 0.72f))
-                                },
-                            )
+        ArticleCreateFab(listState = listState, onClick = onCreateArticle)
+    }
+}
+
+@Composable
+private fun BoxScope.ArticleCreateFab(listState: LazyListState, onClick: () -> Unit) {
+    val scrollInProgress by remember(listState) {
+        derivedStateOf { listState.isScrollInProgress }
+    }
+    if (scrollInProgress) return
+    val buttonShape = RoundedCornerShape(20.dp)
+    val buttonBackdrop = LocalFishPiGlassBackdrop.current
+    val buttonTint = FishPiTheme.accent
+    Box(
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .padding(end = 18.dp, bottom = 108.dp)
+            .size(56.dp)
+            .then(
+                if (buttonBackdrop == null) {
+                    Modifier.background(buttonTint.copy(alpha = 0.82f), buttonShape)
+                } else {
+                    Modifier.drawBackdrop(
+                        backdrop = buttonBackdrop,
+                        shape = { buttonShape },
+                        effects = {
+                            vibrancy()
+                            blur(4.dp.toPx())
+                            lens(16.dp.toPx(), 32.dp.toPx(), chromaticAberration = false)
+                        },
+                        highlight = { Highlight.Plain },
+                        shadow = { Shadow(alpha = 0.22f) },
+                        innerShadow = { InnerShadow(radius = 7.dp, alpha = 0.14f) },
+                        onDrawSurface = {
+                            drawRect(buttonTint, blendMode = BlendMode.Hue)
+                            drawRect(buttonTint.copy(alpha = 0.72f))
                         },
                     )
-                    .border(1.dp, Color.White.copy(alpha = 0.34f), buttonShape)
-                    .clip(buttonShape)
-                    .clickable(onClick = onCreateArticle),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Add,
-                    contentDescription = "发布帖子",
-                    tint = Color.White,
-                )
-            }
-        }
+                },
+            )
+            .border(1.dp, Color.White.copy(alpha = 0.34f), buttonShape)
+            .clip(buttonShape)
+            .clickable(onClick = onClick),
+    contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Add,
+            contentDescription = "发布帖子",
+            tint = Color.White,
+        )
     }
 }
 
@@ -551,7 +562,7 @@ internal fun DefaultArticlePublishUi(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(uiPageBrush())
+            .background(rememberUiPageBrush())
             .imePadding(),
     ) {
         TopAppBar(
@@ -932,10 +943,13 @@ private fun ArticleSettingRow(label: String, checked: Boolean, onChange: (Boolea
     }
 }
 
+private val draftTimestampFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+
 private fun formatDraftTimestamp(millis: Long): String? {
     if (millis <= 0L) return null
-    return java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
-        .format(java.util.Date(millis))
+    return java.time.Instant.ofEpochMilli(millis)
+        .atZone(java.time.ZoneId.systemDefault())
+        .format(draftTimestampFormatter)
 }
 
 @Composable
@@ -1227,7 +1241,7 @@ private fun ArticleDetailPage(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(uiPageBrush())
+            .background(rememberUiPageBrush())
             .imePadding(),
     ) {
         ControlSurface(

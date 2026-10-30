@@ -67,8 +67,9 @@ internal fun HomeRoute(
         onStopOrDispose { controller.setActive(false) }
     }
 
+    val dispatch = remember(controller) { { action: HomeAction -> controller.dispatch(action) } }
     DefaultHomeUi(
         state = state,
-        dispatch = controller::dispatch,
+        dispatch = dispatch,
     )
 }

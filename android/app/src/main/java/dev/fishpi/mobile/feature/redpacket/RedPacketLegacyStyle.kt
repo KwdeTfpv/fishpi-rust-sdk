@@ -76,7 +76,7 @@ import dev.fishpi.mobile.ui.components.FishPiIconButton
 import dev.fishpi.mobile.ui.components.ControlSurface
 import dev.fishpi.mobile.ui.components.IconActionButton
 import dev.fishpi.mobile.ui.components.PlainBackButton
-import dev.fishpi.mobile.ui.components.uiPageBrush
+import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.components.consumeTaps
 import dev.fishpi.mobile.ui.components.silentTap
 import androidx.compose.material3.DropdownMenu
@@ -287,7 +287,7 @@ internal fun RedPacketSendDialog(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(uiPageBrush())
+            .background(rememberUiPageBrush())
             .statusBarsPadding()
             .imePadding()
             .consumeTaps(),
