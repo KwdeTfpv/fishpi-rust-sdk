@@ -1005,7 +1005,6 @@ private fun ChatRoomEntryCard(
     val latest = messages.asReversed().firstOrNull { !chatFilters.blocksChatMessage(it) }
     val preview = latest?.let { message ->
         val text = when {
-            message.revoked -> "消息已撤回"
             message.redPacket != null -> message.redPacket.summary.ifBlank { message.redPacket.typeName.ifBlank { "红包消息" } }
             else -> message.toRenderHints().plainFallback.ifBlank { message.content }
         }

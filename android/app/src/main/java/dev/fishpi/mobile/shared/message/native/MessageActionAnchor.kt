@@ -7,4 +7,5 @@ internal data class MessageActionAnchor(
     val message: ChatRoomMessage,
     val rectInWindow: Rect,
     val isMine: Boolean,
+    val revoked: Boolean = false,
 )

@@ -161,6 +161,7 @@ private class ChatRouteBridge(
     override val locateMessageRequest get() = controllerState.locateMessageRequest
     override val previewLinkUrl get() = overlays.previewLinkUrl.value
     override val actionMessage get() = overlays.actionMessage.value
+    override val actionMessageRevoked get() = overlays.actionMessageRevoked.value
     override val quote get() = composerState.quote
     override val focusInputAfterQuote get() = composerState.focusInputAfterQuote
     override val inputResetKey get() = composerState.inputResetKey
@@ -297,14 +298,16 @@ private class ChatRouteBridge(
 
     override fun dismissMessageActions() {
         overlays.actionMessage.value = null
+        overlays.actionMessageRevoked.value = false
     }
 
     override fun dismissBlockedMessages() {
         overlays.blockedMessagesOpen.value = false
     }
 
-    override fun showMessageActions(message: ChatRoomMessage) {
+    override fun showMessageActions(message: ChatRoomMessage, revoked: Boolean) {
         overlays.actionMessage.value = message
+        overlays.actionMessageRevoked.value = revoked
     }
 }
 

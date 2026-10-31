@@ -15,30 +15,10 @@ internal val ChatRoomMessage.renderSource: String
 
 internal fun ChatRoomMessage.copyableText(): String {
     val text = content.trim()
-    val quoteText = quote?.text?.trim().orEmpty()
-    val quoteImages = quote?.imageUrls
-        ?.filter(String::isNotBlank)
-        ?.distinct()
-        .orEmpty()
 
     return buildList {
         if (text.isNotBlank()) {
             add(text)
-        }
-
-        if (quoteText.isNotBlank()) {
-            val duplicatedInBody = text.contains(quoteText)
-            if (!duplicatedInBody) {
-                add("引用消息：$quoteText")
-            }
-        }
-
-        if (quoteImages.isNotEmpty()) {
-            val quoteImageText = quoteImages.joinToString("\n")
-            val duplicatedInBody = text.contains(quoteImageText)
-            if (!duplicatedInBody) {
-                add("引用图片：\n$quoteImageText")
-            }
         }
 
         mediaUrls("image")
@@ -71,21 +51,9 @@ internal fun ChatRoomMessage.repeatableDraftContent(includeImageFallback: Boolea
     return mediaUrls("image").joinToString("\n") { url -> "![图片]($url)" }
 }
 
-internal fun List<ChatRoomMessage>.markMessageRevoked(messageId: String): List<ChatRoomMessage> {
-    if (messageId.isBlank()) {
-        return this
-    }
-    return map { message ->
-        if (message.oId == messageId) {
-            message.asRevoked()
-        } else {
-            message
-        }
-    }
-}
-
 internal fun ChatRoomMessage.canBeRevokedBy(
     session: AppSession,
+    revoked: Boolean = false,
     allowRevokeOthers: Boolean = session.user.canRevokeOthers,
     excludeRedPacket: Boolean = true,
 ): Boolean {
@@ -108,11 +76,3 @@ internal fun messageTimeSeparator(previous: ChatRoomMessage?, current: ChatRoomM
     val previousDate = previousTime.toSystemLocalDate()
     return if (currentDate != previousDate) currentTime.toChatTimeLabel() else null
 }
-
-private fun ChatRoomMessage.asRevoked(): ChatRoomMessage =
-    copy(
-        content = "[该消息已撤回]",
-        media = emptyList(),
-        revoked = true,
-    )
-

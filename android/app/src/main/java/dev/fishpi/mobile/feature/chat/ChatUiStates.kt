@@ -85,6 +85,7 @@ internal fun rememberChatUiStates(controller: ChatController): ChatUiStates {
 internal class ChatRouteOverlayState {
     val previewLinkUrl = mutableStateOf<String?>(null)
     val actionMessage = mutableStateOf<ChatRoomMessage?>(null)
+    val actionMessageRevoked = mutableStateOf(false)
     val blockedMessagesOpen = mutableStateOf(false)
     val pluginManagerOpen = mutableStateOf(false)
     val emojiManagerOpen = mutableStateOf(false)

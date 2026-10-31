@@ -124,7 +124,7 @@ internal class NativeMessageAdapter(
         }
         if (previous.isNotEmpty() && items.size > previous.size && items.startsWithSameContent(previous)) {
             for (index in previous.size until items.size) {
-                val key = items[index].message.stableNativeKey()
+                val key = items[index].stableNativeKey()
                 if (key !in playedEntranceKeys) {
                     pendingEntranceKeys.add(key)
                 }
@@ -197,7 +197,7 @@ internal class NativeMessageAdapter(
     private fun maybePlayEntrance(holder: NativeMessageViewHolder) {
         val position = holder.bindingAdapterPosition
         if (position == RecyclerView.NO_POSITION || position >= currentItems.size) return
-        val key = currentItems[position].message.stableNativeKey()
+        val key = currentItems[position].stableNativeKey()
         if (!pendingEntranceKeys.remove(key)) return
         playedEntranceKeys.add(key)
         holder.playEntranceAnimation()
@@ -240,8 +240,8 @@ private class ChatItemDiff(
     override fun getNewListSize(): Int = newItems.size
 
     override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-        return oldItems[oldItemPosition].message.stableNativeKey() ==
-            newItems[newItemPosition].message.stableNativeKey()
+        return oldItems[oldItemPosition].stableNativeKey() ==
+            newItems[newItemPosition].stableNativeKey()
     }
 
     override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
@@ -249,8 +249,8 @@ private class ChatItemDiff(
     }
 }
 
-private fun ChatRoomMessage.stableNativeKey(): String =
-    echoKey.ifBlank { oId.ifBlank { "$time:$userName:${content.hashCode()}" } }
+private fun ChatListItem.stableNativeKey(): String =
+    echoKey.ifBlank { message.oId.ifBlank { "${message.time}:${message.userName}:${message.content.hashCode()}" } }
 
 private fun List<ChatListItem>.sameContentAs(other: List<ChatListItem>): Boolean {
     if (size != other.size) return false
@@ -890,7 +890,7 @@ internal class NativeMessageViewHolder(
         )
 
         when {
-            message.revoked -> frame.content.addText("[该消息已撤回]", 15f)
+            item.revoked -> frame.content.addText("[该消息已撤回]", 15f)
             message.redPacket != null -> frame.content.addRedPacket(message, isMine, frame)
             else -> {
                 val markdown = item.renderHints.markdownContent
@@ -1869,12 +1869,12 @@ internal class NativeMessageViewHolder(
         isLongClickable = true
         setOnLongClickListener {
             dismissSourcePopup()
-            onLongPress(anchorView.messageActionAnchor(message, isMine))
+            onLongPress(anchorView.messageActionAnchor(message, isMine, boundItem?.revoked == true))
             true
         }
     }
 
-    private fun View.messageActionAnchor(message: ChatRoomMessage, isMine: Boolean): MessageActionAnchor {
+    private fun View.messageActionAnchor(message: ChatRoomMessage, isMine: Boolean, revoked: Boolean): MessageActionAnchor {
         val location = IntArray(2)
         getLocationInWindow(location)
         return MessageActionAnchor(
@@ -1886,6 +1886,7 @@ internal class NativeMessageViewHolder(
                 location[1] + height,
             ),
             isMine = isMine,
+            revoked = revoked,
         )
     }
 

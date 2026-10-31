@@ -26,6 +26,7 @@ internal data class MessageActionSpec(
 
 internal fun bubbleMessageActionSpecs(
     message: ChatRoomMessage,
+    revoked: Boolean,
     canRevoke: Boolean,
     onCopyContent: () -> Unit,
     onCopyUsername: () -> Unit,
@@ -73,7 +74,7 @@ internal fun bubbleMessageActionSpecs(
         MessageActionSpec(
             label = "引用",
             icon = Icons.Rounded.FormatQuote,
-            enabled = message.canQuote(),
+            enabled = message.canQuote(revoked),
             onClick = onQuote,
         ),
     )
@@ -91,7 +92,7 @@ internal fun bubbleMessageActionSpecs(
         MessageActionSpec(
             label = "复读",
             icon = Icons.Rounded.Replay,
-            enabled = !message.revoked && hasContent,
+            enabled = !revoked && hasContent,
             onClick = onRepeat,
         ),
     )
@@ -139,6 +140,7 @@ internal fun bubbleMessageActionSpecs(
 
 internal fun sheetMessageActionSpecs(
     message: ChatRoomMessage,
+    revoked: Boolean,
     canRevoke: Boolean,
     onCopyContent: () -> Unit,
     onCopyUsername: () -> Unit,
@@ -171,8 +173,8 @@ internal fun sheetMessageActionSpecs(
     }
     addAll(
         listOf(
-            MessageActionSpec("引用", Icons.Rounded.FormatQuote, message.canQuote(), onClick = onQuote),
-            MessageActionSpec("复读", Icons.Rounded.Replay, !message.revoked && (message.copyableText().isNotBlank() || hasImage), onClick = onRepeat),
+            MessageActionSpec("引用", Icons.Rounded.FormatQuote, message.canQuote(revoked), onClick = onQuote),
+            MessageActionSpec("复读", Icons.Rounded.Replay, !revoked && (message.copyableText().isNotBlank() || hasImage), onClick = onRepeat),
             MessageActionSpec("复制", Icons.Rounded.ContentCopy, message.copyableText().isNotBlank() || hasImage, onClick = onCopyContent),
             MessageActionSpec("撤回", Icons.Rounded.DeleteOutline, canRevoke, danger = true, onClick = onRevoke),
         ),

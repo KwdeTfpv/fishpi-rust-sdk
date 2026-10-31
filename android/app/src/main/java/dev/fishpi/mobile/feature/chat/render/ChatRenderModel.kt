@@ -25,7 +25,12 @@ internal class ChatRenderModelReducer {
     private val listItemCache = LinkedHashMap<String, ChatListItem>()
     private var model = ChatRenderModel()
 
-    fun recompute(messages: List<ChatRoomMessage>, filters: ChatFilterConfig): ChatRenderModel {
+    fun recompute(
+        messages: List<ChatRoomMessage>,
+        filters: ChatFilterConfig,
+        revokedIds: Set<String> = emptySet(),
+        echoKeys: Map<String, String> = emptyMap(),
+    ): ChatRenderModel {
         val blocked = ArrayList<ChatRoomMessage>()
         val visible = ArrayList<ChatRoomMessage>(messages.size)
         messages.forEach { message ->
@@ -35,15 +40,15 @@ internal class ChatRenderModelReducer {
                 visible.add(message)
             }
         }
-        val (items, itemEndMessageIndexes) = buildVisibleItems(visible)
+        val (items, itemEndMessageIndexes) = buildVisibleItems(visible, revokedIds, echoKeys)
         model = ChatRenderModel(
             visibleItems = items,
             itemEndMessageIndexes = itemEndMessageIndexes,
             visibleMessages = visible,
             blockedMessages = blocked,
         )
-        renderHintCache.retainRecentRenderHints(visible)
-        listItemCache.retainRecentListItems(model)
+        renderHintCache.retainRecentRenderHints(visible, revokedIds)
+        listItemCache.retainRecentListItems(model, revokedIds, echoKeys)
         return model
     }
 
@@ -51,12 +56,14 @@ internal class ChatRenderModelReducer {
         messages: List<ChatRoomMessage>,
         appended: ChatRoomMessage,
         filters: ChatFilterConfig,
+        revokedIds: Set<String> = emptySet(),
+        echoKeys: Map<String, String> = emptyMap(),
     ): ChatRenderModel {
         val consistent = messages.isNotEmpty() &&
             messages.last() === appended &&
             messages.size == model.visibleMessages.size + model.blockedMessages.size + 1
         if (!consistent) {
-            return recompute(messages, filters)
+            return recompute(messages, filters, revokedIds, echoKeys)
         }
 
         if (filters.blocksChatMessage(appended)) {
@@ -66,14 +73,14 @@ internal class ChatRenderModelReducer {
 
         val visible = model.visibleMessages
         if (visible.isEmpty()) {
-            val item = buildOneItem(listOf(appended), previousMsg = null)
+            val item = buildOneItem(listOf(appended), previousMsg = null, revokedIds, echoKeys)
             model = model.copy(
                 visibleItems = listOf(item),
                 itemEndMessageIndexes = listOf(0),
                 visibleMessages = listOf(appended),
             )
-            renderHintCache.retainRecentRenderHints(model.visibleMessages)
-            listItemCache.retainRecentListItems(model)
+            renderHintCache.retainRecentRenderHints(model.visibleMessages, revokedIds)
+            listItemCache.retainRecentListItems(model, revokedIds, echoKeys)
             return model
         }
 
@@ -89,22 +96,22 @@ internal class ChatRenderModelReducer {
         if (merges) {
             val groupMessages = newVisible.subList(lastGroupStart, newVisible.size)
             val previousOfGroup = if (lastGroupStart > 0) visible[lastGroupStart - 1] else null
-            val rebuilt = buildOneItem(groupMessages, previousOfGroup)
+            val rebuilt = buildOneItem(groupMessages, previousOfGroup, revokedIds, echoKeys)
             model = model.copy(
                 visibleItems = items.dropLast(1) + rebuilt,
                 itemEndMessageIndexes = ends.dropLast(1) + (newVisible.size - 1),
                 visibleMessages = newVisible,
             )
         } else {
-            val item = buildOneItem(listOf(appended), previousMsg = visible.last())
+            val item = buildOneItem(listOf(appended), previousMsg = visible.last(), revokedIds, echoKeys)
             model = model.copy(
                 visibleItems = items + item,
                 itemEndMessageIndexes = ends + (newVisible.size - 1),
                 visibleMessages = newVisible,
             )
         }
-        renderHintCache.retainRecentRenderHints(newVisible)
-        listItemCache.retainRecentListItems(model)
+        renderHintCache.retainRecentRenderHints(newVisible, revokedIds)
+        listItemCache.retainRecentListItems(model, revokedIds, echoKeys)
         return model
     }
 
@@ -112,14 +119,16 @@ internal class ChatRenderModelReducer {
         messages: List<ChatRoomMessage>,
         oId: String,
         filters: ChatFilterConfig,
+        revokedIds: Set<String> = emptySet(),
+        echoKeys: Map<String, String> = emptyMap(),
     ): ChatRenderModel {
-        if (oId.isBlank()) return recompute(messages, filters)
-        val updated = messages.firstOrNull { it.oId == oId } ?: return recompute(messages, filters)
+        if (oId.isBlank()) return recompute(messages, filters, revokedIds, echoKeys)
+        val updated = messages.firstOrNull { it.oId == oId } ?: return recompute(messages, filters, revokedIds, echoKeys)
 
         val blockedIdx = model.blockedMessages.indexOfFirst { it.oId == oId }
         if (blockedIdx >= 0) {
             if (!filters.blocksChatMessage(updated)) {
-                return recompute(messages, filters)
+                return recompute(messages, filters, revokedIds, echoKeys)
             }
             val newBlocked = model.blockedMessages.toMutableList().also { it[blockedIdx] = updated }
             model = model.copy(blockedMessages = newBlocked)
@@ -128,29 +137,31 @@ internal class ChatRenderModelReducer {
 
         val visible = model.visibleMessages
         val vIdx = visible.indexOfFirst { it.oId == oId }
-        if (vIdx < 0) return recompute(messages, filters)
+        if (vIdx < 0) return recompute(messages, filters, revokedIds, echoKeys)
         if (filters.blocksChatMessage(updated)) {
-            return recompute(messages, filters)
+            return recompute(messages, filters, revokedIds, echoKeys)
         }
 
         val newVisible = visible.toMutableList().also { it[vIdx] = updated }
         val ends = model.itemEndMessageIndexes
         val itemIdx = ends.indexOfFirst { it >= vIdx }
-        if (itemIdx < 0) return recompute(messages, filters)
+        if (itemIdx < 0) return recompute(messages, filters, revokedIds, echoKeys)
         val groupStart = if (itemIdx > 0) ends[itemIdx - 1] + 1 else 0
         val groupEnd = ends[itemIdx]
         val groupMessages = newVisible.subList(groupStart, groupEnd + 1)
         val previousOfGroup = if (groupStart > 0) newVisible[groupStart - 1] else null
-        val rebuilt = buildOneItem(groupMessages, previousOfGroup)
+        val rebuilt = buildOneItem(groupMessages, previousOfGroup, revokedIds, echoKeys)
         val newItems = model.visibleItems.toMutableList().also { it[itemIdx] = rebuilt }
         model = model.copy(visibleItems = newItems, visibleMessages = newVisible)
-        renderHintCache.retainRecentRenderHints(newVisible)
-        listItemCache.retainRecentListItems(model)
+        renderHintCache.retainRecentRenderHints(newVisible, revokedIds)
+        listItemCache.retainRecentListItems(model, revokedIds, echoKeys)
         return model
     }
 
     private fun buildVisibleItems(
         visibleMessages: List<ChatRoomMessage>,
+        revokedIds: Set<String>,
+        echoKeys: Map<String, String>,
     ): Pair<List<ChatListItem>, List<Int>> {
         val groups = buildStackedItems(visibleMessages)
         var msgIndex = 0
@@ -159,7 +170,7 @@ internal class ChatRenderModelReducer {
             val previousMsg = if (msgIndex > 0) visibleMessages[msgIndex - 1] else null
             msgIndex += group.messages.size
             itemEndMessageIndexes.add(msgIndex - 1)
-            buildOneItem(group.messages, previousMsg)
+            buildOneItem(group.messages, previousMsg, revokedIds, echoKeys)
         }
         return items to itemEndMessageIndexes
     }
@@ -167,10 +178,14 @@ internal class ChatRenderModelReducer {
     private fun buildOneItem(
         groupMessages: List<ChatRoomMessage>,
         previousMsg: ChatRoomMessage?,
+        revokedIds: Set<String>,
+        echoKeys: Map<String, String>,
     ): ChatListItem {
         val message = groupMessages.first()
-        val hintKey = message.renderHintCacheKey()
-        val itemKey = listItemCacheKey(previousMsg, groupMessages)
+        val revoked = message.oId in revokedIds
+        val echoKey = echoKeys[message.oId].orEmpty()
+        val hintKey = message.renderHintCacheKey(revoked)
+        val itemKey = listItemCacheKey(previousMsg, groupMessages, revoked, echoKey)
 
         val repeatStack = if (groupMessages.size > 1) {
             val participants = groupMessages
@@ -191,9 +206,11 @@ internal class ChatRenderModelReducer {
                 separator = if (repeatStack != null) null
                             else messageTimeSeparator(previousMsg, message),
                 renderHints = renderHintCache.getOrPut(hintKey) {
-                    message.toRenderHints()
+                    message.toRenderHints(revoked)
                 },
                 repeatStack = repeatStack,
+                revoked = revoked,
+                echoKey = echoKey,
             )
         }
     }
@@ -241,7 +258,7 @@ private fun ChatRoomMessage.repeatStackKey(): String {
     return listOf(content, mediaKey).joinToString(StackFieldSeparator)
 }
 
-internal fun ChatRoomMessage.renderHintCacheKey(): String {
+internal fun ChatRoomMessage.renderHintCacheKey(revoked: Boolean = false): String {
     val redPacketKey = redPacket?.let { packet ->
         listOf(
             packet.type,
@@ -275,22 +292,29 @@ private fun ChatRoomMessage.stableMessageIdentity(): String =
 
 private fun LinkedHashMap<String, ChatMessageRenderHints>.retainRecentRenderHints(
     visibleMessages: List<ChatRoomMessage>,
+    revokedIds: Set<String>,
 ) {
-    val activeKeys = visibleMessages.takeLast(180).mapTo(HashSet()) { it.renderHintCacheKey() }
+    val activeKeys = visibleMessages.takeLast(180).mapTo(HashSet()) {
+        it.renderHintCacheKey(it.oId in revokedIds)
+    }
     entries.removeIf { (key, _) -> key !in activeKeys }
 }
 
 private fun listItemCacheKey(
     previous: ChatRoomMessage?,
     groupMessages: List<ChatRoomMessage>,
+    revoked: Boolean,
+    echoKey: String,
 ): String {
     val message = groupMessages.first()
     val previousKey = previous?.renderHintCacheKey().orEmpty()
-    return "$previousKey->${message.renderHintCacheKey()}-${groupMessages.size}"
+    return "$previousKey->${message.renderHintCacheKey(revoked)}-$revoked-$echoKey-${groupMessages.size}"
 }
 
 private fun LinkedHashMap<String, ChatListItem>.retainRecentListItems(
     model: ChatRenderModel,
+    revokedIds: Set<String>,
+    echoKeys: Map<String, String>,
 ) {
     val messages = model.visibleMessages
     val ends = model.itemEndMessageIndexes
@@ -308,7 +332,15 @@ private fun LinkedHashMap<String, ChatListItem>.retainRecentListItems(
     for (index in firstGroup until ends.size) {
         val end = ends[index]
         val previous = if (start > 0) messages[start - 1] else null
-        activeKeys.add(listItemCacheKey(previous, messages.subList(start, end + 1)))
+        val first = messages[start]
+        activeKeys.add(
+            listItemCacheKey(
+                previous,
+                messages.subList(start, end + 1),
+                first.oId in revokedIds,
+                echoKeys[first.oId].orEmpty(),
+            ),
+        )
         start = end + 1
     }
     entries.removeIf { (key, _) -> key !in activeKeys }

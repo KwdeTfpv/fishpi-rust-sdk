@@ -13,5 +13,7 @@ internal data class ChatListItem(
     val separator: String?,
     val renderHints: ChatMessageRenderHints,
     val repeatStack: RepeatStackInfo? = null,
+    val revoked: Boolean = false,
+    val echoKey: String = "",
 )
 

@@ -10,6 +10,7 @@ internal data class PrivateConversationState(
     val selectedPeer: String? = null,
     val selectedPeerAvatar: String = "",
     val messages: List<ChatRoomMessage> = emptyList(),
+    val revokedMessageIds: Set<String> = emptySet(),
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
     val error: String? = null,

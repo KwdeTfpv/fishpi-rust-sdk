@@ -29,6 +29,7 @@ import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 @Composable
 internal fun MessageActionSheet(
     message: ChatRoomMessage,
+    revoked: Boolean,
     canRevoke: Boolean,
     onDismiss: () -> Unit,
     onCopyContent: () -> Unit,
@@ -91,6 +92,7 @@ internal fun MessageActionSheet(
             }
             sheetMessageActionSpecs(
                 message = message,
+                revoked = revoked,
                 canRevoke = canRevoke,
                 onCopyContent = onCopyContent,
                 onCopyUsername = onCopyUsername,

@@ -171,6 +171,7 @@ internal fun DefaultPrivateChatUi(
             peer = selectedPeer,
             peerAvatar = conversation.selectedPeerAvatar,
             messages = conversation.messages,
+            revokedMessageIds = conversation.revokedMessageIds,
             input = conversation.input,
             inputResetKey = conversation.inputResetKey,
             isLoading = conversation.isLoading,
@@ -214,9 +215,10 @@ internal fun DefaultPrivateChatUi(
             onDismissToolPanel = { dispatch(PrivateChatAction.CloseTools) },
             onImageClick = { images, index -> imageViewer.open(images, index) },
             onLinkClick = { dispatch(PrivateChatAction.ShowLinkPreview(it)) },
-            canRevoke = { message ->
+            canRevoke = { message, revoked ->
                 message.canBeRevokedBy(
                     session = environment.session,
+                    revoked = revoked,
                     allowRevokeOthers = false,
                     excludeRedPacket = false,
                 )
@@ -425,6 +427,7 @@ private fun PrivateConversation(
     peer: String,
     peerAvatar: String,
     messages: List<ChatRoomMessage>,
+    revokedMessageIds: Set<String>,
     input: String,
     inputResetKey: Int,
     isLoading: Boolean,
@@ -468,7 +471,7 @@ private fun PrivateConversation(
     onDismissToolPanel: () -> Unit,
     onImageClick: (images: List<String>, index: Int) -> Unit,
     onLinkClick: (String) -> Unit,
-    canRevoke: (ChatRoomMessage) -> Boolean,
+    canRevoke: (ChatRoomMessage, Boolean) -> Boolean,
     onQuoteMessage: (ChatRoomMessage) -> Unit,
     onRepeatMessage: (ChatRoomMessage) -> Unit,
     onRevokeMessage: (ChatRoomMessage) -> Unit,
@@ -486,16 +489,18 @@ private fun PrivateConversation(
         !peer.isFileTransferPeer()
     }
     val renderHintsCache = remember { mutableMapOf<String, ChatMessageRenderHints>() }
-    val listItems = remember(messages) {
+    val listItems = remember(messages, revokedMessageIds) {
         if (renderHintsCache.size > 400) {
             renderHintsCache.clear()
         }
         messages.mapIndexed { index, message ->
-            val key = message.renderHintCacheKey()
+            val revoked = message.oId in revokedMessageIds
+            val key = message.renderHintCacheKey(revoked)
             ChatListItem(
                 message = message,
                 separator = messageTimeSeparator(messages.getOrNull(index - 1), message),
-                renderHints = renderHintsCache.getOrPut(key) { message.toRenderHints() },
+                renderHints = renderHintsCache.getOrPut(key) { message.toRenderHints(revoked) },
+                revoked = revoked,
             )
         }
     }
@@ -694,7 +699,7 @@ private fun PrivateConversation(
                 anchor = anchor,
                 rootOffsetInWindow = rootOffsetInWindow,
                 rootSize = rootSize,
-                canRevoke = canRevoke(anchor.message),
+                canRevoke = canRevoke(anchor.message, anchor.revoked),
                 onDismiss = { actionAnchor = null },
                 onCopyContent = {
                     context.copyToClipboard("私聊内容", anchor.message.copyableText())

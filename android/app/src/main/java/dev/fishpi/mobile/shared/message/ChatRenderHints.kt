@@ -24,7 +24,10 @@ internal data class ChatMessageRenderHints(
     val isMediaOnly: Boolean = false,
 )
 
-internal fun ChatRoomMessage.toRenderHints(avatarModel: Any? = null): ChatMessageRenderHints {
+internal fun ChatRoomMessage.toRenderHints(
+    revoked: Boolean = false,
+    avatarModel: Any? = null,
+): ChatMessageRenderHints {
     val markdownContent = renderSource.trim().withMediaImages(media)
     val imageTokens = markdownContent.extractImageTokens()
     val inlineVideoLinks = imageTokens
@@ -44,6 +47,7 @@ internal fun ChatRoomMessage.toRenderHints(avatarModel: Any? = null): ChatMessag
         isMediaOnly = computeIsMediaOnly(
             revoked = revoked,
             hasRedPacket = redPacket != null,
+
             markdownContent = markdownContent,
             plainFallback = plainFallback,
             hasVideoLinks = videoLinks.isNotEmpty(),

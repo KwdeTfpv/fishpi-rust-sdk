@@ -82,6 +82,7 @@ internal fun MessageActionBubbleMenu(
     val itemPressedBackground = Color.Transparent
     val actions = bubbleMessageActionSpecs(
         message = anchor.message,
+        revoked = anchor.revoked,
         canRevoke = canRevoke,
         onCopyContent = { onCopyContent(); onDismiss() },
         onCopyUsername = { onCopyUsername(); onDismiss() },

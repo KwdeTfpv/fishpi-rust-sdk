@@ -78,8 +78,6 @@ data class ChatRoomMessage(
     val time: String,
     val client: String = "",
     val barragerColor: String = "",
-    val revoked: Boolean = false,
-    val echoKey: String = "",
     val reactionSummary: List<ReactionSummaryItem> = emptyList(),
     val currentUserReaction: String = "",
     val redPacket: RedPacketPreview? = null,
@@ -106,7 +104,7 @@ data class ChatRoomMessage(
             }
         }
 
-    fun toPluginJson(eventType: String): org.json.JSONObject = org.json.JSONObject().apply {
+    fun toPluginJson(eventType: String, revoked: Boolean = false): org.json.JSONObject = org.json.JSONObject().apply {
         put("oId", oId)
         put("userName", userName)
         put("userNickname", userNickname)
@@ -153,12 +151,6 @@ data class ChatRoomMessage(
                 put("source", item.source)
                 put("title", item.title)
                 put("from", item.from)
-            })
-        }
-        quote?.let { quoteItem ->
-            put("quote", org.json.JSONObject().apply {
-                put("text", quoteItem.text)
-                put("imageUrls", org.json.JSONArray(quoteItem.imageUrls))
             })
         }
     }

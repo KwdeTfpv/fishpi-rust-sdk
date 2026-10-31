@@ -4,7 +4,6 @@ import dev.fishpi.mobile.core.ui.UiController
 import android.content.Context
 import dev.fishpi.mobile.data.AttachmentUpload
 import dev.fishpi.mobile.data.AttachmentUploadQueue
-import dev.fishpi.mobile.data.ChatQuotePreview
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.ComposerAttachments
 import dev.fishpi.mobile.data.EmojiItemView
@@ -16,7 +15,6 @@ import dev.fishpi.mobile.feature.privatechat.mapper.sortedByLatest
 import dev.fishpi.mobile.feature.privatechat.mapper.toPrivateSessionUiModel
 import dev.fishpi.mobile.feature.privatechat.mapper.withFileTransferSession
 import dev.fishpi.mobile.feature.privatechat.model.PrivateConversationState
-import dev.fishpi.mobile.shared.message.markMessageRevoked
 import dev.fishpi.mobile.shared.message.repeatableDraftContent
 import dev.fishpi.mobile.shared.message.toQuote
 import dev.fishpi.mobile.utils.appendDraftBlock
@@ -334,7 +332,7 @@ internal class PrivateChatController(
 
     private fun onRealtimeRevoke(messageId: String) {
         if (messageId.isBlank()) return
-        updateConversation { it.copy(messages = it.messages.markMessageRevoked(messageId)) }
+        updateConversation { it.copy(revokedMessageIds = it.revokedMessageIds + messageId) }
     }
 
     private fun sendText() {
@@ -374,9 +372,6 @@ internal class PrivateChatController(
                 userNickname = selfUsername,
                 content = resolved,
                 time = "刚刚",
-                quote = snapshot.quote?.takeIf { it.isValid }?.let {
-                    ChatQuotePreview(text = it.content, imageUrls = it.imageUrls)
-                },
             )
             updateConversation {
                 val unchanged = it.input == snapshot.input
@@ -550,7 +545,7 @@ internal class PrivateChatController(
     }
 
     private fun repeatMessage(message: ChatRoomMessage) {
-        if (message.revoked) return
+        if (message.oId in _state.value.conversation.revokedMessageIds) return
         val content = message.repeatableDraftContent(includeImageFallback = true)
         if (content.isBlank()) return
         updateConversation {
@@ -562,7 +557,7 @@ internal class PrivateChatController(
     }
 
     private fun revokeMessage(message: ChatRoomMessage) {
-        if (message.revoked || message.oId.isBlank()) return
+        if (message.oId in _state.value.conversation.revokedMessageIds || message.oId.isBlank()) return
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) { api.revokePrivateChatMessage(apiKey, message.oId) }

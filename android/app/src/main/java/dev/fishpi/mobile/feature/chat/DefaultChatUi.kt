@@ -264,6 +264,7 @@ internal interface DefaultChatUiBridge {
     val locateMessageRequest: Int
     val previewLinkUrl: String?
     val actionMessage: ChatRoomMessage?
+    val actionMessageRevoked: Boolean
     val quote: ChatQuote?
     val focusInputAfterQuote: Boolean
     val inputResetKey: Int
@@ -331,7 +332,7 @@ internal interface DefaultChatUiBridge {
     fun dismissLinkPreview()
     fun dismissMessageActions()
     fun dismissBlockedMessages()
-    fun showMessageActions(message: ChatRoomMessage)
+    fun showMessageActions(message: ChatRoomMessage, revoked: Boolean)
 }
 
 private class ChatBoxBounds {
@@ -405,6 +406,7 @@ private fun DefaultChatUiContent(
         )
     }
     val actionMessage = bridge.actionMessage
+    val actionMessageRevoked = bridge.actionMessageRevoked
     val quote = bridge.quote
     val emojiPanelOpen = bridge.emojiPanelOpen
     val emojiGroups = bridge.emojiGroups
@@ -1048,7 +1050,7 @@ private fun DefaultChatUiContent(
             anchor = anchor,
             rootOffsetInWindow = chatBoxBounds.offset,
             rootSize = chatBoxBounds.size,
-            canRevoke = anchor.message.canBeRevokedBy(session),
+            canRevoke = anchor.message.canBeRevokedBy(session, revoked = anchor.revoked),
             onDismiss = { actionAnchor = null },
             onCopyContent = { context.copyToClipboard("消息内容", anchor.message.copyableText()) },
             onCopyUsername = {
@@ -1090,8 +1092,9 @@ private fun DefaultChatUiContent(
                 )
             }
             MessageActionSheet(
-            message = message,
-            canRevoke = message.canBeRevokedBy(session),
+                message = message,
+                revoked = actionMessageRevoked,
+                canRevoke = message.canBeRevokedBy(session, revoked = actionMessageRevoked),
             onDismiss = { bridge.dismissMessageActions() },
             onCopyContent = { context.copyToClipboard("消息内容", message.copyableText()) },
             onCopyUsername = {
@@ -1299,7 +1302,7 @@ private fun DefaultChatUiContent(
                 },
                 onLongPress = { anchor ->
                     bridge.dismissBlockedMessages()
-                    bridge.showMessageActions(anchor.message)
+                    bridge.showMessageActions(anchor.message, anchor.revoked)
                 },
                 onDismiss = { bridge.dismissBlockedMessages() },
             )

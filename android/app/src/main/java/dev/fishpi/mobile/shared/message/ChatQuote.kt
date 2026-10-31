@@ -61,7 +61,7 @@ internal fun ChatRoomMessage.toQuote(): ChatQuote {
     )
 }
 
-internal fun ChatRoomMessage.canQuote(): Boolean {
+internal fun ChatRoomMessage.canQuote(revoked: Boolean = false): Boolean {
     val parts = toQuoteParts()
     return !revoked && oId.isNotBlank() && userName.isNotBlank() &&
         (parts.content.isNotBlank() || parts.imageUrls.isNotEmpty())

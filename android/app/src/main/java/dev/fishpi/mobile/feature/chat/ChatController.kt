@@ -84,6 +84,8 @@ internal class ChatController(
     private val renderMutex = Mutex()
     private var renderJob: Job? = null
     private var currentFilters = ChatFilterConfig()
+    private val revokedMessageIds = mutableSetOf<String>()
+    private val echoKeysByOId = mutableMapOf<String, String>()
     private val _renderModel = MutableStateFlow(ChatRenderModel())
     val renderModel: StateFlow<ChatRenderModel> = _renderModel.asStateFlow()
 
@@ -94,15 +96,27 @@ internal class ChatController(
     }
 
     private fun refreshRenderModel() {
-        scheduleRenderModel { filters -> renderReducer.recompute(rawMessages.value, filters) }
+        val revokedIds = revokedMessageIds.toSet()
+        val echoKeys = echoKeysByOId.toMap()
+        scheduleRenderModel { filters ->
+            renderReducer.recompute(rawMessages.value, filters, revokedIds, echoKeys)
+        }
     }
 
     private fun appendRenderModel(appended: ChatRoomMessage) {
-        scheduleRenderModel { filters -> renderReducer.onAppended(rawMessages.value, appended, filters) }
+        val revokedIds = revokedMessageIds.toSet()
+        val echoKeys = echoKeysByOId.toMap()
+        scheduleRenderModel { filters ->
+            renderReducer.onAppended(rawMessages.value, appended, filters, revokedIds, echoKeys)
+        }
     }
 
     private fun replaceRenderModel(oId: String) {
-        scheduleRenderModel { filters -> renderReducer.onReplaced(rawMessages.value, oId, filters) }
+        val revokedIds = revokedMessageIds.toSet()
+        val echoKeys = echoKeysByOId.toMap()
+        scheduleRenderModel { filters ->
+            renderReducer.onReplaced(rawMessages.value, oId, filters, revokedIds, echoKeys)
+        }
     }
 
     private fun scheduleRenderModel(compute: (ChatFilterConfig) -> ChatRenderModel) {
@@ -253,7 +267,10 @@ internal class ChatController(
 
     private fun notifyPluginMessage(message: ChatRoomMessage, eventType: String) {
         if (message.oId.isNotBlank() && !pluginNotifiedIds.add(message.oId)) return
-        pluginManager.notify("message", message.toPluginJson(eventType).toString())
+        pluginManager.notify(
+            "message",
+            message.toPluginJson(eventType, revoked = message.oId in revokedMessageIds).toString(),
+        )
     }
 
     fun emitPluginToolbarAction(entry: PluginToolbarEntry, actionId: String) {
@@ -261,7 +278,12 @@ internal class ChatController(
     }
 
     fun emitPluginMenuAction(action: PluginMenuAction, message: ChatRoomMessage) {
-        pluginManager.emitMenuAction(action.pluginId, action.id, action.scene, message.toPluginJson("menuAction"))
+        pluginManager.emitMenuAction(
+            action.pluginId,
+            action.id,
+            action.scene,
+            message.toPluginJson("menuAction", revoked = message.oId in revokedMessageIds),
+        )
     }
 
     // 订阅进程级连接管理器的事件流；连接本身由 RealtimeLifecycleController 托管
@@ -524,18 +546,7 @@ internal class ChatController(
                 val localTail = previous
                     .filter { it.isLocallySynthesized || it.isOptimistic }
                     .takeLast(MaxRetainedSynthesizedMessages)
-                val echoKeyByOId = previous
-                    .filter { it.echoKey.isNotBlank() && it.oId.isNotBlank() }
-                    .associate { it.oId to it.echoKey }
-                val historyWithEcho = if (echoKeyByOId.isEmpty()) {
-                    history
-                } else {
-                    history.map { message ->
-                        val echoKey = echoKeyByOId[message.oId]
-                        if (echoKey != null && message.echoKey.isBlank()) message.copy(echoKey = echoKey) else message
-                    }
-                }
-                val unmatchedHistory = historyWithEcho.toMutableList()
+                val unmatchedHistory = history.toMutableList()
                 val retainedLocal = localTail.filter { local ->
                     if (!local.isOptimistic) return@filter true
                     val matchIndex = unmatchedHistory.indexOfFirst { historyMessage ->
@@ -548,7 +559,7 @@ internal class ChatController(
                         true
                     }
                 }
-                val merged = historyWithEcho + retainedLocal
+                val merged = history + retainedLocal
                 rawMessages.value = merged
                 refreshRenderModel()
                 _state.update {
@@ -675,9 +686,12 @@ internal class ChatController(
             -1
         }
         if (optimisticIndex >= 0) {
-            val echoKey = current[optimisticIndex].oId
+            val localId = current[optimisticIndex].oId
+            if (incoming.oId.isNotBlank()) {
+                echoKeysByOId[incoming.oId] = localId
+            }
             val replaced = current.toMutableList().apply {
-                this[optimisticIndex] = incoming.copy(echoKey = echoKey)
+                this[optimisticIndex] = incoming
             }
             rawMessages.value = replaced
             refreshRenderModel()
@@ -743,7 +757,9 @@ internal class ChatController(
     }
 
     private fun onRevoke(messageId: String) {
-        updateMessageByOId(messageId) { it.copy(revoked = true) }
+        if (messageId.isBlank()) return
+        revokedMessageIds += messageId
+        replaceRenderModel(messageId)
     }
 
     private fun onReaction(update: ChatReactionUpdate) {
@@ -1417,7 +1433,7 @@ internal class ChatController(
     }
 
     private fun reactToMessage(message: ChatRoomMessage, value: String) {
-        if (message.oId.isBlank() || message.revoked || value.isBlank()) return
+        if (message.oId.isBlank() || message.oId in revokedMessageIds || value.isBlank()) return
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -1429,7 +1445,7 @@ internal class ChatController(
     }
 
     private fun revokeMessage(message: ChatRoomMessage) {
-        if (message.revoked || message.oId.isBlank() || message.contentKind == ChatContentKind.RedPacket) return
+        if (message.oId in revokedMessageIds || message.oId.isBlank() || message.contentKind == ChatContentKind.RedPacket) return
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -1445,7 +1461,7 @@ internal class ChatController(
 
     private fun repeatMessage(message: ChatRoomMessage) {
         val content = message.repeatableDraftContent()
-        if (message.revoked || content.isBlank()) return
+        if (message.oId in revokedMessageIds || content.isBlank()) return
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
