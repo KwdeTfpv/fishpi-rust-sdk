@@ -1,3 +1,10 @@
+use std::collections::HashSet;
+
+fn dedup_urls(urls: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    urls.into_iter().filter(|url| seen.insert(url.clone())).collect()
+}
+
 pub(crate) fn strip_html_tags(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     let mut in_tag = false;
@@ -158,9 +165,7 @@ pub(crate) fn extract_image_urls(html: &str, markdown_or_text: &str) -> Vec<Stri
     collect_plain_image_urls(html, &mut urls);
     collect_markdown_image_urls(markdown_or_text, &mut urls);
     collect_plain_image_urls(markdown_or_text, &mut urls);
-    urls.sort();
-    urls.dedup();
-    urls
+    dedup_urls(urls)
 }
 
 pub(crate) fn extract_video_urls(html: &str, markdown_or_text: &str) -> Vec<String> {
@@ -174,9 +179,7 @@ pub(crate) fn extract_video_urls(html: &str, markdown_or_text: &str) -> Vec<Stri
             urls.push(url);
         }
     }
-    urls.sort();
-    urls.dedup();
-    urls
+    dedup_urls(urls)
 }
 
 pub(crate) fn extract_link_urls(html: &str, markdown_or_text: &str) -> Vec<String> {
@@ -185,9 +188,7 @@ pub(crate) fn extract_link_urls(html: &str, markdown_or_text: &str) -> Vec<Strin
     collect_markdown_link_urls(markdown_or_text, &mut urls);
     collect_plain_link_urls(html, &mut urls);
     collect_plain_link_urls(markdown_or_text, &mut urls);
-    urls.sort();
-    urls.dedup();
-    urls
+    dedup_urls(urls)
 }
 
 pub(crate) fn collect_anchor_href_urls(input: &str, urls: &mut Vec<String>) {
