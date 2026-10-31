@@ -1,10 +1,11 @@
 package dev.fishpi.mobile.ui.overlay
 
-import android.graphics.Color as AndroidColor
-import android.graphics.drawable.ColorDrawable
-import android.view.ViewGroup
-import androidx.activity.compose.BackHandler
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,14 +20,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
+import dev.fishpi.mobile.FishPiNotificationHost
+import dev.fishpi.mobile.ui.back.BackLayer
+import dev.fishpi.mobile.ui.back.BackLayerHost
 
 internal sealed interface MediaOverlayRequest {
     data class Image(val request: ImageViewerRequest) : MediaOverlayRequest
@@ -72,55 +72,66 @@ internal val LocalMediaOverlay = staticCompositionLocalOf<MediaOverlayController
     error("MediaOverlayController 未提供，请在上层包裹 MediaOverlayHost")
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun MediaOverlayHost(content: @Composable () -> Unit) {
     val controller = remember { MediaOverlayController() }
-    CompositionLocalProvider(LocalMediaOverlay provides controller) {
-        content()
-        val request = controller.request ?: return@CompositionLocalProvider
-        Dialog(
-            onDismissRequest = { controller.dismiss() },
-            properties = DialogProperties(
-                dismissOnBackPress = false,
-                dismissOnClickOutside = false,
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
-            ),
-        ) {
-            val view = LocalView.current
-            val window = (view.parent as? DialogWindowProvider)?.window
-
-            DisposableEffect(window) {
-                val dialogWindow = window ?: return@DisposableEffect onDispose {}
-                dialogWindow.setDimAmount(0f)
-                dialogWindow.setBackgroundDrawable(ColorDrawable(AndroidColor.TRANSPARENT))
-                dialogWindow.setLayout(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                )
-                WindowCompat.setDecorFitsSystemWindows(dialogWindow, false)
-                val insetsController = WindowCompat.getInsetsController(dialogWindow, dialogWindow.decorView)
-                val previousLightStatusBars = insetsController.isAppearanceLightStatusBars
-                insetsController.isAppearanceLightStatusBars = false
-                onDispose {
-                    insetsController.isAppearanceLightStatusBars = previousLightStatusBars
-                }
+    BackLayerHost {
+        CompositionLocalProvider(LocalMediaOverlay provides controller) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                content()
+                MediaOverlaySurface(controller)
+                FishPiNotificationHost()
             }
+        }
+    }
+}
 
-            key(request) {
-                MediaOverlayScaffold(onDismiss = { controller.dismiss() }) {
-                    when (request) {
-                        is MediaOverlayRequest.Image -> ImageViewer(
-                            request = request.request,
-                            onDismiss = { controller.dismiss() },
-                        )
-                        is MediaOverlayRequest.Video -> VideoPlaybackOverlay(
-                            url = request.url,
-                            session = request.session,
-                            onDismiss = { controller.dismiss() },
-                        )
-                    }
+@Composable
+private fun MediaOverlaySurface(controller: MediaOverlayController) {
+    val request = controller.request ?: return
+    val view = LocalView.current
+    val interactionSource = remember { MutableInteractionSource() }
+
+    BackLayer(
+        key = "media-overlay",
+        priority = 1000,
+        enabled = true,
+        onBack = controller::dismiss,
+    )
+
+    DisposableEffect(request) {
+        val window = view.context.findActivity()?.window
+            ?: return@DisposableEffect onDispose {}
+        val insetsController = WindowCompat.getInsetsController(window, view)
+        val previousLightStatusBars = insetsController.isAppearanceLightStatusBars
+        insetsController.isAppearanceLightStatusBars = false
+        onDispose {
+            insetsController.isAppearanceLightStatusBars = previousLightStatusBars
+        }
+    }
+
+    key(request) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                ) {},
+        ) {
+            MediaOverlayScaffold {
+                when (request) {
+                    is MediaOverlayRequest.Image -> ImageViewer(
+                        request = request.request,
+                        onDismiss = controller::dismiss,
+                    )
+
+                    is MediaOverlayRequest.Video -> VideoPlaybackOverlay(
+                        url = request.url,
+                        session = request.session,
+                        onDismiss = controller::dismiss,
+                    )
                 }
             }
         }
@@ -128,11 +139,7 @@ internal fun MediaOverlayHost(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun MediaOverlayScaffold(
-    onDismiss: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    BackHandler(onBack = onDismiss)
+private fun MediaOverlayScaffold(content: @Composable () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -144,6 +151,17 @@ private fun MediaOverlayScaffold(
                 .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
             content()
+        }
+    }
+}
+
+private fun Context.findActivity(): Activity? {
+    var current: Context = this
+    while (true) {
+        when (current) {
+            is Activity -> return current
+            is ContextWrapper -> current = current.baseContext
+            else -> return null
         }
     }
 }

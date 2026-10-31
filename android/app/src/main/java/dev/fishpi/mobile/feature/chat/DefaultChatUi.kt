@@ -8,7 +8,7 @@ import dev.fishpi.mobile.feature.chat.ui.ChatLivenessFloatingOrb
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Rect
-import androidx.activity.compose.BackHandler
+import dev.fishpi.mobile.ui.back.BackLayer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -1306,53 +1306,89 @@ private fun DefaultChatUiContent(
         }
     }
 
-    BackHandler(enabled = active && previewLinkUrl != null) {
-        bridge.dismissLinkPreview()
-    }
+    BackLayer(
+        key = "chat-link-preview",
+        priority = 350,
+        enabled = active && previewLinkUrl != null,
+        onBack = { bridge.dismissLinkPreview() },
+    )
 
-    BackHandler(enabled = active && actionAnchor != null) {
-        actionAnchor = null
-    }
+    BackLayer(
+        key = "chat-action-anchor",
+        priority = 320,
+        enabled = active && actionAnchor != null,
+        onBack = { actionAnchor = null },
+    )
 
-    BackHandler(enabled = active && actionMessage != null) {
-        bridge.dismissMessageActions()
-    }
+    BackLayer(
+        key = "chat-message-actions",
+        priority = 330,
+        enabled = active && actionMessage != null,
+        onBack = { bridge.dismissMessageActions() },
+    )
 
-    BackHandler(enabled = active && attachmentPanelOpen) {
-        bridge.closeAttachmentPanel()
-    }
+    BackLayer(
+        key = "chat-attachment-panel",
+        priority = 300,
+        enabled = active && attachmentPanelOpen,
+        onBack = { bridge.closeAttachmentPanel() },
+    )
 
-    BackHandler(enabled = active && barrageComposer.open && !barrageComposer.isSending) {
-        dispatch(ChatAction.DismissBarragerComposer)
-    }
+    BackLayer(
+        key = "chat-barrage-composer",
+        priority = 360,
+        enabled = active && barrageComposer.open && !barrageComposer.isSending,
+        onBack = { dispatch(ChatAction.DismissBarragerComposer) },
+    )
 
-    BackHandler(enabled = active && topicEditorOpen) {
-        topicEditorOpen = false
-    }
+    BackLayer(
+        key = "chat-topic-editor",
+        priority = 370,
+        enabled = active && topicEditorOpen,
+        onBack = { topicEditorOpen = false },
+    )
 
-    BackHandler(enabled = active && chatActionsOpen) {
-        chatActionsOpen = false
-    }
+    BackLayer(
+        key = "chat-actions",
+        priority = 290,
+        enabled = active && chatActionsOpen,
+        onBack = { chatActionsOpen = false },
+    )
 
-    BackHandler(enabled = active && qrScannerOpen) {
-        qrScannerOpen = false
-    }
+    BackLayer(
+        key = "chat-qr-scanner",
+        priority = 380,
+        enabled = active && qrScannerOpen,
+        onBack = { qrScannerOpen = false },
+    )
 
-    BackHandler(enabled = active && redPacketComposerOpen && !isSendingRedPacket) {
-        dispatch(ChatAction.DismissRedPacketComposer)
-    }
+    BackLayer(
+        key = "chat-red-packet-composer",
+        priority = 390,
+        enabled = active && redPacketComposerOpen && !isSendingRedPacket,
+        onBack = { dispatch(ChatAction.DismissRedPacketComposer) },
+    )
 
-    BackHandler(enabled = active && gestureRedPacket != null) {
-        dispatch(ChatAction.ClearGestureRedPacket)
-    }
+    BackLayer(
+        key = "chat-gesture-red-packet",
+        priority = 400,
+        enabled = active && gestureRedPacket != null,
+        onBack = { dispatch(ChatAction.ClearGestureRedPacket) },
+    )
 
-    BackHandler(enabled = active && redPacketResult != null) {
-        dispatch(ChatAction.ClearRedPacketResult)
-    }
+    BackLayer(
+        key = "chat-red-packet-result",
+        priority = 410,
+        enabled = active && redPacketResult != null,
+        onBack = { dispatch(ChatAction.ClearRedPacketResult) },
+    )
 
-    BackHandler(enabled = active && blockedMessagesOpen) {
-        bridge.dismissBlockedMessages()
-    }
+    BackLayer(
+        key = "chat-blocked-messages",
+        priority = 420,
+        enabled = active && blockedMessagesOpen,
+        onBack = { bridge.dismissBlockedMessages() },
+    )
 }
 
 private data class ChatPreloadImage(

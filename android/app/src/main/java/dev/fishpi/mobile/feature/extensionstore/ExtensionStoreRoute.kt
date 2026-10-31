@@ -12,6 +12,7 @@ import dev.fishpi.mobile.StoreThemeSaveState
 @Composable
 internal fun ExtensionStoreRoute(
     apiKey: String,
+    active: Boolean = true,
     onImportTheme: (String, Long, String) -> Result<String>,
     themeSaveState: (String, Long, String) -> StoreThemeSaveState,
 ) {
@@ -40,6 +41,7 @@ internal fun ExtensionStoreRoute(
 
     DefaultExtensionStoreUi(
         state = state,
+        active = active,
         dispatch = controller::dispatch,
         onImportTheme = onImportTheme,
         themeSaveState = themeSaveState,

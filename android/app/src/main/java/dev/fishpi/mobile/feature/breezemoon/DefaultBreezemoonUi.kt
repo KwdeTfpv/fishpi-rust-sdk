@@ -23,7 +23,7 @@ import android.text.style.StyleSpan
 import android.text.style.URLSpan
 import android.view.View
 import android.widget.TextView
-import androidx.activity.compose.BackHandler
+import dev.fishpi.mobile.ui.back.BackLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -403,9 +403,12 @@ internal fun DefaultBreezemoonUi(
         )
     }
 
-    BackHandler(enabled = active && state.profileUsername != null) {
-        dispatch(BreezemoonAction.DismissUserProfile)
-    }
+    BackLayer(
+        key = "breezemoon-user-profile",
+        priority = 300,
+        enabled = active && state.profileUsername != null,
+        onBack = { dispatch(BreezemoonAction.DismissUserProfile) },
+    )
 }
 
 @Composable

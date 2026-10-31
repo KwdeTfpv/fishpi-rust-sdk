@@ -2,7 +2,6 @@ package dev.fishpi.mobile.feature.article
 
 import android.content.Context
 import android.content.Intent
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import dev.fishpi.mobile.ui.motion.FishPiMotion
@@ -20,6 +19,7 @@ import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.ui.overlay.LinkPreviewOverlay
 import dev.fishpi.mobile.ui.overlay.LocalMediaOverlay
+import dev.fishpi.mobile.ui.back.BackLayer
 import dev.fishpi.mobile.feature.article.model.ArticleOverlayState
 import dev.fishpi.mobile.feature.article.publish.ArticlePublishAction
 import dev.fishpi.mobile.feature.article.publish.ArticlePublishController
@@ -166,6 +166,7 @@ internal fun ArticleRoute(
             DefaultArticleUi(
                 state = state,
                 dispatch = dispatch,
+                active = active,
                 pendingJump = pendingArticleJump,
                 pendingJumpSummary = if (pendingArticleJump && jumpSummary?.id == jumpArticleId) jumpSummary else null,
                 pluginToolbarEntries = controller.pluginToolbarEntries,
@@ -183,9 +184,12 @@ internal fun ArticleRoute(
         mediaOverlay.openVideo(video.url)
     }
 
-    BackHandler(enabled = active && state.publishOpen) {
-        controller.dispatch(ArticleAction.ClosePublish)
-    }
+    BackLayer(
+        key = "article-publish",
+        priority = 210,
+        enabled = active && state.publishOpen,
+        onBack = { controller.dispatch(ArticleAction.ClosePublish) },
+    )
 }
 
 private fun shareArticleLink(context: Context, title: String, articleId: String) {

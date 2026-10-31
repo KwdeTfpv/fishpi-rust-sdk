@@ -83,6 +83,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
+import dev.fishpi.mobile.ui.back.BackLayer
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -204,6 +205,12 @@ internal fun MainShell(
     }
 
     val navigator = rememberShellNavigator()
+    BackLayer(
+        key = "shell-overlay",
+        priority = 100,
+        enabled = navigator.overlays.isNotEmpty(),
+        onBack = { navigator.back() },
+    )
     val pagerState = rememberPagerState(
         initialPage = FishTab.Home.ordinal,
         pageCount = { FishTab.entries.size },
@@ -684,7 +691,7 @@ internal fun MainShell(
                             ChatRoute(
                                 chatFilters = chatFilters,
                                 openBlockedRequest = openBlockedRequest,
-                                active = true,
+                                active = navigator.topOverlay == ShellOverlay.ChatRoom,
                                 chatController = chatController,
                                 themeLabel = themeOptions.firstOrNull { it.key == themeKey }?.label ?: themeKey,
                                 noticeUnread = noticeUnread,
@@ -727,7 +734,7 @@ internal fun MainShell(
                         ) {
                             ProfileRoute(
                                 session = session,
-                                active = true,
+                                active = navigator.topOverlay == overlay,
                                 profileUsername = overlay.username,
                                 savedAccounts = savedAccounts,
                                 chatFilters = chatFilters,
@@ -766,10 +773,11 @@ internal fun MainShell(
                             when (overlay.pane) {
                                 HomeSubPane.Breezemoon -> BreezemoonRoute(
                                     session = session,
-                                    active = true,
+                                    active = navigator.topOverlay == overlay,
                                 )
                                 HomeSubPane.Store -> ExtensionStoreRoute(
                                     apiKey = session.apiKey,
+                                    active = navigator.topOverlay == overlay,
                                     onImportTheme = onSaveStoreTheme,
                                     themeSaveState = storeThemeSaveState,
                                 )
@@ -785,7 +793,7 @@ internal fun MainShell(
                         ) {
                             ArticleRoute(
                                 session = session,
-                                active = true,
+                                active = navigator.topOverlay == overlay,
                                 jumpArticleId = overlay.articleId,
                                 jumpSummary = overlay.summary,
                                 jumpRequest = 1,

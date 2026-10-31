@@ -1,6 +1,6 @@
 package dev.fishpi.mobile.feature.chat
 
-import androidx.activity.compose.BackHandler
+import dev.fishpi.mobile.ui.back.BackLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -96,14 +96,28 @@ internal fun ChatRoute(
         ChatRouteContent(uiStates = uiStates, dispatch = dispatch)
     }
 
+    BackLayer(
+        key = "chat-plugin-manager",
+        priority = 430,
+        enabled = active && overlays.pluginManagerOpen.value,
+        onBack = { overlays.pluginManagerOpen.value = false },
+    )
+
     if (overlays.pluginManagerOpen.value) {
-        BackHandler {
-            overlays.pluginManagerOpen.value = false
-        }
         dev.fishpi.mobile.plugin.PluginListSheet(
             onDismiss = { overlays.pluginManagerOpen.value = false },
         )
     }
+
+    BackLayer(
+        key = "chat-emoji-manager",
+        priority = 440,
+        enabled = active && overlays.emojiManagerOpen.value,
+        onBack = {
+            overlays.emojiManagerOpen.value = false
+            chatController.refreshEmojiGroups()
+        },
+    )
 
     if (overlays.emojiManagerOpen.value) {
         val appSession = LocalAppSession.current

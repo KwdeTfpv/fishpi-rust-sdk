@@ -52,7 +52,7 @@ internal class PlaybackSession(context: Context) {
     fun prepare(url: String, playWhenReady: Boolean = true) {
         if (released) return
         setSource(url)
-        if (player.playbackState == Player.STATE_IDLE) {
+        if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) {
             player.prepare()
         }
         player.playWhenReady = playWhenReady
@@ -102,7 +102,7 @@ internal class PlaybackSession(context: Context) {
         player.release()
     }
 
-    private fun releaseIfIdle() {
+    internal fun releaseIfIdle() {
         if (!fullscreen && inlineView == null) release()
     }
 }

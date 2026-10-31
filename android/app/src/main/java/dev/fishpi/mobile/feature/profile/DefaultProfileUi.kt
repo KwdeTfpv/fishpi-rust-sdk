@@ -5,7 +5,7 @@ import dev.fishpi.mobile.ui.components.*
 import dev.fishpi.mobile.ui.bottomBarContentPadding
 import dev.fishpi.mobile.ui.animal.AnimalIconButton
 
-import androidx.activity.compose.BackHandler
+import dev.fishpi.mobile.ui.back.BackLayer
 import dev.fishpi.mobile.*
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -385,33 +385,60 @@ internal fun DefaultProfileUi(
         )
     }
 
-    BackHandler(enabled = active && showWebLoginScanner) {
-        showWebLoginScanner = false
-    }
-    BackHandler(enabled = active && state.webLoginTargetId != null && !state.isWebLoginAuthorizing) {
-        dispatch(ProfileAction.DismissWebLoginConfirm)
-    }
-    BackHandler(enabled = active && state.transferOpen) {
-        dispatch(ProfileAction.DismissTransfer)
-    }
-    BackHandler(enabled = active && (state.closeOnBack || !state.isSelfProfile) && !isOverlayOpen) {
-        dispatch(ProfileAction.CloseProfile)
-    }
-    BackHandler(enabled = active && state.contentOpen && !isOverlayOpen) {
-        dispatch(ProfileAction.DismissContent)
-    }
-    BackHandler(enabled = active && state.settingsOpen && !state.filterSettingsOpen && !state.themeEditorOpen) {
-        dispatch(ProfileAction.DismissSettings)
-    }
-    BackHandler(enabled = active && state.filterSettingsOpen) {
-        dispatch(ProfileAction.DismissFilterSettings)
-    }
-    BackHandler(enabled = active && state.themeEditorOpen) {
-        dispatch(ProfileAction.DismissThemeEditor)
-    }
-    BackHandler(enabled = active && state.aboutOpen) {
-        dispatch(ProfileAction.DismissAbout)
-    }
+    BackLayer(
+        key = "profile-web-login-scanner",
+        priority = 600,
+        enabled = active && showWebLoginScanner,
+        onBack = { showWebLoginScanner = false },
+    )
+    BackLayer(
+        key = "profile-web-login-confirm",
+        priority = 590,
+        enabled = active && state.webLoginTargetId != null && !state.isWebLoginAuthorizing,
+        onBack = { dispatch(ProfileAction.DismissWebLoginConfirm) },
+    )
+    BackLayer(
+        key = "profile-transfer",
+        priority = 580,
+        enabled = active && state.transferOpen,
+        onBack = { dispatch(ProfileAction.DismissTransfer) },
+    )
+    BackLayer(
+        key = "profile-close",
+        priority = 500,
+        enabled = active && (state.closeOnBack || !state.isSelfProfile) && !isOverlayOpen,
+        onBack = { dispatch(ProfileAction.CloseProfile) },
+    )
+    BackLayer(
+        key = "profile-content",
+        priority = 510,
+        enabled = active && state.contentOpen && !isOverlayOpen,
+        onBack = { dispatch(ProfileAction.DismissContent) },
+    )
+    BackLayer(
+        key = "profile-settings",
+        priority = 520,
+        enabled = active && state.settingsOpen && !state.filterSettingsOpen && !state.themeEditorOpen,
+        onBack = { dispatch(ProfileAction.DismissSettings) },
+    )
+    BackLayer(
+        key = "profile-filter-settings",
+        priority = 530,
+        enabled = active && state.filterSettingsOpen,
+        onBack = { dispatch(ProfileAction.DismissFilterSettings) },
+    )
+    BackLayer(
+        key = "profile-theme-editor",
+        priority = 540,
+        enabled = active && state.themeEditorOpen,
+        onBack = { dispatch(ProfileAction.DismissThemeEditor) },
+    )
+    BackLayer(
+        key = "profile-about",
+        priority = 550,
+        enabled = active && state.aboutOpen,
+        onBack = { dispatch(ProfileAction.DismissAbout) },
+    )
 }
 
 @Composable

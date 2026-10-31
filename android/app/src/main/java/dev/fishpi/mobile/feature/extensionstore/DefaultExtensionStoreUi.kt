@@ -1,7 +1,7 @@
 package dev.fishpi.mobile.feature.extensionstore
 
 import android.content.ClipData
-import androidx.activity.compose.BackHandler
+import dev.fishpi.mobile.ui.back.BackLayer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -144,6 +144,7 @@ private enum class StoreItemAction {
 @Composable
 internal fun DefaultExtensionStoreUi(
     state: ExtensionStoreState,
+    active: Boolean = true,
     dispatch: (ExtensionStoreAction) -> Unit,
     onImportTheme: (String, Long, String) -> Result<String>,
     themeSaveState: (String, Long, String) -> StoreThemeSaveState,
@@ -243,12 +244,17 @@ internal fun DefaultExtensionStoreUi(
 
 
     if (uploadOpen) {
-        BackHandler {
-            if (!state.isUploading) {
-                uploadOpen = false
-                editingInitial = null
-            }
-        }
+        BackLayer(
+            key = "extension-store-upload",
+            priority = 340,
+            enabled = active,
+            onBack = {
+                if (!state.isUploading) {
+                    uploadOpen = false
+                    editingInitial = null
+                }
+            },
+        )
         StoreUploadPage(
             initialType = editingInitial?.type ?: state.selectedFilter.type ?: ExtensionStoreClient.TypeAppExtension,
             initial = editingInitial,
@@ -276,7 +282,12 @@ internal fun DefaultExtensionStoreUi(
     }
 
     if (draftsOpen) {
-        BackHandler { draftsOpen = false }
+        BackLayer(
+            key = "extension-store-drafts",
+            priority = 330,
+            enabled = active,
+            onBack = { draftsOpen = false },
+        )
         StoreDraftsPage(
             drafts = state.drafts,
             isLoading = state.isLoadingDrafts,
@@ -292,7 +303,12 @@ internal fun DefaultExtensionStoreUi(
     }
 
     if (manageOpen) {
-        BackHandler { manageOpen = false }
+        BackLayer(
+            key = "extension-store-manage",
+            priority = 320,
+            enabled = active,
+            onBack = { manageOpen = false },
+        )
         PluginListSheet(onDismiss = { manageOpen = false })
         return
     }
@@ -302,9 +318,12 @@ internal fun DefaultExtensionStoreUi(
         val item = activeDetailItem
         val fullItem = detailById[item.id] ?: item
         val versions = versionsById[item.id].orEmpty()
-        BackHandler {
-            detailItem = null
-        }
+        BackLayer(
+            key = "extension-store-detail",
+            priority = 310,
+            enabled = active,
+            onBack = { detailItem = null },
+        )
         StoreItemDetailPage(
             item = fullItem,
             token = state.session?.accessToken,

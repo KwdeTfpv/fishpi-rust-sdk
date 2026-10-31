@@ -437,13 +437,15 @@ private class ChatVideoCard(
 
     fun releasePlayer() {
         removeCallbacks(hideControlsRunnable)
+        val activeSession = session
         val activeView = playerView
         if (activeView != null) {
-            session?.unbindInline(activeView)
+            activeSession?.unbindInline(activeView)
             removeView(activeView)
         }
         playerView = null
         session = null
+        activeSession?.releaseIfIdle()
     }
 
     private fun setControlsVisible(visible: Boolean) {

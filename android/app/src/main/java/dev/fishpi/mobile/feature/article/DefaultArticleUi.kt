@@ -11,7 +11,6 @@ import dev.fishpi.mobile.*
 import android.text.Html
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -19,6 +18,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.ui.zIndex
 import dev.fishpi.mobile.ui.motion.FishPiMotion
 import dev.fishpi.mobile.ui.overlay.LocalMediaOverlay
+import dev.fishpi.mobile.ui.back.BackLayer
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -214,6 +214,7 @@ private enum class ArticleScreenState { List, JumpLoading, Detail }
 internal fun DefaultArticleUi(
     state: ArticleState,
     dispatch: (ArticleAction) -> Unit,
+    active: Boolean = true,
     pendingJump: Boolean = false,
     pendingJumpSummary: ArticleSummary? = null,
     pluginToolbarEntries: List<PluginToolbarEntry> = emptyList(),
@@ -349,9 +350,12 @@ internal fun DefaultArticleUi(
     }
     }
 
-    BackHandler(enabled = state.selected != null) {
-        dispatch(ArticleAction.CloseDetail)
-    }
+    BackLayer(
+        key = "article-detail",
+        priority = 200,
+        enabled = active && state.selected != null,
+        onBack = { dispatch(ArticleAction.CloseDetail) },
+    )
 }
 
 @Composable
