@@ -137,6 +137,7 @@ import dev.fishpi.mobile.ui.media.rememberChatAttachmentPicker
 import dev.fishpi.mobile.ui.overlay.LocalMediaOverlay
 import dev.fishpi.mobile.ui.overlay.LinkPreviewOverlay
 import dev.fishpi.mobile.data.ChatContentKind
+import dev.fishpi.mobile.data.ChatMediaKind
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.ChatOnlineUser
@@ -1406,13 +1407,7 @@ private fun ChatRoomMessage.preloadImages(): List<ChatPreloadImage> {
         userAvatarURL.takeIf { it.isNotBlank() }?.let {
             add(ChatPreloadImage(it, 72, 72))
         }
-        quote?.imageUrls
-            ?.firstOrNull()
-            ?.takeIf { it.isNotBlank() && !it.isAnimatedListImageUrl() }
-            ?.let {
-                add(ChatPreloadImage(it, 96, 96))
-            }
-        imageUrls
+        mediaUrls(ChatMediaKind.Image)
             .firstOrNull()
             ?.takeIf { it.isNotBlank() && !it.isAnimatedListImageUrl() }
             ?.let {

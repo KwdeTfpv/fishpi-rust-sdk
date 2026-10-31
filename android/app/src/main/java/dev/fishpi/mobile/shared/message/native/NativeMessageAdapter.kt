@@ -1011,7 +1011,7 @@ internal class NativeMessageViewHolder(
         addView(textView)
         renderJob = markdownRenderer.renderInto(
             textView = textView,
-            messageKey = message.stableNativeKey() + keySuffix,
+            messageKey = item.stableNativeKey() + keySuffix,
             markdown = markdown,
             fallback = item.renderHints.plainFallback,
         )
