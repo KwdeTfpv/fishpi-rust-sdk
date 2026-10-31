@@ -17,6 +17,141 @@ pub(crate) fn strip_html_tags(input: &str) -> String {
         .to_string()
 }
 
+
+pub(crate) fn html_to_markdown(input: &str) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut quote_depth = 0usize;
+    let mut anchors: Vec<String> = Vec::new();
+    let mut i = 0usize;
+    while i < input.len() {
+        let ch = input[i..].chars().next().unwrap_or_default();
+        if ch != '<' {
+            push_html_text(&mut current, ch);
+            i += ch.len_utf8();
+            continue;
+        }
+        let Some(end_rel) = input[i + 1..].find('>') else {
+            for ch in input[i..].chars() {
+                push_html_text(&mut current, ch);
+            }
+            break;
+        };
+        let tag_end = i + 1 + end_rel;
+        let tag = &input[i + 1..tag_end];
+        let lower = tag.trim().to_ascii_lowercase();
+        let closing = lower.starts_with('/');
+        let name = lower
+            .trim_start_matches('/')
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .trim_end_matches('/');
+        match name {
+            "blockquote" => {
+                flush_html_line(&mut lines, &mut current, quote_depth);
+                if closing {
+                    quote_depth = quote_depth.saturating_sub(1);
+                    push_html_blank(&mut lines, quote_depth);
+                } else {
+                    quote_depth += 1;
+                }
+            }
+            "p" | "div" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "li" | "tr" => {
+                flush_html_line(&mut lines, &mut current, quote_depth);
+                if closing {
+                    push_html_blank(&mut lines, quote_depth);
+                }
+            }
+            "br" => flush_html_line(&mut lines, &mut current, quote_depth),
+            "img" => {
+                if let Some(src) = html_tag_attr(tag, "src") {
+                    current.push_str("![图片](");
+                    current.push_str(&decode_html_entities(src));
+                    current.push(')');
+                }
+            }
+            "a" => {
+                if closing {
+                    if let Some(href) = anchors.pop() {
+                        current.push_str("](");
+                        current.push_str(&href);
+                        current.push(')');
+                    }
+                } else if let Some(href) = html_tag_attr(tag, "href") {
+                    anchors.push(decode_html_entities(href));
+                    current.push('[');
+                }
+            }
+            _ => {}
+        }
+        i = tag_end + 1;
+    }
+    flush_html_line(&mut lines, &mut current, quote_depth);
+    while lines.last().is_some_and(|line| {
+        line.trim().is_empty() || line.chars().all(|c| c == '>' || c.is_whitespace())
+    }) {
+        lines.pop();
+    }
+    let mut out = lines.join("\n");
+    while out.contains("\n\n\n") {
+        out = out.replace("\n\n\n", "\n\n");
+    }
+    out.trim().to_string()
+}
+
+fn push_html_text(out: &mut String, ch: char) {
+    if ch.is_whitespace() {
+        if !out.is_empty() && !out.ends_with(' ') {
+            out.push(' ');
+        }
+    } else {
+        out.push(ch);
+    }
+}
+
+fn flush_html_line(lines: &mut Vec<String>, current: &mut String, depth: usize) {
+    let text = decode_html_entities(current.trim());
+    current.clear();
+    if text.is_empty() {
+        return;
+    }
+    let prefix = "> ".repeat(depth);
+    let line = format!("{prefix}{text}");
+    if lines.last() != Some(&line) {
+        lines.push(line);
+    }
+}
+
+fn push_html_blank(lines: &mut Vec<String>, depth: usize) {
+    let blank = if depth == 0 {
+        String::new()
+    } else {
+        "> ".repeat(depth).trim_end().to_string()
+    };
+    if lines.last() != Some(&blank) {
+        lines.push(blank);
+    }
+}
+
+fn html_tag_attr<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
+    let lower = tag.to_ascii_lowercase();
+    let pos = lower.find(name)?;
+    let rest = &tag[pos + name.len()..];
+    let eq = rest.find('=')?;
+    read_attr_value(rest[eq + 1..].trim_start())
+}
+
+fn decode_html_entities(input: &str) -> String {
+    input
+        .replace("&nbsp;", " ")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
+}
+
 pub(crate) fn extract_image_urls(html: &str, markdown_or_text: &str) -> Vec<String> {
     let mut urls = Vec::new();
     collect_img_src_urls(html, &mut urls);

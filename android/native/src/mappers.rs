@@ -1,4 +1,4 @@
-use crate::media::{extract_image_urls, extract_link_urls, extract_video_urls, strip_html_tags};
+use crate::media::{extract_image_urls, extract_link_urls, extract_video_urls, html_to_markdown, strip_html_tags};
 use fishpi_sdk::domain::article::{
     ArticleDetail, ArticleDraftDetail, ArticleDraftSummary, ArticleListType, VoteStatus,
 };
@@ -97,7 +97,7 @@ fn chat_media_to_json(html: &str, markdown: &str) -> Value {
 fn chat_content_text(html: &str, markdown: &str) -> String {
     let trimmed = markdown.trim();
     let mut text = if trimmed.is_empty() {
-        strip_html_tags(html)
+        html_to_markdown(html)
     } else {
         trimmed.to_string()
     };
