@@ -930,6 +930,33 @@ pub(crate) fn custom_to_json(message: CustomMsg) -> Value {
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::{chat_content_text, chat_media_to_json};
+
+    #[test]
+    fn media_json_keeps_image_video_link_order() {
+        let html = r#"<p><img src="https://file.fishpi.cn/a.jpg"><a href="https://fishpi.cn/b">b</a></p>"#;
+        let markdown = "![c](https://file.fishpi.cn/c.jpg) [v](https://file.fishpi.cn/d.mp4) https://fishpi.cn/e";
+        let media = chat_media_to_json(html, markdown);
+        let items = media.as_array().expect("media array");
+        assert_eq!(items[0]["kind"], "image");
+        assert_eq!(items[0]["url"], "https://file.fishpi.cn/a.jpg");
+        assert_eq!(items[1]["kind"], "image");
+        assert_eq!(items[1]["url"], "https://file.fishpi.cn/c.jpg");
+        assert_eq!(items[2]["kind"], "video");
+        assert_eq!(items[2]["url"], "https://file.fishpi.cn/d.mp4");
+        assert!(items.iter().any(|item| item["url"] == "https://fishpi.cn/b"));
+        assert!(items.iter().any(|item| item["url"] == "https://fishpi.cn/e"));
+    }
+
+    #[test]
+    fn video_fallback_text_is_removed() {
+        let html = r#"<p>前<video src="https://file.fishpi.cn/a.mp4">您的浏览器不支持该媒体的播放</video>后</p>"#;
+        assert_eq!(chat_content_text(html, ""), "前后");
+    }
+}
+
 pub(crate) fn redpacket_preview_from_value(value: &Value, self_username: &str) -> Option<Value> {
     let obj = value.as_object()?;
     let type_raw = obj.get("type").and_then(|x| x.as_str()).unwrap_or("");
