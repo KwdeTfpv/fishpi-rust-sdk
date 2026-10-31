@@ -89,8 +89,8 @@ private fun ChatRoomMessage.toQuoteParts(): QuoteParts {
 
 private fun ChatRoomMessage.allQuoteImageUrls(): List<String> {
     return buildList {
-        addAll(imageUrls)
-        listOf(md, content).forEach { source ->
+        addAll(mediaUrls("image"))
+        listOf(content).forEach { source ->
             MarkdownImageRegex.findAll(source).forEach { match ->
                 add(match.groupValues.getOrNull(1).orEmpty())
             }

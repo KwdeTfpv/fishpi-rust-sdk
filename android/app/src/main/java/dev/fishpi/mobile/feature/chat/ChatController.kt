@@ -1429,7 +1429,7 @@ internal class ChatController(
     }
 
     private fun revokeMessage(message: ChatRoomMessage) {
-        if (message.revoked || message.oId.isBlank() || message.type == "redPacket") return
+        if (message.revoked || message.oId.isBlank() || message.contentKind == ChatContentKind.RedPacket) return
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {

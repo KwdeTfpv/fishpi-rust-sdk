@@ -4,18 +4,17 @@ import dev.fishpi.mobile.AppSession
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import dev.fishpi.mobile.data.ChatContentKind
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.utils.toChatTimeLabel
 import dev.fishpi.mobile.utils.toEpochMillisOrNull
-import dev.fishpi.mobile.utils.toPlainMessageText
 import dev.fishpi.mobile.utils.toSystemLocalDate
 
 internal val ChatRoomMessage.renderSource: String
-    get() = md.ifBlank { content }
+    get() = content
 
 internal fun ChatRoomMessage.copyableText(): String {
-    val text = md.ifBlank { content.toPlainMessageText() }.trim()
-    val mdText = md.trim()
+    val text = content.trim()
     val quoteText = quote?.text?.trim().orEmpty()
     val quoteImages = quote?.imageUrls
         ?.filter(String::isNotBlank)
@@ -23,13 +22,12 @@ internal fun ChatRoomMessage.copyableText(): String {
         .orEmpty()
 
     return buildList {
-        when {
-            text.isNotBlank() -> add(text)
-            mdText.isNotBlank() -> add(mdText)
+        if (text.isNotBlank()) {
+            add(text)
         }
 
         if (quoteText.isNotBlank()) {
-            val duplicatedInBody = text.contains(quoteText) || mdText.contains(quoteText)
+            val duplicatedInBody = text.contains(quoteText)
             if (!duplicatedInBody) {
                 add("引用消息：$quoteText")
             }
@@ -37,19 +35,19 @@ internal fun ChatRoomMessage.copyableText(): String {
 
         if (quoteImages.isNotEmpty()) {
             val quoteImageText = quoteImages.joinToString("\n")
-            val duplicatedInBody = text.contains(quoteImageText) || mdText.contains(quoteImageText)
+            val duplicatedInBody = text.contains(quoteImageText)
             if (!duplicatedInBody) {
                 add("引用图片：\n$quoteImageText")
             }
         }
 
-        imageUrls
+        mediaUrls("image")
             .filter(String::isNotBlank)
             .distinct()
             .takeIf { it.isNotEmpty() }
             ?.joinToString("\n")
             ?.let(::add)
-        linkUrls
+        mediaUrls("link")
             .filter(String::isNotBlank)
             .distinct()
             .takeIf { it.isNotEmpty() }
@@ -66,15 +64,11 @@ internal fun Context.copyToClipboard(label: String, text: String) {
 }
 
 internal fun ChatRoomMessage.repeatableDraftContent(includeImageFallback: Boolean = true): String {
-    val mdText = md.trim()
-    if (mdText.isNotBlank()) {
-        return mdText
-    }
     val text = content.trim()
     if (text.isNotBlank() || !includeImageFallback) {
         return text
     }
-    return imageUrls.joinToString("\n") { url -> "![图片]($url)" }
+    return mediaUrls("image").joinToString("\n") { url -> "![图片]($url)" }
 }
 
 internal fun List<ChatRoomMessage>.markMessageRevoked(messageId: String): List<ChatRoomMessage> {
@@ -95,7 +89,7 @@ internal fun ChatRoomMessage.canBeRevokedBy(
     allowRevokeOthers: Boolean = session.user.canRevokeOthers,
     excludeRedPacket: Boolean = true,
 ): Boolean {
-    if (revoked || oId.isBlank() || (excludeRedPacket && type == "redPacket")) {
+    if (revoked || oId.isBlank() || (excludeRedPacket && contentKind == ChatContentKind.RedPacket)) {
         return false
     }
     return userName.equals(session.user.userName, ignoreCase = true) || allowRevokeOthers

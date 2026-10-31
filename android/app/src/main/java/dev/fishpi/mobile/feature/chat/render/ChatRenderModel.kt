@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.feature.chat.render
 
 import dev.fishpi.mobile.data.ChatFilterConfig
+import dev.fishpi.mobile.data.ChatContentKind
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.feature.chat.blocksChatMessage
 import dev.fishpi.mobile.shared.message.ChatListItem
@@ -225,17 +226,19 @@ private fun buildStackedItems(messages: List<ChatRoomMessage>): List<StackGroup>
 }
 
 private fun shouldStack(message: ChatRoomMessage): Boolean {
-    return message.type != "system" && message.type != "redPacket" && message.redPacket == null
+    return message.contentKind != ChatContentKind.System &&
+        message.contentKind != ChatContentKind.RedPacket &&
+        message.redPacket == null
 }
 
 private val StackFieldSeparator = Char(0x1E).toString()
 private val StackMediaSeparator = Char(0x1F).toString()
 
 private fun ChatRoomMessage.repeatStackKey(): String {
-    val mediaUrls = (allRenderableImageUrls() + linkUrls.filter { it.isDirectVideoUrl() })
+    val mediaKey = (allRenderableImageUrls() + mediaUrls("link").filter { it.isDirectVideoUrl() })
         .distinct()
         .joinToString(StackMediaSeparator)
-    return listOf(content, mediaUrls).joinToString(StackFieldSeparator)
+    return listOf(content, mediaKey).joinToString(StackFieldSeparator)
 }
 
 internal fun ChatRoomMessage.renderHintCacheKey(): String {
@@ -253,14 +256,14 @@ internal fun ChatRoomMessage.renderHintCacheKey(): String {
     }.orEmpty()
     return listOf(
         stableMessageIdentity(),
-        type,
+        contentKind.wire,
         revoked.toString(),
         userAvatarURL,
         client,
         time,
         renderSource.hashCode().toString(),
-        linkUrls.hashCode().toString(),
-        imageUrls.hashCode().toString(),
+        mediaUrls("link").hashCode().toString(),
+        mediaUrls("image").hashCode().toString(),
         reactionSummary.hashCode().toString(),
         currentUserReaction,
         redPacketKey,

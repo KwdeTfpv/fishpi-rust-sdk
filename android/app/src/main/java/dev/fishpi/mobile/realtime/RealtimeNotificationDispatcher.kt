@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.realtime
 
 import android.content.Context
+import dev.fishpi.mobile.data.ChatContentKind
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.NotificationPrefs
 import dev.fishpi.mobile.data.PrivateChatNotice
@@ -48,7 +49,10 @@ class RealtimeNotificationDispatcher(
         if (chatRoomVisible && appInForeground) {
             return
         }
-        if (message.type == "system" || message.type == "barrage" || message.userName.isBlank()) {
+        if (message.contentKind == ChatContentKind.System ||
+            message.contentKind == ChatContentKind.Barrage ||
+            message.userName.isBlank()
+        ) {
             return
         }
         val prefs = store.getNotificationPrefs()

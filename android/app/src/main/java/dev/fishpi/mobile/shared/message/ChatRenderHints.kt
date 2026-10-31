@@ -119,8 +119,8 @@ internal fun previewableContentLinkUrls(
 private fun ChatRoomMessage.previewLinkUrls(markdownContent: String): List<String> {
     return previewableContentLinkUrls(
         content = markdownContent,
-        linkUrls = linkUrls,
-        imageUrls = imageUrls,
+        linkUrls = mediaUrls("link"),
+        imageUrls = mediaUrls("image"),
         renderableImageUrls = allRenderableImageUrls(),
     )
 }

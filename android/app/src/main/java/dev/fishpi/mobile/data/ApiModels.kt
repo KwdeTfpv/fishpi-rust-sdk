@@ -86,17 +86,8 @@ data class ChatRoomMessage(
     val music: MusicPreview? = null,
     val quote: ChatQuotePreview? = null,
 ) {
-    val md: String
-        get() = content
-
-    val imageUrls: List<String>
-        get() = media.filter { it.kind == "image" }.map { it.url }
-
-    val linkUrls: List<String>
-        get() = media.filter { it.kind == "link" }.map { it.url }
-
-    val type: String
-        get() = contentKind.wire
+    fun mediaUrls(kind: String): List<String> =
+        media.filter { it.kind == kind }.map { it.url }
 
     val isBarrager: Boolean
         get() = contentKind == ChatContentKind.Barrage

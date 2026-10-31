@@ -47,6 +47,7 @@ import dev.fishpi.mobile.shared.message.ChatListItem
 import dev.fishpi.mobile.shared.message.allRenderableImageUrls
 import dev.fishpi.mobile.R
 import dev.fishpi.mobile.chatui.MarkwonChatRenderer
+import dev.fishpi.mobile.data.ChatContentKind
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.feature.redpacket.RedPacketGestureOptions
 import dev.fishpi.mobile.feature.redpacket.toRedPacketUiModel
@@ -644,7 +645,7 @@ internal class NativeMessageViewHolder(
             view.addView(serviceText(separator))
         }
 
-        if (message.type == "system") {
+        if (message.contentKind == ChatContentKind.System) {
             view.addView(serviceText(message.content))
             return
         }

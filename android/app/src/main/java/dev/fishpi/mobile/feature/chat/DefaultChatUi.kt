@@ -136,6 +136,7 @@ import dev.fishpi.mobile.ui.components.silentTap
 import dev.fishpi.mobile.ui.media.rememberChatAttachmentPicker
 import dev.fishpi.mobile.ui.overlay.LocalMediaOverlay
 import dev.fishpi.mobile.ui.overlay.LinkPreviewOverlay
+import dev.fishpi.mobile.data.ChatContentKind
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.ChatOnlineUser
@@ -483,7 +484,7 @@ private fun DefaultChatUiContent(
         }
         visibleMessages.forEach { msg ->
             if (dispatchedIds.add(msg.oId)) {
-                val eventType = when { msg.redPacket != null -> "redPacket"; msg.type == "system" -> "system"; else -> "msg" }
+                val eventType = when { msg.redPacket != null -> "redPacket"; msg.contentKind == ChatContentKind.System -> "system"; else -> "msg" }
                 dispatch(ChatAction.NotifyPluginMessage(msg, eventType))
             }
         }
