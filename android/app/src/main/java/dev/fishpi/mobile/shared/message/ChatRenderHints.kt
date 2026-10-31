@@ -29,7 +29,7 @@ internal data class ChatMessageRenderHints(
 )
 
 internal fun ChatRoomMessage.toRenderHints(avatarModel: Any? = null): ChatMessageRenderHints {
-    val markdownContent = renderSource.trim()
+    val markdownContent = renderSource.trim().withMediaImages(media)
     val inlineVideoLinks = markdownContent.markdownVideoUrls()
     val videoLinks = previewVideoUrls().filterNot(inlineVideoLinks::contains)
     val plainFallback = markdownContent.toPlainMessageText()
@@ -52,6 +52,26 @@ internal fun ChatRoomMessage.toRenderHints(avatarModel: Any? = null): ChatMessag
             imageTokens = imageTokens,
         ),
     )
+}
+
+private fun String.withMediaImages(media: List<dev.fishpi.mobile.data.ChatMedia>): String {
+    val existing = extractImageTokens()
+        .filter { it.type == MarkdownMediaType.Image }
+        .map { it.url.normalizeWebUrl() }
+        .toSet()
+    val missing = media
+        .asSequence()
+        .filter { it.kind == "image" }
+        .map { it.url.normalizeWebUrl() }
+        .filter { it.isNotBlank() && it !in existing }
+        .distinct()
+        .toList()
+    if (missing.isEmpty()) return this
+    return buildString {
+        append(trim())
+        if (isNotBlank()) append("\n\n")
+        missing.forEach { url -> append("![图片](").append(url).append(")\n") }
+    }.trim()
 }
 
 private fun computeIsMediaOnly(
