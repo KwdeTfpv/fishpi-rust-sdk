@@ -84,7 +84,6 @@ data class ChatRoomMessage(
     val currentUserReaction: String = "",
     val redPacket: RedPacketPreview? = null,
     val music: MusicPreview? = null,
-    val quote: ChatQuotePreview? = null,
 ) {
     fun mediaUrls(kind: String): List<String> =
         media.filter { it.kind == kind }.map { it.url }
@@ -170,11 +169,6 @@ data class MusicPreview(
     val source: String = "",
     val title: String = "",
     val from: String = "",
-)
-
-data class ChatQuotePreview(
-    val text: String,
-    val imageUrls: List<String> = emptyList(),
 )
 
 data class RedPacketPreview(
