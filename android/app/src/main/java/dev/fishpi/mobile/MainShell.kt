@@ -575,7 +575,7 @@ internal fun MainShell(
 
                         FishTab.Article -> {
                             val tabActive by remember {
-                                derivedStateOf { pagerState.settledPage == FishTab.Article.ordinal }
+                                derivedStateOf { pagerState.currentPage == FishTab.Article.ordinal }
                             }
                             Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
                                 ArticleRoute(

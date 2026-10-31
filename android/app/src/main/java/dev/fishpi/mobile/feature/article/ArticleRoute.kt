@@ -167,6 +167,13 @@ internal fun ArticleRoute(
                 state = state,
                 dispatch = dispatch,
                 active = active,
+                onCloseDetail = {
+                    if (state.selected != null) {
+                        controller.dispatch(ArticleAction.CloseDetail)
+                    } else {
+                        onDetailClosed()
+                    }
+                },
                 pendingJump = pendingArticleJump,
                 pendingJumpSummary = if (pendingArticleJump && jumpSummary?.id == jumpArticleId) jumpSummary else null,
                 pluginToolbarEntries = controller.pluginToolbarEntries,

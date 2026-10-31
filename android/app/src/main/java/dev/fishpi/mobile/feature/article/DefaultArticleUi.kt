@@ -215,6 +215,7 @@ internal fun DefaultArticleUi(
     state: ArticleState,
     dispatch: (ArticleAction) -> Unit,
     active: Boolean = true,
+    onCloseDetail: () -> Unit = { dispatch(ArticleAction.CloseDetail) },
     pendingJump: Boolean = false,
     pendingJumpSummary: ArticleSummary? = null,
     pluginToolbarEntries: List<PluginToolbarEntry> = emptyList(),
@@ -353,8 +354,8 @@ internal fun DefaultArticleUi(
     BackLayer(
         key = "article-detail",
         priority = 200,
-        enabled = active && state.selected != null,
-        onBack = { dispatch(ArticleAction.CloseDetail) },
+        enabled = active && (state.selected != null || pendingJump || pendingJumpSummary != null),
+        onBack = onCloseDetail,
     )
 }
 
