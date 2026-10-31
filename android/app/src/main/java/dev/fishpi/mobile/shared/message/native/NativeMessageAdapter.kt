@@ -721,7 +721,13 @@ internal class NativeMessageViewHolder(
         val bubble = ChatBubbleFrame(context)
         val metaHost = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         val reactionHost = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        val repeatHost = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val repeatHost = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            )
+        }
         return Skeleton(row, column, authorLine, authorName, bubble, metaHost, reactionHost, repeatHost)
     }
 
