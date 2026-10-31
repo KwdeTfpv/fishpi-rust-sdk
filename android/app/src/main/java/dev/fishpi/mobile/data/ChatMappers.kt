@@ -13,6 +13,7 @@ internal fun JSONObject.toChatRoomMessage(): ChatRoomMessage {
         contentKind = ChatContentKind.fromWire(optString("contentKind", "markdown")),
         media = optJSONArray("media").toChatMediaList(),
         time = optString("time"),
+        schema = optInt("schema", 1),
         client = optString("client"),
         barragerColor = optString("barragerColor"),
         reactionSummary = optJSONArray("reactionSummary").toReactionSummaryList(),
@@ -32,6 +33,7 @@ internal fun JSONObject.toPrivateChatMessage(): PrivateChatMessage {
         contentKind = ChatContentKind.fromWire(optString("contentKind", "markdown")),
         media = optJSONArray("media").toChatMediaList(),
         time = optString("time"),
+        schema = optInt("schema", 1),
     )
 }
 
@@ -45,6 +47,7 @@ internal fun PrivateChatMessage.toChatRoomMessage(): ChatRoomMessage {
         contentKind = contentKind,
         media = media,
         time = time,
+        schema = schema,
     )
 }
 
@@ -58,7 +61,7 @@ internal fun JSONArray?.toChatMediaList(): List<ChatMedia> {
             val kind = item.optString("kind").trim()
             val url = item.optString("url").trim()
             if (kind.isNotEmpty() && url.isNotEmpty()) {
-                add(ChatMedia(kind = kind, url = url))
+                add(ChatMedia(kind = ChatMediaKind.fromWire(kind), url = url))
             }
         }
     }

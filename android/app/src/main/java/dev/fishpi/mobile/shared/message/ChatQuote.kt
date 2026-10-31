@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.shared.message
 
+import dev.fishpi.mobile.data.ChatMediaKind
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.utils.HtmlTagRegex
 import dev.fishpi.mobile.utils.MarkdownImageRegex
@@ -86,7 +87,7 @@ private fun ChatRoomMessage.toQuoteParts(): QuoteParts {
 }
 
 private fun ChatRoomMessage.allQuoteImageUrls(): List<String> {
-    return mediaUrls("image")
+    return mediaUrls(ChatMediaKind.Image)
         .map(String::cleanMarkdownUrl)
         .filter(String::isNotBlank)
         .distinct()

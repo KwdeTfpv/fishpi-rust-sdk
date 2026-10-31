@@ -62,8 +62,20 @@ enum class ChatContentKind(val wire: String) {
     }
 }
 
+enum class ChatMediaKind(val wire: String) {
+    Image("image"),
+    Video("video"),
+    Link("link"),
+    ;
+
+    companion object {
+        fun fromWire(value: String): ChatMediaKind =
+            values().firstOrNull { it.wire.equals(value, ignoreCase = true) } ?: Link
+    }
+}
+
 data class ChatMedia(
-    val kind: String,
+    val kind: ChatMediaKind,
     val url: String,
 )
 
@@ -76,6 +88,7 @@ data class PrivateChatMessage(
     val contentKind: ChatContentKind = ChatContentKind.Markdown,
     val media: List<ChatMedia> = emptyList(),
     val time: String,
+    val schema: Int = 2,
 )
 
 data class ChatRoomMessage(
@@ -87,6 +100,7 @@ data class ChatRoomMessage(
     val contentKind: ChatContentKind = ChatContentKind.Markdown,
     val media: List<ChatMedia> = emptyList(),
     val time: String,
+    val schema: Int = 2,
     val client: String = "",
     val barragerColor: String = "",
     val reactionSummary: List<ReactionSummaryItem> = emptyList(),
@@ -94,7 +108,7 @@ data class ChatRoomMessage(
     val redPacket: RedPacketPreview? = null,
     val music: MusicPreview? = null,
 ) {
-    fun mediaUrls(kind: String): List<String> =
+    fun mediaUrls(kind: ChatMediaKind): List<String> =
         media.filter { it.kind == kind }.map { it.url }
 
     val isBarrager: Boolean
@@ -122,9 +136,10 @@ data class ChatRoomMessage(
         put("userAvatarURL", userAvatarURL)
         put("content", content)
         put("contentKind", contentKind.wire)
+        put("schema", schema)
         put("media", org.json.JSONArray(media.map {
             org.json.JSONObject().apply {
-                put("kind", it.kind)
+                put("kind", it.kind.wire)
                 put("url", it.url)
             }
         }))

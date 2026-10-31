@@ -2,6 +2,7 @@ package dev.fishpi.mobile.feature.chat.render
 
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.ChatContentKind
+import dev.fishpi.mobile.data.ChatMediaKind
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.feature.chat.blocksChatMessage
 import dev.fishpi.mobile.shared.message.ChatListItem
@@ -252,7 +253,7 @@ private val StackFieldSeparator = Char(0x1E).toString()
 private val StackMediaSeparator = Char(0x1F).toString()
 
 private fun ChatRoomMessage.repeatStackKey(): String {
-    val mediaKey = (allRenderableImageUrls() + mediaUrls("link").filter { it.isDirectVideoUrl() })
+    val mediaKey = (allRenderableImageUrls() + mediaUrls(ChatMediaKind.Link).filter { it.isDirectVideoUrl() })
         .distinct()
         .joinToString(StackMediaSeparator)
     return listOf(content, mediaKey).joinToString(StackFieldSeparator)
@@ -279,8 +280,8 @@ internal fun ChatRoomMessage.renderHintCacheKey(revoked: Boolean = false): Strin
         client,
         time,
         renderSource.hashCode().toString(),
-        mediaUrls("link").hashCode().toString(),
-        mediaUrls("image").hashCode().toString(),
+        mediaUrls(ChatMediaKind.Link).hashCode().toString(),
+        mediaUrls(ChatMediaKind.Image).hashCode().toString(),
         reactionSummary.hashCode().toString(),
         currentUserReaction,
         redPacketKey,

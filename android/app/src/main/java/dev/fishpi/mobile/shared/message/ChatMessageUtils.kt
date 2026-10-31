@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import dev.fishpi.mobile.data.ChatContentKind
+import dev.fishpi.mobile.data.ChatMediaKind
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.utils.toChatTimeLabel
 import dev.fishpi.mobile.utils.toEpochMillisOrNull
@@ -21,13 +22,13 @@ internal fun ChatRoomMessage.copyableText(): String {
             add(text)
         }
 
-        mediaUrls("image")
+        mediaUrls(ChatMediaKind.Image)
             .filter(String::isNotBlank)
             .distinct()
             .takeIf { it.isNotEmpty() }
             ?.joinToString("\n")
             ?.let(::add)
-        mediaUrls("link")
+        mediaUrls(ChatMediaKind.Link)
             .filter(String::isNotBlank)
             .distinct()
             .takeIf { it.isNotEmpty() }
@@ -48,7 +49,7 @@ internal fun ChatRoomMessage.repeatableDraftContent(includeImageFallback: Boolea
     if (text.isNotBlank() || !includeImageFallback) {
         return text
     }
-    return mediaUrls("image").joinToString("\n") { url -> "![图片]($url)" }
+    return mediaUrls(ChatMediaKind.Image).joinToString("\n") { url -> "![图片]($url)" }
 }
 
 internal fun ChatRoomMessage.canBeRevokedBy(

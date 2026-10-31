@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.shared.message
 
+import dev.fishpi.mobile.data.ChatMediaKind
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.utils.HtmlAnchorHrefRegex
 import dev.fishpi.mobile.utils.MarkdownMediaToken
@@ -63,7 +64,7 @@ private fun String.withMediaImages(media: List<dev.fishpi.mobile.data.ChatMedia>
         .toSet()
     val missing = media
         .asSequence()
-        .filter { it.kind == "image" }
+        .filter { it.kind == ChatMediaKind.Image }
         .map { it.url.normalizeWebUrl() }
         .filter { it.isNotBlank() && it !in existing }
         .distinct()
@@ -141,8 +142,8 @@ internal fun previewableContentLinkUrls(
 private fun ChatRoomMessage.previewLinkUrls(markdownContent: String): List<String> {
     return previewableContentLinkUrls(
         content = markdownContent,
-        linkUrls = mediaUrls("link"),
-        imageUrls = mediaUrls("image"),
+        linkUrls = mediaUrls(ChatMediaKind.Link),
+        imageUrls = mediaUrls(ChatMediaKind.Image),
         renderableImageUrls = allRenderableImageUrls(),
     )
 }
@@ -170,7 +171,7 @@ private fun String.extractLinkUrls(): List<String> {
 
 private fun ChatRoomMessage.previewVideoUrls(): List<String> {
     return media
-        .filter { it.kind == "video" }
+        .filter { it.kind == ChatMediaKind.Video }
         .map { it.url.normalizeWebUrl() }
         .filter(String::isNotBlank)
         .distinct()
@@ -211,7 +212,7 @@ private fun String.cleanClientType(): String {
 
 internal fun ChatRoomMessage.allRenderableImageUrls(): List<String> {
     return media
-        .filter { it.kind == "image" }
+        .filter { it.kind == ChatMediaKind.Image }
         .map { it.url.normalizeWebUrl() }
         .filter { it.isNotBlank() }
         .distinct()
