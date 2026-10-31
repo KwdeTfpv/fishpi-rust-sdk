@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import androidx.core.net.toUri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -41,7 +40,9 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -69,11 +70,15 @@ import coil3.size.Precision
 import coil3.size.Scale
 import coil3.size.Size
 import dev.fishpi.mobile.rememberFishPiImageLoader
+import dev.fishpi.mobile.ui.media.cleanupSharedImageCache
+import dev.fishpi.mobile.ui.media.imageExtensionOf
+import dev.fishpi.mobile.ui.media.openImageStream
 import java.io.File
-import java.net.URL
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -105,6 +110,13 @@ internal fun ImageViewer(
     var isSaving by remember { mutableStateOf(false) }
     var saveStatus by remember { mutableStateOf<String?>(null) }
     var isSharing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(saveStatus) {
+        val status = saveStatus ?: return@LaunchedEffect
+        if (status.startsWith("正在")) return@LaunchedEffect
+        delay(3_000)
+        saveStatus = null
+    }
 
     fun saveImage() {
         if (isSaving) return
@@ -269,6 +281,9 @@ private fun ZoomableImage(
     val context = LocalContext.current
     var scale by remember(url) { mutableFloatStateOf(1f) }
     var offset by remember(url) { mutableStateOf(Offset.Zero) }
+    var imageWidth by remember(url) { mutableFloatStateOf(0f) }
+    var imageHeight by remember(url) { mutableFloatStateOf(0f) }
+    var reloadKey by remember(url) { mutableIntStateOf(0) }
 
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize(),
@@ -276,12 +291,12 @@ private fun ZoomableImage(
     ) {
         val viewportWidthPx = constraints.maxWidth
         val viewportHeightPx = constraints.maxHeight
-        val request = remember(context, url, viewportWidthPx, viewportHeightPx) {
+        val request = remember(context, url, viewportWidthPx, viewportHeightPx, reloadKey) {
             ImageRequest.Builder(context)
                 .data(url)
                 .size(
                     if (viewportWidthPx > 0 && viewportHeightPx > 0) {
-                        Size(viewportWidthPx, viewportHeightPx)
+                        Size(viewportWidthPx * 2, viewportHeightPx * 2)
                     } else {
                         Size.ORIGINAL
                     },
@@ -306,7 +321,7 @@ private fun ZoomableImage(
                     translationY = offset.y
                     transformOrigin = TransformOrigin(0.5f, 0.5f)
                 }
-                .pointerInput(url) {
+                .pointerInput(url, imageWidth, imageHeight) {
                     // 统一手势循环：双指缩放/平移 + 放大后单指平移 + 1x 时单指竖直下滑关闭。
                     // 关键：1x 且横向为主的单指拖动不消费，交给 HorizontalPager 翻页。
                     awaitEachGesture {
@@ -333,7 +348,7 @@ private fun ZoomableImage(
                                     val center = Offset(size.width / 2f, size.height / 2f)
                                     val scaleChange = nextScale / oldScale
                                     val anchored = (offset + center - centroid) * scaleChange - center + centroid + panChange
-                                    clampOffset(anchored, nextScale, size.width.toFloat(), size.height.toFloat())
+                                    clampOffset(anchored, nextScale, imageWidth, imageHeight, size.width.toFloat(), size.height.toFloat())
                                 }
                                 event.changes.forEach { it.consume() }
                             } else if (pressedCount == 1) {
@@ -351,6 +366,8 @@ private fun ZoomableImage(
                                         offset = clampOffset(
                                             offset + panChange,
                                             scale,
+                                            imageWidth,
+                                            imageHeight,
                                             size.width.toFloat(),
                                             size.height.toFloat(),
                                         )
@@ -377,7 +394,7 @@ private fun ZoomableImage(
                         }
                     }
                 }
-                .pointerInput(url) {
+                .pointerInput(url, imageWidth, imageHeight) {
                     detectTapGestures(
                         onDoubleTap = { tap ->
                             if (scale > 1f) {
@@ -390,6 +407,8 @@ private fun ZoomableImage(
                                 offset = clampOffset(
                                     (center - tap) * (target - 1f),
                                     target,
+                                    imageWidth,
+                                    imageHeight,
                                     size.width.toFloat(),
                                     size.height.toFloat(),
                                 )
@@ -398,7 +417,17 @@ private fun ZoomableImage(
                     )
                 },
         ) {
-            when (painter.state.value) {
+            val painterState = painter.state.value
+            LaunchedEffect(painterState) {
+                if (painterState is coil3.compose.AsyncImagePainter.State.Success) {
+                    val intrinsic = painterState.painter.intrinsicSize
+                    if (intrinsic.width > 0f && intrinsic.height > 0f) {
+                        imageWidth = intrinsic.width
+                        imageHeight = intrinsic.height
+                    }
+                }
+            }
+            when (painterState) {
                 is coil3.compose.AsyncImagePainter.State.Loading -> Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
@@ -419,6 +448,9 @@ private fun ZoomableImage(
                             tint = Color.White.copy(alpha = 0.7f),
                         )
                         Text(text = "图片加载失败", color = Color.White.copy(alpha = 0.7f))
+                        TextButton(onClick = { reloadKey++ }) {
+                            Text(text = "重试", color = Color.White)
+                        }
                     }
                 }
                 else -> SubcomposeAsyncImageContent()
@@ -439,44 +471,31 @@ private fun LaunchedEffectPage(
 
 private enum class DragMode { Undecided, Transform, Pan, Dismiss, YieldToPager }
 
-private fun clampOffset(offset: Offset, scale: Float, width: Float, height: Float): Offset {
-    val horizontalBound = max(0f, (width * scale - width) / 2f)
-    val verticalBound = max(0f, (height * scale - height) / 2f)
+private fun clampOffset(
+    offset: Offset,
+    scale: Float,
+    imageWidth: Float,
+    imageHeight: Float,
+    viewportWidth: Float,
+    viewportHeight: Float,
+): Offset {
+    val fitScale = if (imageWidth > 0f && imageHeight > 0f) {
+        min(viewportWidth / imageWidth, viewportHeight / imageHeight)
+    } else {
+        1f
+    }
+    val displayedWidth = if (imageWidth > 0f) imageWidth * fitScale else viewportWidth
+    val displayedHeight = if (imageHeight > 0f) imageHeight * fitScale else viewportHeight
+    val horizontalBound = max(0f, (displayedWidth * scale - viewportWidth) / 2f)
+    val verticalBound = max(0f, (displayedHeight * scale - viewportHeight) / 2f)
     return Offset(
         x = offset.x.coerceIn(-horizontalBound, horizontalBound),
         y = offset.y.coerceIn(-verticalBound, verticalBound),
     )
 }
 
-private fun Context.openImageStream(source: String): java.io.InputStream {
-    val scheme = source.substringBefore(':').lowercase()
-    return if (scheme == "content" || scheme == "file") {
-        requireNotNull(contentResolver.openInputStream(source.toUri())) { "无法读取图片" }
-    } else {
-        URL(source).openStream()
-    }
-}
-
-private fun imageExtensionOf(source: String, context: Context): String {
-    val scheme = source.substringBefore(':').lowercase()
-    if (scheme == "content" || scheme == "file") {
-        val mime = context.contentResolver.getType(source.toUri()).orEmpty().lowercase()
-        return when (mime) {
-            "image/png" -> "png"
-            "image/webp" -> "webp"
-            "image/gif" -> "gif"
-            else -> "jpg"
-        }
-    }
-    return source.substringBefore('?')
-        .substringAfterLast('.', "jpg")
-        .lowercase()
-        .takeIf { it in setOf("jpg", "jpeg", "png", "webp", "gif") }
-        ?: "jpg"
-}
-
 private fun Context.saveImageToPictures(imageUrl: String): Uri {
-    val extension = imageExtensionOf(imageUrl, this)
+    val extension = imageExtensionOf(imageUrl)
     val mimeType = when (extension) {
         "png" -> "image/png"
         "webp" -> "image/webp"
@@ -516,7 +535,8 @@ private fun Context.saveImageToPictures(imageUrl: String): Uri {
 
 /** 下载到 cacheDir 并通过 FileProvider 生成可分享的 content:// URI。 */
 private fun Context.cacheImageForShare(imageUrl: String): Uri {
-    val extension = imageExtensionOf(imageUrl, this)
+    cleanupSharedImageCache()
+    val extension = imageExtensionOf(imageUrl)
     val dir = File(cacheDir, "shared-images").apply { mkdirs() }
     val file = File(dir, "fishpi-${System.currentTimeMillis()}.$extension")
     openImageStream(imageUrl).use { input ->
