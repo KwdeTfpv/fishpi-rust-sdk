@@ -245,6 +245,7 @@ private fun buildStackedItems(messages: List<ChatRoomMessage>): List<StackGroup>
 
 private fun shouldStack(message: ChatRoomMessage): Boolean {
     return message.contentKind != ChatContentKind.System &&
+        message.contentKind != ChatContentKind.Barrage &&
         message.contentKind != ChatContentKind.RedPacket &&
         message.redPacket == null
 }

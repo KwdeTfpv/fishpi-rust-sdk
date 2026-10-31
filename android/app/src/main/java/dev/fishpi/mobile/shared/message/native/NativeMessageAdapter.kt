@@ -891,6 +891,7 @@ internal class NativeMessageViewHolder(
 
         when {
             item.revoked -> frame.content.addText("[该消息已撤回]", 15f)
+            message.contentKind == ChatContentKind.Barrage -> frame.content.addText(message.content, 15f)
             message.redPacket != null -> frame.content.addRedPacket(message, isMine, frame)
             else -> {
                 val markdown = item.renderHints.markdownContent
