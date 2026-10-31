@@ -64,11 +64,30 @@ pub(crate) fn html_to_markdown(input: &str) -> String {
                     quote_depth += 1;
                 }
             }
-            "p" | "div" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "li" | "tr" => {
+            "p" | "div" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "tr" => {
                 flush_html_line(&mut lines, &mut current, quote_depth);
                 if closing {
                     push_html_blank(&mut lines, quote_depth);
                 }
+            }
+            "ul" | "ol" => {
+                flush_html_line(&mut lines, &mut current, quote_depth);
+                if closing {
+                    push_html_blank(&mut lines, quote_depth);
+                }
+            }
+            "li" => {
+                flush_html_line(&mut lines, &mut current, quote_depth);
+                if !closing && current.is_empty() {
+                    current.push_str("- ");
+                }
+            }
+            "strong" | "b" => current.push_str("**"),
+            "em" | "i" => current.push('*'),
+            "code" => current.push('`'),
+            "hr" => {
+                flush_html_line(&mut lines, &mut current, quote_depth);
+                lines.push(format!("{}---", "> ".repeat(quote_depth)));
             }
             "br" => flush_html_line(&mut lines, &mut current, quote_depth),
             "img" => {
@@ -311,6 +330,32 @@ pub(crate) fn push_link_url(candidate: &str, urls: &mut Vec<String>) {
     let lower = url.to_ascii_lowercase();
     if lower.starts_with("http://") || lower.starts_with("https://") {
         urls.push(url);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::html_to_markdown;
+
+    #[test]
+    fn keeps_nested_quotes() {
+        let input = "<p>outer</p><blockquote><p>inner</p><blockquote><p>deep</p></blockquote></blockquote>";
+        assert_eq!(html_to_markdown(input), "outer\n\n> inner\n>\n> > deep");
+    }
+
+    #[test]
+    fn keeps_inline_images() {
+        let input = "<p>前<img src=\"https://file.fishpi.cn/a.jpg\" alt=\"图片\">后</p>";
+        assert_eq!(
+            html_to_markdown(input),
+            "前![图片](https://file.fishpi.cn/a.jpg)后"
+        );
+    }
+
+    #[test]
+    fn converts_lists_and_code() {
+        let input = "<ul><li>one</li><li>two</li></ul><p>Use <code>foo</code></p>";
+        assert_eq!(html_to_markdown(input), "- one\n- two\n\nUse `foo`");
     }
 }
 
