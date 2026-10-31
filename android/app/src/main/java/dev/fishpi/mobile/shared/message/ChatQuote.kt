@@ -93,18 +93,19 @@ private fun ChatRoomMessage.allQuoteImageUrls(): List<String> {
 }
 
 private fun String.removeQuoteImages(): String {
+    val source = this
     val tokens = extractImageTokens()
-    if (tokens.isEmpty()) return this
+    if (tokens.isEmpty()) return source
     return buildString {
         var cursor = 0
         tokens.forEach { token ->
             if (token.start > cursor) {
-                append(substring(cursor, token.start))
+                append(source.substring(cursor, token.start))
             }
             cursor = token.end
         }
-        if (cursor < length) {
-            append(substring(cursor))
+        if (cursor < source.length) {
+            append(source.substring(cursor))
         }
     }.trim()
 }
