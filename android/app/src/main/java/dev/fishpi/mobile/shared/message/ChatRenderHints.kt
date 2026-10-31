@@ -7,6 +7,7 @@ import dev.fishpi.mobile.utils.MarkdownMediaType
 import dev.fishpi.mobile.utils.cleanImageSplitTextSegment
 import dev.fishpi.mobile.utils.extractImageTokens
 import dev.fishpi.mobile.utils.toPlainMessageText
+import dev.fishpi.mobile.utils.extractMarkdownAndPlainUrls
 import dev.fishpi.mobile.utils.isDirectImageUrl
 import dev.fishpi.mobile.utils.normalizeWebUrl
 import dev.fishpi.mobile.utils.toChatTimeLabelOrNull
@@ -108,6 +109,25 @@ private fun computeIsMediaOnly(
         text.isNotBlank()
     }
     return !hasBodyText
+}
+
+internal fun previewableContentLinkUrls(
+    content: String,
+    linkUrls: List<String>,
+    imageUrls: List<String>,
+    renderableImageUrls: List<String>,
+): List<String> {
+    val images = (imageUrls + renderableImageUrls)
+        .map(String::normalizeWebUrl)
+        .toSet()
+    return (linkUrls + content.extractMarkdownAndPlainUrls())
+        .map(String::normalizeWebUrl)
+        .filter(String::isNotBlank)
+        .distinct()
+        .filterNot(images::contains)
+        .filterNot { it.isDirectImageUrl() }
+        .filterNot(::isMentionProfileUrl)
+        .filterNot(::isFishPiInternalJumpUrl)
 }
 
 private fun ChatRoomMessage.previewLinkUrls(): List<String> {
