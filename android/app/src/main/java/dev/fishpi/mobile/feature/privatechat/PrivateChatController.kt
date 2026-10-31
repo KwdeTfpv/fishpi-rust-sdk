@@ -8,9 +8,11 @@ import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.ComposerAttachments
 import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.data.FishPiApiClient
+import dev.fishpi.mobile.data.PrivateChatMessage
 import dev.fishpi.mobile.data.PrivateChatNotice
 import dev.fishpi.mobile.data.PrivateChatRealtimeClient
 import dev.fishpi.mobile.data.PrivateChatSession
+import dev.fishpi.mobile.data.toChatRoomMessage
 import dev.fishpi.mobile.feature.privatechat.mapper.sortedByLatest
 import dev.fishpi.mobile.feature.privatechat.mapper.toPrivateSessionUiModel
 import dev.fishpi.mobile.feature.privatechat.mapper.withFileTransferSession
@@ -199,7 +201,7 @@ internal class PrivateChatController(
                 if (generation != conversationGeneration) return@onSuccess
                 if (_state.value.conversation.selectedPeer != peer) return@onSuccess
                 val current = _state.value.conversation.messages
-                val merged = (history + current).distinctBy { it.stableMessageKey() }
+                val merged = (history.map { it.toChatRoomMessage() } + current).distinctBy { it.stableMessageKey() }
                 updateConversation {
                     it.copy(
                         messages = merged,
@@ -256,7 +258,7 @@ internal class PrivateChatController(
                 if (_state.value.conversation.selectedPeer != peer) return@onSuccess
                 val current = _state.value.conversation.messages
                 val existing = current.mapTo(HashSet()) { it.stableMessageKey() }
-                val unique = older.filterNot { it.stableMessageKey() in existing }
+                val unique = older.map { it.toChatRoomMessage() }.filterNot { it.stableMessageKey() in existing }
                 updateConversation {
                     it.copy(
                         messages = (unique + current).distinctBy { message -> message.stableMessageKey() },
@@ -301,21 +303,22 @@ internal class PrivateChatController(
         }
     }
 
-    private fun onRealtimeMessage(incoming: ChatRoomMessage) {
+    private fun onRealtimeMessage(incoming: PrivateChatMessage) {
+        val message = incoming.toChatRoomMessage()
         val peer = _state.value.conversation.selectedPeer ?: return
         if (
-            !incoming.userName.equals(peer, ignoreCase = true) &&
-            !incoming.userName.equals(selfUsername, ignoreCase = true)
+            !message.userName.equals(peer, ignoreCase = true) &&
+            !message.userName.equals(selfUsername, ignoreCase = true)
         ) {
             return
         }
         updateConversation {
-            val withoutLocalEcho = it.messages.filterNot { message ->
-                message.oId.startsWith("local:") &&
-                    message.userName.equals(selfUsername, ignoreCase = true) &&
-                    message.content == incoming.content
+            val withoutLocalEcho = it.messages.filterNot { local ->
+                local.oId.startsWith("local:") &&
+                    local.userName.equals(selfUsername, ignoreCase = true) &&
+                    local.content == message.content
             }
-            val nextMessages = (withoutLocalEcho + incoming).distinctBy { message -> message.stableMessageKey() }
+            val nextMessages = (withoutLocalEcho + message).distinctBy { item -> item.stableMessageKey() }
             it.copy(
                 messages = nextMessages,
                 scrollToBottomRequest = it.scrollToBottomRequest + 1,
@@ -323,8 +326,8 @@ internal class PrivateChatController(
         }
         updateSessionPreview(
             peer = peer,
-            preview = incoming.content,
-            avatar = incoming.userAvatarURL.takeIf { incoming.userName.equals(peer, ignoreCase = true) }.orEmpty(),
+            preview = message.content,
+            avatar = message.userAvatarURL.takeIf { message.userName.equals(peer, ignoreCase = true) }.orEmpty(),
             unread = 0,
         )
         scheduleMarkRead(peer)

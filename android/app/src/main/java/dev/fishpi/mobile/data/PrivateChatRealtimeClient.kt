@@ -6,7 +6,7 @@ internal class PrivateChatRealtimeClient : NativeRealtimeClient() {
         apiKey: String,
         selfUsername: String,
         peer: String,
-        onMessage: (ChatRoomMessage) -> Unit,
+        onMessage: (PrivateChatMessage) -> Unit,
         onNotice: (PrivateChatNotice) -> Unit = {},
         onRevoke: (String) -> Unit,
         onStatus: (String) -> Unit,
@@ -78,7 +78,7 @@ internal class PrivateChatRealtimeClient : NativeRealtimeClient() {
 
     private class NativeCallback(
         mainHandler: android.os.Handler,
-        private val onMessage: (ChatRoomMessage) -> Unit,
+        private val onMessage: (PrivateChatMessage) -> Unit,
         private val onNotice: (PrivateChatNotice) -> Unit,
         private val onRevoke: (String) -> Unit,
         onStatus: (String) -> Unit,
@@ -91,7 +91,7 @@ internal class PrivateChatRealtimeClient : NativeRealtimeClient() {
                 when (type) {
                     "message" -> {
                         val item = event.optJSONObject("message") ?: return@dispatch
-                        post { onMessage(item.toChatRoomMessage()) }
+                        post { onMessage(item.toPrivateChatMessage()) }
                     }
                     "notice" -> {
                         val item = event.optJSONObject("notice") ?: return@dispatch

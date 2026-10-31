@@ -154,10 +154,10 @@ class FishPiApiClient private constructor() {
         peer: String,
         page: Int = 1,
         selfUsername: String,
-    ): List<ChatRoomMessage> {
+    ): List<PrivateChatMessage> {
         return traceApi("getPrivateChatHistory(page=$page)") {
             dataArray(FishPiNative.getPrivateChatHistory(apiKey, peer, page, selfUsername))
-                .mapObjects { it.toChatRoomMessage() }
+                .mapObjects { it.toPrivateChatMessage() }
         }
     }
 

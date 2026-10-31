@@ -67,6 +67,17 @@ data class ChatMedia(
     val url: String,
 )
 
+data class PrivateChatMessage(
+    val oId: String,
+    val userName: String,
+    val userNickname: String = "",
+    val userAvatarURL: String = "",
+    val content: String,
+    val contentKind: ChatContentKind = ChatContentKind.Markdown,
+    val media: List<ChatMedia> = emptyList(),
+    val time: String,
+)
+
 data class ChatRoomMessage(
     val oId: String,
     val userName: String,

@@ -22,6 +22,32 @@ internal fun JSONObject.toChatRoomMessage(): ChatRoomMessage {
     )
 }
 
+internal fun JSONObject.toPrivateChatMessage(): PrivateChatMessage {
+    return PrivateChatMessage(
+        oId = optString("oId"),
+        userName = optString("userName"),
+        userNickname = optString("userNickname"),
+        userAvatarURL = optString("userAvatarURL"),
+        content = optString("content"),
+        contentKind = ChatContentKind.fromWire(optString("contentKind", "markdown")),
+        media = optJSONArray("media").toChatMediaList(),
+        time = optString("time"),
+    )
+}
+
+internal fun PrivateChatMessage.toChatRoomMessage(): ChatRoomMessage {
+    return ChatRoomMessage(
+        oId = oId,
+        userName = userName,
+        userNickname = userNickname,
+        userAvatarURL = userAvatarURL,
+        content = content,
+        contentKind = contentKind,
+        media = media,
+        time = time,
+    )
+}
+
 internal fun JSONArray?.toChatMediaList(): List<ChatMedia> {
     if (this == null) {
         return emptyList()
