@@ -28,6 +28,22 @@ pub(crate) fn extract_image_urls(html: &str, markdown_or_text: &str) -> Vec<Stri
     urls
 }
 
+pub(crate) fn extract_video_urls(html: &str, markdown_or_text: &str) -> Vec<String> {
+    let mut urls = Vec::new();
+    for url in extract_link_urls(html, markdown_or_text) {
+        let lower = url.to_ascii_lowercase();
+        if [".mp4", ".m3u8", ".webm", ".mov"]
+            .iter()
+            .any(|ext| lower.contains(ext))
+        {
+            urls.push(url);
+        }
+    }
+    urls.sort();
+    urls.dedup();
+    urls
+}
+
 pub(crate) fn extract_link_urls(html: &str, markdown_or_text: &str) -> Vec<String> {
     let mut urls = Vec::new();
     collect_anchor_href_urls(html, &mut urls);

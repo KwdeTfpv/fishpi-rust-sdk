@@ -1,4 +1,4 @@
-use crate::media::{extract_image_urls, extract_link_urls, strip_html_tags};
+use crate::media::{extract_image_urls, extract_link_urls, extract_video_urls, strip_html_tags};
 use fishpi_sdk::domain::article::{
     ArticleDetail, ArticleDraftDetail, ArticleDraftSummary, ArticleListType, VoteStatus,
 };
@@ -73,22 +73,54 @@ fn payload_type_is(value: &Value, expected: &str) -> bool {
     chatroom_payload_type(value).is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
 }
 
-pub(crate) fn chat_message_to_json(msg: ChatRoomMsg, _self_username: &str) -> Value {
-    if payload_type_is(&msg.content, "music") {
-        return music_from_chatroom_msg(msg);
+fn chat_media_to_json(html: &str, markdown: &str) -> Value {
+    let images = extract_image_urls(html, markdown);
+    let videos = extract_video_urls(html, markdown);
+    let mut media = Vec::new();
+    for url in &images {
+        media.push(json!({ "kind": "image", "url": url }));
     }
+    for url in &videos {
+        if !images.contains(url) {
+            media.push(json!({ "kind": "video", "url": url }));
+        }
+    }
+    for url in extract_link_urls(html, markdown) {
+        if images.contains(&url) || videos.contains(&url) {
+            continue;
+        }
+        media.push(json!({ "kind": "link", "url": url }));
+    }
+    Value::Array(media)
+}
 
-    let is_redpacket = payload_type_is(&msg.content, "redPacket");
-    let redpacket_preview = if is_redpacket {
-        redpacket_preview_from_value(&msg.content, _self_username)
+fn chat_content_text(html: &str, markdown: &str) -> String {
+    let trimmed = markdown.trim();
+    let mut text = if trimmed.is_empty() {
+        strip_html_tags(html)
     } else {
-        None
+        trimmed.to_string()
     };
+    if html.contains("<video") {
+        text = text
+            .replace("您的浏览器不支持该媒体的播放", "")
+            .replace("您的浏览器不支持该媒体播放", "");
+    }
+    text.trim().to_string()
+}
+
+fn chat_message_to_json_with_kind(msg: ChatRoomMsg, self_username: &str, kind: &str) -> Value {
     let content_html = match &msg.content {
         Value::String(s) => s.clone(),
         other => serde_json::to_string(&other).unwrap_or_else(|_| "[无法解析消息]".to_string()),
     };
     let content_md = msg.md.trim().to_string();
+    let is_redpacket = kind == "redPacket";
+    let redpacket_preview = if is_redpacket {
+        redpacket_preview_from_value(&msg.content, self_username)
+    } else {
+        None
+    };
     let content = if is_redpacket {
         redpacket_preview
             .as_ref()
@@ -96,23 +128,24 @@ pub(crate) fn chat_message_to_json(msg: ChatRoomMsg, _self_username: &str) -> Va
             .and_then(Value::as_str)
             .map(ToString::to_string)
             .unwrap_or_else(|| "【红包消息】".to_string())
-    } else if content_md.is_empty() {
-        content_html.clone()
     } else {
-        content_md.clone()
+        chat_content_text(&content_html, &content_md)
     };
-    let type_str = if is_redpacket { "redPacket" } else { "msg" };
+    let media = if is_redpacket {
+        Value::Array(Vec::new())
+    } else {
+        chat_media_to_json(&content_html, &content_md)
+    };
     let mut payload = json!({
         "oId": msg.id,
         "userName": msg.user_name,
         "userNickname": msg.user_nickname,
         "userAvatarURL": msg.user_avatar_url,
         "content": content,
-        "md": content_md,
+        "contentKind": kind,
+        "media": media,
         "time": msg.time,
         "client": msg.client,
-        "type": type_str,
-        "revoked": false,
         "reactionSummary": reaction_summary_to_json(&msg.reaction_summary),
         "currentUserReaction": msg.current_user_reaction,
     });
@@ -122,25 +155,39 @@ pub(crate) fn chat_message_to_json(msg: ChatRoomMsg, _self_username: &str) -> Va
     payload
 }
 
+pub(crate) fn chat_message_to_json(msg: ChatRoomMsg, self_username: &str) -> Value {
+    if payload_type_is(&msg.content, "music") {
+        return music_from_chatroom_msg(msg);
+    }
+    let kind = if payload_type_is(&msg.content, "redPacket") {
+        "redPacket"
+    } else if payload_type_is(&msg.content, "weather") {
+        "weather"
+    } else {
+        "markdown"
+    };
+    chat_message_to_json_with_kind(msg, self_username, kind)
+}
+
 pub(crate) fn music_message_to_json(msg: MusicMsg) -> Value {
     let raw_music = msg.base.content.clone();
-    let raw_music_text = if msg.base.md.trim().is_empty() {
-        raw_music.to_string()
+    let content = if !msg.title.trim().is_empty() {
+        msg.title.clone()
+    } else if !msg.from.trim().is_empty() {
+        msg.from.clone()
     } else {
-        msg.base.md.clone()
+        "音乐".to_string()
     };
-
     json!({
         "oId": msg.base.id,
         "userName": msg.base.user_name,
         "userNickname": msg.base.user_nickname,
         "userAvatarURL": msg.base.user_avatar_url,
-        "content": raw_music_text.clone(),
-        "md": raw_music_text,
+        "content": content,
+        "contentKind": "music",
+        "media": [],
         "time": msg.base.time,
         "client": msg.base.client,
-        "type": "msg",
-        "revoked": false,
         "reactionSummary": reaction_summary_to_json(&msg.base.reaction_summary),
         "currentUserReaction": msg.base.current_user_reaction,
         "music": {
@@ -163,23 +210,25 @@ fn music_from_chatroom_msg(msg: ChatRoomMsg) -> Value {
             .to_string()
     };
     let raw_music = msg.content.clone();
-    let raw_music_text = if msg.md.trim().is_empty() {
-        raw_music.to_string()
+    let title = field("title");
+    let from = field("from");
+    let content = if !title.trim().is_empty() {
+        title
+    } else if !from.trim().is_empty() {
+        from
     } else {
-        msg.md.clone()
+        "音乐".to_string()
     };
-
     json!({
         "oId": msg.id,
         "userName": msg.user_name,
         "userNickname": msg.user_nickname,
         "userAvatarURL": msg.user_avatar_url,
-        "content": raw_music_text.clone(),
-        "md": raw_music_text,
+        "content": content,
+        "contentKind": "music",
+        "media": [],
         "time": msg.time,
         "client": msg.client,
-        "type": "msg",
-        "revoked": false,
         "reactionSummary": reaction_summary_to_json(&msg.reaction_summary),
         "currentUserReaction": msg.current_user_reaction,
         "music": {
@@ -242,25 +291,17 @@ const PRIVATE_SESSION_PREVIEW_ELLIPSIS_THRESHOLD: usize = 18;
 pub(crate) fn private_message_to_json(msg: ChatData, _self_username: &str) -> Value {
     let content_html = msg.content.clone();
     let content_md = msg.markdown.trim().to_string();
-    let content = if content_md.is_empty() {
-        content_html.clone()
-    } else {
-        content_md.clone()
-    };
-    let image_urls = extract_image_urls(&content_html, &content);
-    let link_urls = extract_link_urls(&content_html, &content_md);
+    let content = chat_content_text(&content_html, &content_md);
+    let media = chat_media_to_json(&content_html, &content_md);
 
     json!({
         "oId": msg.id,
         "userName": msg.sender_user_name,
         "userAvatarURL": msg.sender_avatar,
         "content": content,
-        "md": content_md,
-        "imageUrls": image_urls,
-        "linkUrls": link_urls,
+        "contentKind": "markdown",
+        "media": media,
         "time": msg.time,
-        "type": "msg",
-        "revoked": false,
     })
 }
 
@@ -837,10 +878,10 @@ pub(crate) fn barrager_to_json(msg: BarragerMsg) -> Value {
         "userNickname": msg.user_nickname,
         "userAvatarURL": msg.user_avatar_url48,
         "content": msg.barrager_content,
-        "md": msg.barrager_content,
+        "contentKind": "barrage",
+        "media": [],
         "barragerColor": msg.barrager_color,
         "client": "barrager",
-        "type": "barrager",
     })
 }
 
@@ -1020,12 +1061,18 @@ pub(crate) fn chatroom_event_to_json(event: ChatRoomEvent, self_username: &str) 
             "event": "revoke",
             "id": id,
         }),
-        ChatRoomEvent::Msg(msg) | ChatRoomEvent::RedPacket(msg) | ChatRoomEvent::Weather(msg) => {
-            json!({
-                "event": "message",
-                "message": chat_message_to_json(msg, self_username),
-            })
-        }
+        ChatRoomEvent::Msg(msg) => json!({
+            "event": "message",
+            "message": chat_message_to_json(msg, self_username),
+        }),
+        ChatRoomEvent::RedPacket(msg) => json!({
+            "event": "message",
+            "message": chat_message_to_json_with_kind(msg, self_username, "redPacket"),
+        }),
+        ChatRoomEvent::Weather(msg) => json!({
+            "event": "message",
+            "message": chat_message_to_json_with_kind(msg, self_username, "weather"),
+        }),
         ChatRoomEvent::Music(msg) => json!({
             "event": "message",
             "message": music_message_to_json(msg),

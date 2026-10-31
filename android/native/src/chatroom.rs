@@ -74,7 +74,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getChatRoomHisto
                     Duration::from_secs(15),
                     client
                         .chatroom()
-                        .history(page.max(1) as u32, ChatContentType::Html),
+                        .history(page.max(1) as u32, ChatContentType::Markdown),
                 )
                 .await
                 .map_err(|_| "加载聊天室历史超时".to_string())?

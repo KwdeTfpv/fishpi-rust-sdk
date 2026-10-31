@@ -2,7 +2,6 @@ package dev.fishpi.mobile.shared.message
 
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.utils.HtmlAnchorHrefRegex
-import dev.fishpi.mobile.utils.HtmlImageSrcRegex
 import dev.fishpi.mobile.utils.MarkdownImageRegex
 import dev.fishpi.mobile.utils.MarkdownVideoRegex
 import dev.fishpi.mobile.utils.MarkdownMediaToken
@@ -148,13 +147,13 @@ private fun String.extractLinkUrls(): List<String> {
 }
 
 private fun ChatRoomMessage.previewVideoUrls(): List<String> {
-    val fromLinks = linkUrls.filter { it.isDirectVideoUrl() }
+    val fromMedia = media.filter { it.kind == "video" }.map { it.url }
     val fromMarkdownVideoLinks = renderSource.markdownVideoUrls()
     val fromContent = VideoUrlRegex.findAll(renderSource)
         .map { it.value.trimUrlPunctuation() }
         .map(String::normalizeWebUrl)
         .filter { it.isDirectVideoUrl() }
-    return (fromLinks + fromMarkdownVideoLinks + fromContent)
+    return (fromMedia + fromMarkdownVideoLinks + fromContent)
         .distinct()
         .take(2)
         .toList()
@@ -203,16 +202,10 @@ private fun String.cleanClientType(): String {
 }
 
 internal fun ChatRoomMessage.allRenderableImageUrls(): List<String> {
-    val markdownOrText = renderSource
-    val fromArray = imageUrls.asSequence()
-    val fromMarkdown = MarkdownImageRegex.findAll(markdownOrText)
+    val fromMedia = media.filter { it.kind == "image" }.map { it.url }.asSequence()
+    val fromMarkdown = MarkdownImageRegex.findAll(renderSource)
         .map { it.groupValues.getOrNull(1).orEmpty() }
-    val fromHtml = if (md.isBlank()) {
-        HtmlImageSrcRegex.findAll(content).map { it.groupValues.getOrNull(2).orEmpty() }
-    } else {
-        emptySequence()
-    }
-    return (fromArray + fromMarkdown + fromHtml)
+    return (fromMedia + fromMarkdown)
         .map { it.normalizeWebUrl() }
         .filter { it.isNotBlank() }
         .distinct()

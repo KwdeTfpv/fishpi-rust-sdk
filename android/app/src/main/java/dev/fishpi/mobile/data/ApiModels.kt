@@ -47,19 +47,37 @@ data class UserDailyState(
     val livenessRewarded: Boolean,
 )
 
+enum class ChatContentKind(val wire: String) {
+    Markdown("markdown"),
+    RedPacket("redPacket"),
+    Music("music"),
+    Weather("weather"),
+    Barrage("barrage"),
+    System("system"),
+    ;
+
+    companion object {
+        fun fromWire(value: String): ChatContentKind =
+            values().firstOrNull { it.wire.equals(value, ignoreCase = true) } ?: Markdown
+    }
+}
+
+data class ChatMedia(
+    val kind: String,
+    val url: String,
+)
+
 data class ChatRoomMessage(
     val oId: String,
     val userName: String,
     val userNickname: String = "",
     val userAvatarURL: String = "",
     val content: String,
-    val md: String = "",
-    val imageUrls: List<String> = emptyList(),
-    val linkUrls: List<String> = emptyList(),
+    val contentKind: ChatContentKind = ChatContentKind.Markdown,
+    val media: List<ChatMedia> = emptyList(),
     val time: String,
     val client: String = "",
     val barragerColor: String = "",
-    val type: String = "msg",
     val revoked: Boolean = false,
     val echoKey: String = "",
     val reactionSummary: List<ReactionSummaryItem> = emptyList(),
@@ -68,8 +86,20 @@ data class ChatRoomMessage(
     val music: MusicPreview? = null,
     val quote: ChatQuotePreview? = null,
 ) {
+    val md: String
+        get() = content
+
+    val imageUrls: List<String>
+        get() = media.filter { it.kind == "image" }.map { it.url }
+
+    val linkUrls: List<String>
+        get() = media.filter { it.kind == "link" }.map { it.url }
+
+    val type: String
+        get() = contentKind.wire
+
     val isBarrager: Boolean
-        get() = type.equals("barrager", ignoreCase = true)
+        get() = contentKind == ChatContentKind.Barrage
 
     val displayName: String
         get() = userNickname.ifBlank { userName }
@@ -92,10 +122,13 @@ data class ChatRoomMessage(
         put("userNickname", userNickname)
         put("userAvatarURL", userAvatarURL)
         put("content", content)
-        put("md", md)
-        put("contentHtml", content)
-        put("imageUrls", org.json.JSONArray(imageUrls))
-        put("linkUrls", org.json.JSONArray(linkUrls))
+        put("contentKind", contentKind.wire)
+        put("media", org.json.JSONArray(media.map {
+            org.json.JSONObject().apply {
+                put("kind", it.kind)
+                put("url", it.url)
+            }
+        }))
         put("time", time)
         put("client", client)
         put("barragerColor", barragerColor)

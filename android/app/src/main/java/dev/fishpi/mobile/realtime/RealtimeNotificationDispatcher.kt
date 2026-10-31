@@ -48,7 +48,7 @@ class RealtimeNotificationDispatcher(
         if (chatRoomVisible && appInForeground) {
             return
         }
-        if (message.type == "system" || message.userName.isBlank()) {
+        if (message.type == "system" || message.type == "barrage" || message.userName.isBlank()) {
             return
         }
         val prefs = store.getNotificationPrefs()

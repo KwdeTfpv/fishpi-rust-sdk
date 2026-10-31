@@ -118,8 +118,7 @@ internal fun messageTimeSeparator(previous: ChatRoomMessage?, current: ChatRoomM
 private fun ChatRoomMessage.asRevoked(): ChatRoomMessage =
     copy(
         content = "[该消息已撤回]",
-        imageUrls = emptyList(),
-        linkUrls = emptyList(),
+        media = emptyList(),
         revoked = true,
     )
 

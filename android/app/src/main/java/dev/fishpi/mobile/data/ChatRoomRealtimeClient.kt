@@ -157,7 +157,7 @@ internal class ChatRoomRealtimeClient : NativeRealtimeClient() {
                                 content = message,
                                 time = "",
                                 client = "system",
-                                type = "system",
+                                contentKind = ChatContentKind.System,
                             )
                             post { onMessage(systemMessage) }
                         }

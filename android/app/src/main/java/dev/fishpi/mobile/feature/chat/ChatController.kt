@@ -7,6 +7,7 @@ import dev.fishpi.mobile.shared.message.repeatableDraftContent
 import dev.fishpi.mobile.core.ui.UiController
 import dev.fishpi.mobile.data.AtUserCandidate
 import dev.fishpi.mobile.data.ChatReactionUpdate
+import dev.fishpi.mobile.data.ChatContentKind
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.realtime.ChatRoomEvent
 import dev.fishpi.mobile.realtime.ChatRoomSnapshot
@@ -238,7 +239,7 @@ internal class ChatController(
                 userNickname = "",
                 content = text,
                 time = java.time.Instant.now().toString(),
-                type = "system",
+                contentKind = ChatContentKind.System,
             )
             onMessage(
                 incoming = systemMessage,
@@ -809,7 +810,7 @@ internal class ChatController(
             content = "话题已更改：$normalizedTopic",
             time = java.time.Instant.now().toString(),
             client = "system",
-            type = "system",
+            contentKind = ChatContentKind.System,
         )
         onMessage(
             incoming = systemMessage,
@@ -964,10 +965,8 @@ internal class ChatController(
             userNickname = mine?.userNickname.orEmpty(),
             userAvatarURL = mine?.userAvatarURL.orEmpty(),
             content = sendContent,
-            md = sendContent,
             time = java.time.Instant.now().toString(),
             client = "Android",
-            type = "msg",
         )
         val next = rawMessages.value + optimistic
         rawMessages.value = next

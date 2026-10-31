@@ -10,20 +10,32 @@ internal fun JSONObject.toChatRoomMessage(): ChatRoomMessage {
         userNickname = optString("userNickname"),
         userAvatarURL = optString("userAvatarURL"),
         content = optString("content"),
-        md = optString("md"),
-        imageUrls = optJSONArray("imageUrls").toStringList(),
-        linkUrls = optJSONArray("linkUrls").toStringList(),
+        contentKind = ChatContentKind.fromWire(optString("contentKind", "markdown")),
+        media = optJSONArray("media").toChatMediaList(),
         time = optString("time"),
         client = optString("client"),
         barragerColor = optString("barragerColor"),
-        type = optString("type", "msg"),
-        revoked = optBoolean("revoked", false),
         reactionSummary = optJSONArray("reactionSummary").toReactionSummaryList(),
         currentUserReaction = optString("currentUserReaction"),
         redPacket = optJSONObject("redPacket")?.toRedPacketPreview(),
         music = optJSONObject("music")?.toMusicPreview(),
-        quote = optJSONObject("quote")?.toChatQuotePreview(),
     )
+}
+
+internal fun JSONArray?.toChatMediaList(): List<ChatMedia> {
+    if (this == null) {
+        return emptyList()
+    }
+    return buildList {
+        for (index in 0 until length()) {
+            val item = optJSONObject(index) ?: continue
+            val kind = item.optString("kind").trim()
+            val url = item.optString("url").trim()
+            if (kind.isNotEmpty() && url.isNotEmpty()) {
+                add(ChatMedia(kind = kind, url = url))
+            }
+        }
+    }
 }
 
 private fun JSONObject.toMusicPreview(): MusicPreview {
@@ -32,13 +44,6 @@ private fun JSONObject.toMusicPreview(): MusicPreview {
         source = optString("source"),
         title = optString("title"),
         from = optString("from"),
-    )
-}
-
-private fun JSONObject.toChatQuotePreview(): ChatQuotePreview {
-    return ChatQuotePreview(
-        text = optString("text"),
-        imageUrls = optJSONArray("imageUrls").toStringList(),
     )
 }
 
