@@ -2,10 +2,9 @@ package dev.fishpi.mobile.shared.message
 
 import dev.fishpi.mobile.data.ChatMediaKind
 import dev.fishpi.mobile.data.ChatRoomMessage
-import dev.fishpi.mobile.utils.HtmlTagRegex
-import dev.fishpi.mobile.utils.MarkdownImageRegex
-import dev.fishpi.mobile.utils.cleanMarkdownUrl
-import dev.fishpi.mobile.utils.decodeBasicHtmlEntities
+import dev.fishpi.mobile.utils.extractImageTokens
+import dev.fishpi.mobile.utils.normalizeWebUrl
+import dev.fishpi.mobile.utils.toPlainMessageText
 
 internal data class ChatQuote(
     val messageId: String,
@@ -88,29 +87,34 @@ private fun ChatRoomMessage.toQuoteParts(): QuoteParts {
 
 private fun ChatRoomMessage.allQuoteImageUrls(): List<String> {
     return mediaUrls(ChatMediaKind.Image)
-        .map(String::cleanMarkdownUrl)
+        .map(String::normalizeWebUrl)
         .filter(String::isNotBlank)
         .distinct()
 }
 
 private fun String.removeQuoteImages(): String {
-    return replace(MarkdownImageRegex, "").trim()
+    val tokens = extractImageTokens()
+    if (tokens.isEmpty()) return this
+    return buildString {
+        var cursor = 0
+        tokens.forEach { token ->
+            if (token.start > cursor) {
+                append(substring(cursor, token.start))
+            }
+            cursor = token.end
+        }
+        if (cursor < length) {
+            append(substring(cursor))
+        }
+    }.trim()
 }
 
 private fun String.toQuotePlainText(): String {
-    return replace(SimpleParagraphBoundaryRegex, "\n")
-        .replace(ParagraphTagRegex, "")
-        .replace(BreakTagRegex, "\n")
-        .replace(HtmlTagRegex, "")
-        .decodeBasicHtmlEntities()
+    return toPlainMessageText()
         .lines()
         .map(String::trim)
         .filter(String::isNotBlank)
         .joinToString("\n")
         .trim()
 }
-
-private val SimpleParagraphBoundaryRegex = Regex("</p\\s*>\\s*<p\\b[^>]*>", RegexOption.IGNORE_CASE)
-private val ParagraphTagRegex = Regex("</?p\\b[^>]*>", RegexOption.IGNORE_CASE)
-private val BreakTagRegex = Regex("<br\\s*/?>", RegexOption.IGNORE_CASE)
 
