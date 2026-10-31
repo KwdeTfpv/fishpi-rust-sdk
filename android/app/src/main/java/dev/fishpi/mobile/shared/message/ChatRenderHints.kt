@@ -2,13 +2,11 @@ package dev.fishpi.mobile.shared.message
 
 import dev.fishpi.mobile.data.ChatMediaKind
 import dev.fishpi.mobile.data.ChatRoomMessage
-import dev.fishpi.mobile.utils.HtmlAnchorHrefRegex
 import dev.fishpi.mobile.utils.MarkdownMediaToken
 import dev.fishpi.mobile.utils.MarkdownMediaType
 import dev.fishpi.mobile.utils.cleanImageSplitTextSegment
 import dev.fishpi.mobile.utils.extractImageTokens
 import dev.fishpi.mobile.utils.toPlainMessageText
-import dev.fishpi.mobile.utils.extractMarkdownAndPlainUrls
 import dev.fishpi.mobile.utils.isDirectImageUrl
 import dev.fishpi.mobile.utils.normalizeWebUrl
 import dev.fishpi.mobile.utils.toChatTimeLabelOrNull
@@ -37,7 +35,7 @@ internal fun ChatRoomMessage.toRenderHints(
     val videoLinks = previewVideoUrls().filterNot(inlineVideoLinks::contains)
     val plainFallback = markdownContent.toPlainMessageText()
     return ChatMessageRenderHints(
-        previewLinks = previewLinkUrls(markdownContent).filterNot(videoLinks::contains),
+        previewLinks = previewLinkUrls().filterNot(videoLinks::contains),
         videoLinks = videoLinks,
         clientLabel = client.cleanClientType(),
         timeLabel = time.toMessageTimeLabelOrNull().orEmpty(),
@@ -112,61 +110,18 @@ private fun computeIsMediaOnly(
     return !hasBodyText
 }
 
-private val HtmlBlockQuoteRegex = Regex("<blockquote\\b[^>]*>(.*?)</blockquote>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
-
-internal fun previewableContentLinkUrls(
-    content: String,
-    linkUrls: List<String>,
-    imageUrls: List<String>,
-    renderableImageUrls: List<String>,
-): List<String> {
-    val quotedLinks = content.quotedLinkUrls()
-    val sourceLinks = content.extractLinkUrls()
-    val renderableImages = renderableImageUrls
+private fun ChatRoomMessage.previewLinkUrls(): List<String> {
+    val images = mediaUrls(ChatMediaKind.Image)
         .map(String::normalizeWebUrl)
         .toSet()
-    val knownImages = imageUrls
-        .map(String::normalizeWebUrl)
-        .toSet()
-    return (linkUrls + sourceLinks)
+    return mediaUrls(ChatMediaKind.Link)
         .map(String::normalizeWebUrl)
         .filter(String::isNotBlank)
         .distinct()
-        .filterNot { url -> knownImages.contains(url) || renderableImages.contains(url) }
+        .filterNot(images::contains)
         .filterNot { it.isDirectImageUrl() }
-        .filterNot { url -> quotedLinks.contains(url) }
         .filterNot(::isMentionProfileUrl)
         .filterNot(::isFishPiInternalJumpUrl)
-}
-
-private fun ChatRoomMessage.previewLinkUrls(markdownContent: String): List<String> {
-    return previewableContentLinkUrls(
-        content = markdownContent,
-        linkUrls = mediaUrls(ChatMediaKind.Link),
-        imageUrls = mediaUrls(ChatMediaKind.Image),
-        renderableImageUrls = allRenderableImageUrls(),
-    )
-}
-
-private fun String.quotedLinkUrls(): Set<String> {
-    val markdownQuoteText = lineSequence()
-        .filter { it.trimStart().startsWith(">") }
-        .joinToString("\n") { it.trimStart().removePrefix(">").trimStart() }
-    val htmlQuoteText = HtmlBlockQuoteRegex.findAll(this)
-        .joinToString("\n") { it.groupValues.getOrNull(1).orEmpty() }
-    return (markdownQuoteText + "\n" + htmlQuoteText)
-        .extractMarkdownAndPlainUrls()
-        .toSet()
-}
-
-private fun String.extractLinkUrls(): List<String> {
-    val htmlLinks = HtmlAnchorHrefRegex.findAll(this)
-        .map { it.groupValues.getOrNull(2).orEmpty() }
-    return (htmlLinks + extractMarkdownAndPlainUrls().asSequence())
-        .map(String::normalizeWebUrl)
-        .filter(String::isNotBlank)
-        .distinct()
-        .toList()
 }
 
 private fun ChatRoomMessage.previewVideoUrls(): List<String> {
