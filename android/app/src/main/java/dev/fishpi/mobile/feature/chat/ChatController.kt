@@ -726,16 +726,23 @@ internal class ChatController(
         }
     }
 
+    private fun ChatRoomMessage.messageFingerprint(): String =
+        listOf(
+            contentKind.wire,
+            content.trim(),
+            media.joinToString("|") { "${it.kind.wire}:${it.url}" },
+        ).joinToString("|")
+
     private fun ChatRoomMessage.matchesOptimistic(incoming: ChatRoomMessage): Boolean {
-        val mineText = renderSource.trim()
-        val theirText = incoming.renderSource.trim()
+        val mineText = messageFingerprint()
+        val theirText = incoming.messageFingerprint()
         return mineText.isNotEmpty() && mineText == theirText
     }
 
     private fun ChatRoomMessage.matchesOptimisticHistory(history: ChatRoomMessage): Boolean {
         if (!userName.equals(currentUsername, ignoreCase = true)) return false
         if (!history.userName.equals(currentUsername, ignoreCase = true)) return false
-        if (renderSource.trim() != history.renderSource.trim()) return false
+        if (messageFingerprint() != history.messageFingerprint()) return false
         val localTime = time.toEpochMillisOrNull()
         val historyTime = history.time.toEpochMillisOrNull()
         if (localTime == null || historyTime == null) return false
@@ -1574,7 +1581,7 @@ internal class ChatController(
     }
 
     private fun ChatRoomMessage.historyStableKey(): String =
-        oId.ifBlank { "$userName|$time|$content" }
+        oId.ifBlank { "$userName|$time|${messageFingerprint()}" }
 
     private fun ChatRoomMessage.toBarrageUiModel(now: Long): ChatBarrageUiModel =
         ChatBarrageUiModel(
