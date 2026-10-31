@@ -2,8 +2,6 @@ package dev.fishpi.mobile.shared.message
 
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.utils.HtmlAnchorHrefRegex
-import dev.fishpi.mobile.utils.MarkdownImageRegex
-import dev.fishpi.mobile.utils.MarkdownVideoRegex
 import dev.fishpi.mobile.utils.MarkdownMediaToken
 import dev.fishpi.mobile.utils.MarkdownMediaType
 import dev.fishpi.mobile.utils.cleanImageSplitTextSegment
@@ -11,10 +9,8 @@ import dev.fishpi.mobile.utils.extractImageTokens
 import dev.fishpi.mobile.utils.toPlainMessageText
 import dev.fishpi.mobile.utils.extractMarkdownAndPlainUrls
 import dev.fishpi.mobile.utils.isDirectImageUrl
-import dev.fishpi.mobile.utils.isDirectVideoUrl
 import dev.fishpi.mobile.utils.normalizeWebUrl
 import dev.fishpi.mobile.utils.toChatTimeLabelOrNull
-import dev.fishpi.mobile.utils.trimUrlPunctuation
 
 internal data class ChatMessageRenderHints(
     val previewLinks: List<String> = emptyList(),
@@ -30,10 +26,12 @@ internal data class ChatMessageRenderHints(
 
 internal fun ChatRoomMessage.toRenderHints(avatarModel: Any? = null): ChatMessageRenderHints {
     val markdownContent = renderSource.trim().withMediaImages(media)
-    val inlineVideoLinks = markdownContent.markdownVideoUrls()
+    val imageTokens = markdownContent.extractImageTokens()
+    val inlineVideoLinks = imageTokens
+        .filter { it.type == MarkdownMediaType.Video }
+        .map { it.url.normalizeWebUrl() }
     val videoLinks = previewVideoUrls().filterNot(inlineVideoLinks::contains)
     val plainFallback = markdownContent.toPlainMessageText()
-    val imageTokens = markdownContent.extractImageTokens()
     return ChatMessageRenderHints(
         previewLinks = previewLinkUrls(markdownContent).filterNot(videoLinks::contains),
         videoLinks = videoLinks,
@@ -167,28 +165,14 @@ private fun String.extractLinkUrls(): List<String> {
 }
 
 private fun ChatRoomMessage.previewVideoUrls(): List<String> {
-    val fromMedia = media.filter { it.kind == "video" }.map { it.url }
-    val fromMarkdownVideoLinks = renderSource.markdownVideoUrls()
-    val fromContent = VideoUrlRegex.findAll(renderSource)
-        .map { it.value.trimUrlPunctuation() }
-        .map(String::normalizeWebUrl)
-        .filter { it.isDirectVideoUrl() }
-    return (fromMedia + fromMarkdownVideoLinks + fromContent)
+    return media
+        .filter { it.kind == "video" }
+        .map { it.url.normalizeWebUrl() }
+        .filter(String::isNotBlank)
         .distinct()
         .take(2)
         .toList()
 }
-
-private fun String.markdownVideoUrls(): List<String> {
-    return MarkdownVideoRegex.findAll(this)
-        .map { it.groupValues.getOrNull(1).orEmpty() }
-        .map(String::normalizeWebUrl)
-        .filter(String::isNotBlank)
-        .distinct()
-        .toList()
-}
-
-private val VideoUrlRegex = Regex("""https?://[^\s<>"']+\.(?:mp4|m3u8|webm|mov)(?:\?[^\s<>"']*)?""", RegexOption.IGNORE_CASE)
 
 private fun isMentionProfileUrl(url: String): Boolean {
     return runCatching {
@@ -222,11 +206,9 @@ private fun String.cleanClientType(): String {
 }
 
 internal fun ChatRoomMessage.allRenderableImageUrls(): List<String> {
-    val fromMedia = media.filter { it.kind == "image" }.map { it.url }.asSequence()
-    val fromMarkdown = MarkdownImageRegex.findAll(renderSource)
-        .map { it.groupValues.getOrNull(1).orEmpty() }
-    return (fromMedia + fromMarkdown)
-        .map { it.normalizeWebUrl() }
+    return media
+        .filter { it.kind == "image" }
+        .map { it.url.normalizeWebUrl() }
         .filter { it.isNotBlank() }
         .distinct()
         .toList()
