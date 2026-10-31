@@ -17,7 +17,7 @@ import dev.fishpi.mobile.data.FishPiApiClient
 import dev.fishpi.mobile.data.SavedAccount
 import dev.fishpi.mobile.data.SessionStore
 import dev.fishpi.mobile.realtime.RealtimeLifecycleController
-import dev.fishpi.mobile.ui.overlay.ImageViewerHost
+import dev.fishpi.mobile.ui.overlay.MediaOverlayHost
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -238,42 +238,42 @@ fun FishPiApp() {
                 },
             )
             else -> CompositionLocalProvider(LocalAppSession provides session!!) {
-                ImageViewerHost {
-                MainShell(
-                    session = session!!,
-                    savedAccounts = savedAccounts,
-                    themeOptions = themeOptions,
-                    themeKey = themeKey,
-                    onCycleTheme = {
-                        val currentIndex = themeOptions.indexOfFirst { it.key == themeKey }.coerceAtLeast(0)
-                        val next = themeOptions[(currentIndex + 1) % themeOptions.size]
-                        applyThemeKey(next.key)
-                    },
-                    onThemeChange = { applyThemeKey(it) },
-                    onImportThemePackage = { importThemePackage(it) },
-                    onSaveEditedTheme = { importTheme(it) },
-                    onSaveStoreTheme = { identifier, itemId, raw -> saveStoreTheme(identifier, itemId, raw) },
-                    storeThemeSaveState = { identifier, itemId, raw -> storeThemeSaveState(identifier, itemId, raw) },
-                    onDeleteCustomTheme = { deleteCustomTheme(it) },
-                    chatWallpaperUri = chatWallpaperUri,
-                    onChatWallpaperChange = { applyChatWallpaper(it) },
-                    glassEffectsEnabled = glassEffectsEnabled,
-                    onGlassEffectsEnabledChange = { applyGlassEffectsEnabled(it) },
-                    onSwitchAccount = { account -> switchAccount(account) },
-                    onAddAccount = {
-                        session = null
-                        bootError = null
-                    },
-                    onLogout = {
-                        store.clear()
-                        refreshSavedAccounts()
-                        session = null
-                    },
-                )
+                MediaOverlayHost {
+                    MainShell(
+                        session = session!!,
+                        savedAccounts = savedAccounts,
+                        themeOptions = themeOptions,
+                        themeKey = themeKey,
+                        onCycleTheme = {
+                            val currentIndex = themeOptions.indexOfFirst { it.key == themeKey }.coerceAtLeast(0)
+                            val next = themeOptions[(currentIndex + 1) % themeOptions.size]
+                            applyThemeKey(next.key)
+                        },
+                        onThemeChange = { applyThemeKey(it) },
+                        onImportThemePackage = { importThemePackage(it) },
+                        onSaveEditedTheme = { importTheme(it) },
+                        onSaveStoreTheme = { identifier, itemId, raw -> saveStoreTheme(identifier, itemId, raw) },
+                        storeThemeSaveState = { identifier, itemId, raw -> storeThemeSaveState(identifier, itemId, raw) },
+                        onDeleteCustomTheme = { deleteCustomTheme(it) },
+                        chatWallpaperUri = chatWallpaperUri,
+                        onChatWallpaperChange = { applyChatWallpaper(it) },
+                        glassEffectsEnabled = glassEffectsEnabled,
+                        onGlassEffectsEnabledChange = { applyGlassEffectsEnabled(it) },
+                        onSwitchAccount = { account -> switchAccount(account) },
+                        onAddAccount = {
+                            session = null
+                            bootError = null
+                        },
+                        onLogout = {
+                            store.clear()
+                            refreshSavedAccounts()
+                            session = null
+                        },
+                    )
                 }
             }
         }
-        }
+    }
     }
 
 

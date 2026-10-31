@@ -35,7 +35,7 @@ import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.data.AttachmentUpload
 import dev.fishpi.mobile.data.ComposerAttachment
 import dev.fishpi.mobile.rememberFishPiImageLoader
-import dev.fishpi.mobile.ui.overlay.LocalImageViewer
+import dev.fishpi.mobile.ui.overlay.LocalMediaOverlay
 
 @Composable
 internal fun ComposerAttachmentStrip(
@@ -46,7 +46,7 @@ internal fun ComposerAttachmentStrip(
 ) {
     if (attachments.isEmpty()) return
     val imageLoader = rememberFishPiImageLoader()
-    val imageViewer = LocalImageViewer.current
+    val imageViewer = LocalMediaOverlay.current
     val previewable = attachments.filterNot { it.isVideo }
     LazyRow(
         modifier = modifier.fillMaxWidth(),

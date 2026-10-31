@@ -2,7 +2,6 @@ package dev.fishpi.mobile.ui.overlay
 
 import dev.fishpi.mobile.*
 import android.view.ViewGroup
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -16,22 +15,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -48,10 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.C
-import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import dev.fishpi.mobile.shared.message.native.openSystemVideo
@@ -60,24 +55,34 @@ import kotlinx.coroutines.delay
 @Composable
 internal fun VideoPlaybackOverlay(
     url: String,
+    session: PlaybackSession? = null,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val player = remember(url) {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(url))
-            prepare()
-            playWhenReady = true
+    val ownedSession = remember(url, session) {
+        if (session == null) PlaybackSession(context) else null
+    }
+    LaunchedEffect(ownedSession, url) {
+        ownedSession?.prepare(url)
+    }
+    val activeSession = session ?: ownedSession ?: return
+    val player = activeSession.player
+
+    var controlsVisible by remember(activeSession) { mutableStateOf(true) }
+    var isPlaying by remember(activeSession) { mutableStateOf(false) }
+    var hasError by remember(activeSession) { mutableStateOf(false) }
+    var positionMs by remember(activeSession) { mutableLongStateOf(0L) }
+    var durationMs by remember(activeSession) { mutableLongStateOf(0L) }
+    var isScrubbing by remember(activeSession) { mutableStateOf(false) }
+    var scrubPositionMs by remember(activeSession) { mutableLongStateOf(0L) }
+
+    DisposableEffect(activeSession) {
+        activeSession.enterFullscreen()
+        onDispose {
+            activeSession.exitFullscreen()
+            ownedSession?.release()
         }
     }
-    var controlsVisible by remember(url) { mutableStateOf(true) }
-    var isPlaying by remember(url) { mutableStateOf(false) }
-    var isBuffering by remember(url) { mutableStateOf(true) }
-    var hasError by remember(url) { mutableStateOf(false) }
-    var positionMs by remember(url) { mutableLongStateOf(0L) }
-    var durationMs by remember(url) { mutableLongStateOf(0L) }
-
-    BackHandler(onBack = onDismiss)
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -86,35 +91,34 @@ internal fun VideoPlaybackOverlay(
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                isBuffering = playbackState == Player.STATE_BUFFERING
                 val duration = player.duration
                 durationMs = if (duration == C.TIME_UNSET) 0L else duration.coerceAtLeast(0L)
             }
 
             override fun onPlayerError(error: PlaybackException) {
                 hasError = true
-                isBuffering = false
                 controlsVisible = true
             }
         }
         player.addListener(listener)
         onDispose {
             player.removeListener(listener)
-            player.release()
         }
     }
 
-    LaunchedEffect(player) {
+    LaunchedEffect(player, isScrubbing) {
         while (true) {
-            positionMs = player.currentPosition.coerceAtLeast(0L)
-            val duration = player.duration
-            durationMs = if (duration == C.TIME_UNSET) 0L else duration.coerceAtLeast(0L)
+            if (!isScrubbing) {
+                positionMs = player.currentPosition.coerceAtLeast(0L)
+                val duration = player.duration
+                durationMs = if (duration == C.TIME_UNSET) 0L else duration.coerceAtLeast(0L)
+            }
             delay(250)
         }
     }
 
-    LaunchedEffect(controlsVisible, isPlaying) {
-        if (controlsVisible && isPlaying) {
+    LaunchedEffect(controlsVisible, isPlaying, isScrubbing) {
+        if (controlsVisible && isPlaying && !isScrubbing) {
             delay(2200)
             controlsVisible = false
         }
@@ -133,6 +137,7 @@ internal fun VideoPlaybackOverlay(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = false
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     setShutterBackgroundColor(android.graphics.Color.BLACK)
                     layoutParams = ViewGroup.LayoutParams(
@@ -144,29 +149,33 @@ internal fun VideoPlaybackOverlay(
             },
             update = { view ->
                 if (view.player !== player) view.player = player
+                view.keepScreenOn = player.isPlaying
             },
             onRelease = { view ->
                 view.player = null
             },
         )
 
-        if (isBuffering && !hasError) {
-            CircularProgressIndicator(
-                color = Color.White,
-                strokeWidth = 2.dp,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(34.dp),
-            )
-        }
-
         if (hasError) {
-            Text(
-                text = "无法播放",
-                color = Color.White.copy(alpha = 0.82f),
-                fontSize = 14.sp,
+            Column(
                 modifier = Modifier.align(Alignment.Center),
-            )
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = "无法播放",
+                    color = Color.White.copy(alpha = 0.82f),
+                    fontSize = 14.sp,
+                )
+                TextButton(
+                    onClick = {
+                        hasError = false
+                        activeSession.retry()
+                    },
+                ) {
+                    Text(text = "重试", color = Color.White)
+                }
+            }
         }
 
         AnimatedVisibility(
@@ -183,51 +192,78 @@ internal fun VideoPlaybackOverlay(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .statusBarsPadding()
                         .padding(horizontal = 10.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    OverlayIconButton(onClick = onDismiss) {
-                        Icon(Icons.Rounded.Close, contentDescription = "关闭", tint = Color.White)
+                    FilledIconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(48.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = Color.Black.copy(alpha = 0.38f),
+                            contentColor = Color.White,
+                        ),
+                    ) {
+                        Icon(Icons.Rounded.Close, contentDescription = "关闭")
                     }
-                    OverlayIconButton(onClick = { context.openSystemVideo(url) }) {
-                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = "系统播放器", tint = Color.White)
+                    FilledIconButton(
+                        onClick = { context.openSystemVideo(url) },
+                        modifier = Modifier.size(48.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = Color.Black.copy(alpha = 0.38f),
+                            contentColor = Color.White,
+                        ),
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = "系统播放器")
                     }
                 }
 
-                OverlayIconButton(
-                    onClick = {
-                        hasError = false
-                        if (player.isPlaying) player.pause() else player.play()
-                    },
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(72.dp),
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        contentDescription = if (isPlaying) "暂停" else "播放",
-                        tint = Color.White,
-                        modifier = Modifier.size(40.dp),
-                    )
+                if (!hasError) {
+                    FilledIconButton(
+                        onClick = {
+                            if (player.isPlaying) player.pause() else player.play()
+                        },
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(72.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = Color.Black.copy(alpha = 0.38f),
+                            contentColor = Color.White,
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            contentDescription = if (isPlaying) "暂停" else "播放",
+                            modifier = Modifier.size(40.dp),
+                        )
+                    }
                 }
 
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Slider(
-                        value = positionMs.toFloat(),
-                        onValueChange = { player.seekTo(it.toLong()) },
+                        value = if (isScrubbing) scrubPositionMs.toFloat() else positionMs.toFloat(),
+                        onValueChange = {
+                            isScrubbing = true
+                            scrubPositionMs = it.toLong()
+                        },
+                        onValueChangeFinished = {
+                            player.seekTo(scrubPositionMs)
+                            isScrubbing = false
+                        },
                         valueRange = 0f..durationMs.coerceAtLeast(1L).toFloat(),
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(formatVideoTime(positionMs), color = Color.White.copy(alpha = 0.82f), fontSize = 12.sp)
+                        Text(
+                            text = formatVideoTime(if (isScrubbing) scrubPositionMs else positionMs),
+                            color = Color.White.copy(alpha = 0.82f),
+                            fontSize = 12.sp,
+                        )
                         Spacer(Modifier.width(8.dp))
                         Text("/", color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
                         Spacer(Modifier.width(8.dp))
@@ -239,23 +275,9 @@ internal fun VideoPlaybackOverlay(
     }
 }
 
-@Composable
-private fun OverlayIconButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier.size(48.dp),
-    content: @Composable () -> Unit,
-) {
-    IconButton(
-        onClick = onClick,
-        modifier = modifier.background(Color.Black.copy(alpha = 0.38f), MaterialTheme.shapes.extraLarge),
-        content = content,
-    )
-}
-
 private fun formatVideoTime(ms: Long): String {
     val totalSeconds = (ms / 1000).coerceAtLeast(0)
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return "%d:%02d".format(minutes, seconds)
 }
-

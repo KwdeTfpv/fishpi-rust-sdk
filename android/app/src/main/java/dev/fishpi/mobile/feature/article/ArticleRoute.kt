@@ -19,7 +19,7 @@ import dev.fishpi.mobile.AppSession
 import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.data.ArticleSummary
 import dev.fishpi.mobile.ui.overlay.LinkPreviewOverlay
-import dev.fishpi.mobile.ui.overlay.VideoPlaybackOverlay
+import dev.fishpi.mobile.ui.overlay.LocalMediaOverlay
 import dev.fishpi.mobile.feature.article.model.ArticleOverlayState
 import dev.fishpi.mobile.feature.article.publish.ArticlePublishAction
 import dev.fishpi.mobile.feature.article.publish.ArticlePublishController
@@ -38,6 +38,7 @@ internal fun ArticleRoute(
     onOpenUserProfile: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
+    val mediaOverlay = LocalMediaOverlay.current
     val controller = remember(session.apiKey) {
         ArticleController(
             context = context.applicationContext,
@@ -176,12 +177,10 @@ internal fun ArticleRoute(
     (state.overlay as? ArticleOverlayState.Link)?.let { (url) ->
         LinkPreviewOverlay(url = url, apiKey = session.apiKey, onDismiss = { controller.dispatch(ArticleAction.DismissOverlay) })
     }
-    (state.overlay as? ArticleOverlayState.Video)?.let { (url) ->
-        VideoPlaybackOverlay(url = url, onDismiss = { controller.dispatch(ArticleAction.DismissOverlay) })
-    }
-
-    BackHandler(enabled = active && state.overlay != ArticleOverlayState.None) {
+    LaunchedEffect(state.overlay) {
+        val video = state.overlay as? ArticleOverlayState.Video ?: return@LaunchedEffect
         controller.dispatch(ArticleAction.DismissOverlay)
+        mediaOverlay.openVideo(video.url)
     }
 
     BackHandler(enabled = active && state.publishOpen) {

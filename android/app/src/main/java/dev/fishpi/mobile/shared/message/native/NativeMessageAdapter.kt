@@ -33,9 +33,7 @@ import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.core.content.ContextCompat
 import androidx.core.view.setPadding
-import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.DiffUtil
@@ -52,6 +50,7 @@ import dev.fishpi.mobile.chatui.MarkwonChatRenderer
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.feature.redpacket.RedPacketGestureOptions
 import dev.fishpi.mobile.feature.redpacket.toRedPacketUiModel
+import dev.fishpi.mobile.ui.overlay.PlaybackSession
 import dev.fishpi.mobile.utils.adaptiveImageBoxSize
 import dev.fishpi.mobile.utils.cleanImageSplitTextSegment
 import dev.fishpi.mobile.utils.decodeBasicHtmlEntities
@@ -77,7 +76,7 @@ internal class NativeMessageAdapter(
     private val onRedPacketGestureClick: (ChatRoomMessage, Int) -> Unit,
     private val onReactionClick: (ChatRoomMessage, String) -> Unit,
     private val onRepeatClick: (ChatRoomMessage) -> Unit,
-    private val onVideoFullscreenClick: (String) -> Unit,
+    private val onVideoFullscreenClick: (String, PlaybackSession) -> Unit,
 ) : RecyclerView.Adapter<NativeMessageViewHolder>() {
     var currentItems: List<ChatListItem> = emptyList()
         private set
@@ -272,11 +271,11 @@ private class ChatVideoCard(
     context: android.content.Context,
     private val theme: NativeMessageTheme,
 ) : FrameLayout(context) {
-    private var player: ExoPlayer? = null
+    private var session: PlaybackSession? = null
     private var playerView: PlayerView? = null
     private var controlsVisible = true
     private var videoUrl: String = ""
-    private var fullscreenCallback: () -> Unit = {}
+    private var fullscreenCallback: (PlaybackSession) -> Unit = {}
     private val hideControlsRunnable = Runnable { setControlsVisible(false) }
     private val placeholder = TextView(context).apply {
         text = "视频"
@@ -327,7 +326,7 @@ private class ChatVideoCard(
         })
     }
 
-    fun bind(url: String, onFullscreen: () -> Unit) {
+    fun bind(url: String, onFullscreen: (PlaybackSession) -> Unit) {
         releasePlayer()
         videoUrl = url
         fullscreenCallback = onFullscreen
@@ -339,10 +338,18 @@ private class ChatVideoCard(
         play.setOnClickListener {
             startPlayer(playImmediately = true)
         }
-        fullscreen.setOnClickListener { fullscreenCallback() }
+        error.setOnClickListener {
+            startPlayer(playImmediately = true)
+        }
+        fullscreen.setOnClickListener {
+            startPlayer(playImmediately = false, restart = false)
+            val activeSession = session ?: return@setOnClickListener
+            activeSession.enterFullscreen()
+            fullscreenCallback(activeSession)
+        }
         openExternal.setOnClickListener { context.openSystemVideo(videoUrl) }
         setOnClickListener {
-            val exo = player
+            val exo = session?.player
             if (exo == null) {
                 startPlayer(playImmediately = true)
             } else if (exo.isPlaying && !controlsVisible) {
@@ -356,40 +363,15 @@ private class ChatVideoCard(
         }
     }
 
-    private fun startPlayer(playImmediately: Boolean) {
-        if (videoUrl.isBlank()) return
-        val existing = player
-        if (existing != null) {
-            if (playImmediately) existing.play()
-            return
-        }
-        error.visibility = GONE
-        loading.visibility = VISIBLE
-        val activePlayerView = PlayerView(context).apply {
-            useController = false
-            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-            setShutterBackgroundColor(0xFF05070AL.toInt())
-            setBackgroundColor(0xFF05070AL.toInt())
-        }
-        playerView = activePlayerView
-        addView(
-            activePlayerView,
-            0,
-            LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-            ),
-        )
-        placeholder.visibility = GONE
-        val mediaItem = MediaItem.fromUri(Uri.parse(videoUrl))
-        player = ExoPlayer.Builder(context).build().also { exo ->
-            activePlayerView.player = exo
-            exo.setMediaItem(mediaItem)
-            exo.prepare()
-            exo.addListener(object : Player.Listener {
+    private fun ensureSession(): PlaybackSession {
+        val current = session
+        if (current != null) return current
+        return PlaybackSession(context).also { active ->
+            active.setSource(videoUrl)
+            active.player.addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     loading.visibility = if (playbackState == Player.STATE_BUFFERING) VISIBLE else GONE
-                    if (playbackState == Player.STATE_READY && exo.isPlaying) {
+                    if (playbackState == Player.STATE_READY && active.player.isPlaying) {
                         scheduleHideControls()
                     }
                 }
@@ -406,19 +388,62 @@ private class ChatVideoCard(
                     setControlsVisible(true)
                 }
             })
+            session = active
         }
-        if (playImmediately) {
-            player?.play()
+    }
+
+    private fun startPlayer(playImmediately: Boolean, restart: Boolean = true) {
+        if (videoUrl.isBlank()) return
+        val activeSession = ensureSession()
+        val activePlayer = activeSession.player
+        if (activePlayer.playerError != null) {
+            error.visibility = GONE
+            loading.visibility = VISIBLE
+            activeSession.retry()
+            return
+        }
+        if (playerView == null) {
+            error.visibility = GONE
+            loading.visibility = VISIBLE
+            val activePlayerView = PlayerView(context).apply {
+                useController = false
+                setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                setShutterBackgroundColor(0xFF05070AL.toInt())
+                setBackgroundColor(0xFF05070AL.toInt())
+            }
+            playerView = activePlayerView
+            activeSession.bindInline(activePlayerView)
+            addView(
+                activePlayerView,
+                0,
+                LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                ),
+            )
+            placeholder.visibility = GONE
+            activeSession.prepare(videoUrl, playImmediately)
+            return
+        }
+        if (restart) {
+            activeSession.prepare(videoUrl, playImmediately)
+        } else if (activePlayer.mediaItemCount == 0) {
+            activeSession.prepare(videoUrl, playImmediately)
+        } else if (playImmediately) {
+            activePlayer.play()
         }
     }
 
     fun releasePlayer() {
         removeCallbacks(hideControlsRunnable)
-        playerView?.player = null
-        player?.release()
-        player = null
-        playerView?.let(::removeView)
+        val activeView = playerView
+        if (activeView != null) {
+            session?.unbindInline(activeView)
+            removeView(activeView)
+        }
         playerView = null
+        session = null
     }
 
     private fun setControlsVisible(visible: Boolean) {
@@ -426,9 +451,9 @@ private class ChatVideoCard(
         val visibility = if (visible) VISIBLE else GONE
         openExternal.visibility = visibility
         fullscreen.visibility = visibility
-        if (player?.isPlaying != true && error.visibility != VISIBLE) {
+        if (session?.player?.isPlaying != true && error.visibility != VISIBLE) {
             play.visibility = VISIBLE
-        } else if (player?.isPlaying == true) {
+        } else if (session?.player?.isPlaying == true) {
             play.visibility = GONE
         }
     }
@@ -497,7 +522,7 @@ internal class NativeMessageViewHolder(
     private val onRedPacketGestureClick: (ChatRoomMessage, Int) -> Unit,
     private val onReactionClick: (ChatRoomMessage, String) -> Unit,
     private val onRepeatClick: (ChatRoomMessage) -> Unit,
-    private val onVideoFullscreenClick: (String) -> Unit,
+    private val onVideoFullscreenClick: (String, PlaybackSession) -> Unit,
     private val avatarDrawableStore: SharedAvatarDrawableStore,
     private val messageDrawableStore: SharedMessageDrawableStore,
 ) : RecyclerView.ViewHolder(view) {
@@ -1336,9 +1361,9 @@ internal class NativeMessageViewHolder(
             addView(ChatVideoCard(context, theme).apply {
                 bind(
                     url = url,
-                    onFullscreen = {
+                    onFullscreen = { session ->
                         dismissSourcePopup()
-                        onVideoFullscreenClick(url)
+                        onVideoFullscreenClick(url, session)
                     },
                 )
             }, FrameLayout.LayoutParams(

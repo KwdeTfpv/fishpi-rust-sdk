@@ -73,7 +73,7 @@ import dev.fishpi.mobile.shared.message.ChatListItem
 import dev.fishpi.mobile.shared.message.ChatMessageRenderHints
 import dev.fishpi.mobile.shared.message.ChatQuote
 import dev.fishpi.mobile.ui.components.PlainBackButton
-import dev.fishpi.mobile.ui.overlay.LocalImageViewer
+import dev.fishpi.mobile.ui.overlay.LocalMediaOverlay
 import dev.fishpi.mobile.ui.overlay.LinkPreviewOverlay
 import dev.fishpi.mobile.ui.components.LoadingScreen
 import dev.fishpi.mobile.ui.components.FloatingNoticePill
@@ -109,7 +109,7 @@ internal fun DefaultPrivateChatUi(
 ) {
     val environment = LocalPrivateChatUiEnvironment.current
     val conversation = state.conversation
-    val imageViewer = LocalImageViewer.current
+    val imageViewer = LocalMediaOverlay.current
     val attachmentPicker = rememberChatAttachmentPicker(
         onPicked = { uri, isVideo -> dispatch(PrivateChatAction.PickAttachment(uri, isVideo)) },
         onError = { dispatch(PrivateChatAction.ShowError(it)) },

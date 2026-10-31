@@ -10,13 +10,9 @@ import androidx.core.net.toUri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -28,13 +24,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,9 +37,11 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -55,7 +50,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -75,7 +69,6 @@ import coil3.size.Precision
 import coil3.size.Scale
 import coil3.size.Size
 import dev.fishpi.mobile.rememberFishPiImageLoader
-import dev.fishpi.mobile.ui.components.FishPiIconButton
 import java.io.File
 import java.net.URL
 import kotlin.math.abs
@@ -90,65 +83,8 @@ internal data class ImageViewerRequest(
     val startIndex: Int,
 )
 
-/**
- * 全局图片查看器控制器。挂在 app 根部（见 [ImageViewerHost]），
- * 三处入口（聊天室 / 帖子 / 私聊）通过 [LocalImageViewer] 调用 [open]。
- */
-internal class ImageViewerController {
-    var request by mutableStateOf<ImageViewerRequest?>(null)
-        private set
-
-    fun open(images: List<String>, index: Int) {
-        val cleaned = images.filter { it.isNotBlank() }
-        if (cleaned.isEmpty()) return
-        request = ImageViewerRequest(
-            images = cleaned,
-            startIndex = index.coerceIn(0, cleaned.lastIndex),
-        )
-    }
-
-    fun open(url: String) {
-        if (url.isBlank()) return
-        request = ImageViewerRequest(listOf(url), 0)
-    }
-
-    fun dismiss() {
-        request = null
-    }
-}
-
-internal val LocalImageViewer = staticCompositionLocalOf<ImageViewerController> {
-    error("ImageViewerController 未提供，请在上层包裹 ImageViewerHost")
-}
-
-/**
- * 在 app 根部包裹一次：提供 [LocalImageViewer]，并在内容之上渲染全屏查看器。
- */
 @Composable
-internal fun ImageViewerHost(content: @Composable () -> Unit) {
-    val controller = remember { ImageViewerController() }
-    CompositionLocalProvider(LocalImageViewer provides controller) {
-        content()
-        val request = controller.request
-        AnimatedVisibility(
-            visible = request != null,
-            enter = fadeIn(FishPiMotionSpec),
-            exit = fadeOut(FishPiMotionSpec),
-        ) {
-            // 记住最后一次非空请求，让退场动画期间仍有内容可渲染。
-            val lastRequest = remember { mutableStateOf(request) }
-            if (request != null) lastRequest.value = request
-            lastRequest.value?.let {
-                ImageViewer(request = it, onDismiss = { controller.dismiss() })
-            }
-        }
-    }
-}
-
-private val FishPiMotionSpec = androidx.compose.animation.core.tween<Float>(durationMillis = 180)
-
-@Composable
-private fun ImageViewer(
+internal fun ImageViewer(
     request: ImageViewerRequest,
     onDismiss: () -> Unit,
 ) {
@@ -169,8 +105,6 @@ private fun ImageViewer(
     var isSaving by remember { mutableStateOf(false) }
     var saveStatus by remember { mutableStateOf<String?>(null) }
     var isSharing by remember { mutableStateOf(false) }
-
-    BackHandler(enabled = true) { onDismiss() }
 
     fun saveImage() {
         if (isSaving) return
@@ -257,35 +191,43 @@ private fun ImageViewer(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .statusBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FishPiIconButton(
-                icon = Icons.Rounded.Close,
-                contentDescription = "关闭图片预览",
+            FilledIconButton(
                 onClick = onDismiss,
-                tint = Color.White,
-                background = Color.Black.copy(alpha = 0.42f),
-            )
+                modifier = Modifier.size(44.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = Color.Black.copy(alpha = 0.42f),
+                    contentColor = Color.White,
+                ),
+            ) {
+                Icon(Icons.Rounded.Close, contentDescription = "关闭图片预览")
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FishPiIconButton(
-                    icon = Icons.Rounded.Share,
-                    contentDescription = "分享图片",
+                FilledIconButton(
                     onClick = { shareImage() },
                     enabled = !isSharing,
-                    tint = Color.White,
-                    background = Color.Black.copy(alpha = 0.42f),
-                )
-                FishPiIconButton(
-                    icon = Icons.Rounded.Download,
-                    contentDescription = "保存图片",
+                    modifier = Modifier.size(44.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = Color.Black.copy(alpha = 0.42f),
+                        contentColor = Color.White,
+                    ),
+                ) {
+                    Icon(Icons.Rounded.Share, contentDescription = "分享图片")
+                }
+                FilledIconButton(
                     onClick = { requestSaveImage() },
                     enabled = !isSaving,
-                    tint = Color.White,
-                    background = Color.Black.copy(alpha = 0.42f),
-                )
+                    modifier = Modifier.size(44.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = Color.Black.copy(alpha = 0.42f),
+                        contentColor = Color.White,
+                    ),
+                ) {
+                    Icon(Icons.Rounded.Download, contentDescription = "保存图片")
+                }
             }
         }
 
@@ -294,7 +236,6 @@ private fun ImageViewer(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(bottom = 28.dp)
                     .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(999.dp))
                     .padding(horizontal = 14.dp, vertical = 6.dp),

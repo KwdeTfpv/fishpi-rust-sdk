@@ -23,6 +23,7 @@ import dev.fishpi.mobile.chatui.ChatMarkdownRenderCache
 import dev.fishpi.mobile.chatui.MarkwonChatRenderer
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.rememberFishPiImageLoader
+import dev.fishpi.mobile.ui.overlay.PlaybackSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -60,7 +61,7 @@ internal fun NativeMessageList(
     onRedPacketGestureClick: (ChatRoomMessage, Int) -> Unit = { _, _ -> },
     onReactionClick: (ChatRoomMessage, String) -> Unit,
     onRepeatClick: (ChatRoomMessage) -> Unit = {},
-    onVideoFullscreenClick: (String) -> Unit = {},
+    onVideoFullscreenClick: (String, PlaybackSession) -> Unit = { _, _ -> },
     onTapBlankArea: () -> Unit = {},
     controller: NativeMessageListController = rememberNativeMessageListController(),
 ) {

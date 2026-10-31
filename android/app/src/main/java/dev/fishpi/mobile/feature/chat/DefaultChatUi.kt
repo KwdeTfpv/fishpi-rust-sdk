@@ -134,9 +134,8 @@ import dev.fishpi.mobile.ui.components.consumeTaps
 import dev.fishpi.mobile.ui.components.fishPiChatWallpaper
 import dev.fishpi.mobile.ui.components.silentTap
 import dev.fishpi.mobile.ui.media.rememberChatAttachmentPicker
-import dev.fishpi.mobile.ui.overlay.LocalImageViewer
+import dev.fishpi.mobile.ui.overlay.LocalMediaOverlay
 import dev.fishpi.mobile.ui.overlay.LinkPreviewOverlay
-import dev.fishpi.mobile.ui.overlay.VideoPlaybackOverlay
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.ChatOnlineUser
@@ -384,9 +383,8 @@ private fun DefaultChatUiContent(
     val redPacketJumpTargetId = bridge.redPacketJumpTargetId
     val locateMessageId = bridge.locateMessageId
     val locateMessageRequest = bridge.locateMessageRequest
-    val imageViewer = LocalImageViewer.current
+    val imageViewer = LocalMediaOverlay.current
     val previewLinkUrl = bridge.previewLinkUrl
-    var previewVideoUrl by remember { mutableStateOf<String?>(null) }
     var onlineUsersOpen by remember { mutableStateOf(false) }
     var chatActionsOpen by remember { mutableStateOf(false) }
     var qrScannerOpen by remember { mutableStateOf(false) }
@@ -838,8 +836,8 @@ private fun DefaultChatUiContent(
                         onRepeatClick = { message ->
                             dispatch(ChatAction.RepeatMessage(message))
                         },
-                        onVideoFullscreenClick = { url ->
-                            previewVideoUrl = url
+                        onVideoFullscreenClick = { url, session ->
+                            imageViewer.openVideo(session, url)
                         },
                         onTapBlankArea = {
                             bridge.closeAttachmentPanel()
@@ -1034,10 +1032,6 @@ private fun DefaultChatUiContent(
         }
         previewLinkUrl?.let { linkUrl ->
             LinkPreviewOverlay(url = linkUrl, apiKey = session.apiKey, onDismiss = { bridge.dismissLinkPreview() })
-        }
-
-        previewVideoUrl?.let { videoUrl ->
-            VideoPlaybackOverlay(url = videoUrl, onDismiss = { previewVideoUrl = null })
         }
 
         actionAnchor?.let { anchor ->
@@ -1314,10 +1308,6 @@ private fun DefaultChatUiContent(
 
     BackHandler(enabled = active && previewLinkUrl != null) {
         bridge.dismissLinkPreview()
-    }
-
-    BackHandler(enabled = active && previewVideoUrl != null) {
-        previewVideoUrl = null
     }
 
     BackHandler(enabled = active && actionAnchor != null) {

@@ -35,7 +35,7 @@ internal fun DefaultMessageListUi(
         onRedPacketGestureClick = { message, gesture -> dispatch(MessageAction.RedPacketGestureClicked(message, gesture)) },
         onReactionClick = { message, reaction -> dispatch(MessageAction.ReactionClicked(message, reaction)) },
         onRepeatClick = { dispatch(MessageAction.RepeatClicked(it)) },
-        onVideoFullscreenClick = { dispatch(MessageAction.VideoFullscreenClicked(it)) },
+        onVideoFullscreenClick = { url, _ -> dispatch(MessageAction.VideoFullscreenClicked(url)) },
         onTapBlankArea = { dispatch(MessageAction.BlankAreaTapped) },
         controller = controller,
     )

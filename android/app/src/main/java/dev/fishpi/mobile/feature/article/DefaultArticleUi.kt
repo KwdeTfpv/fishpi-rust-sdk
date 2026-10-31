@@ -18,7 +18,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.zIndex
 import dev.fishpi.mobile.ui.motion.FishPiMotion
-import dev.fishpi.mobile.ui.overlay.LocalImageViewer
+import dev.fishpi.mobile.ui.overlay.LocalMediaOverlay
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -220,7 +220,7 @@ internal fun DefaultArticleUi(
     onPluginToolbarAction: (PluginToolbarEntry, String) -> Unit = { _, _ -> },
 ) {
     val listState = rememberLazyListState()
-    val imageViewer = LocalImageViewer.current
+    val imageViewer = LocalMediaOverlay.current
 
     LaunchedEffect(listState, state.articles.size, state.hasMore, state.isLoadingMore) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
