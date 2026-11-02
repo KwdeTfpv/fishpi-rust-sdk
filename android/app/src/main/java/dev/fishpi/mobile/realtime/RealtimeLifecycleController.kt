@@ -64,7 +64,6 @@ object RealtimeLifecycleController {
             stopEverything()
         } else {
             RealtimeConnectionManager.start(next)
-            reconcileService()
         }
     }
 
@@ -138,7 +137,6 @@ object RealtimeLifecycleController {
         if (now - lastNetworkRestartAt < NETWORK_RESTART_INTERVAL_MS) return
         lastNetworkRestartAt = now
         RealtimeConnectionManager.restart()
-        reconcileService()
         if (!RealtimeConnectionManager.hasActiveChatHandle()) {
             RealtimeConnectionManager.start(current)
         }
@@ -146,6 +144,7 @@ object RealtimeLifecycleController {
 
     private fun reconcileService() {
         val context = appContext ?: return
+        if (foreground && !serviceRunning) return
         val shouldRun = keepAliveEnabled() && (session != null || restoreSession(context) != null)
         if (!shouldRun) {
             if (serviceRunning) {

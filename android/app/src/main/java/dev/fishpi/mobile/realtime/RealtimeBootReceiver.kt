@@ -31,5 +31,6 @@ class RealtimeBootReceiver : BroadcastReceiver() {
         RealtimeLifecycleController.attach(context)
         val session = RealtimeLifecycleController.restoreSession(context) ?: return
         RealtimeLifecycleController.onSession(session)
+        RealtimeKeepAliveService.start(context)
     }
 }
