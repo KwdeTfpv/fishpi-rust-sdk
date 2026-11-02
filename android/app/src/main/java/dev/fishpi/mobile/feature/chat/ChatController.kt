@@ -38,6 +38,7 @@ import dev.fishpi.mobile.plugin.PluginMenuAction
 import dev.fishpi.mobile.plugin.PluginToolbarEntry
 import dev.fishpi.mobile.utils.appendDraftBlock
 import dev.fishpi.mobile.utils.toEpochMillisOrNull
+import dev.fishpi.mobile.utils.toPlainMessageText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -734,18 +735,25 @@ internal class ChatController(
         ).joinToString("|")
 
     private fun ChatRoomMessage.matchesOptimistic(incoming: ChatRoomMessage): Boolean {
-        val mineText = messageFingerprint()
-        val theirText = incoming.messageFingerprint()
+        if (messageFingerprint() == incoming.messageFingerprint()) return true
+        val mineText = content.trim().toPlainMessageText().trim()
+        val theirText = incoming.content.trim().toPlainMessageText().trim()
         return mineText.isNotEmpty() && mineText == theirText
     }
 
     private fun ChatRoomMessage.matchesOptimisticHistory(history: ChatRoomMessage): Boolean {
         if (!userName.equals(currentUsername, ignoreCase = true)) return false
-        if (!history.userName.equals(currentUsername, ignoreCase = true)) return false
-        if (messageFingerprint() != history.messageFingerprint()) return false
+        if (history.userName.isNotBlank() && !history.userName.equals(currentUsername, ignoreCase = true)) {
+            return false
+        }
+        if (messageFingerprint() != history.messageFingerprint()) {
+            val mineText = content.trim().toPlainMessageText().trim()
+            val historyText = history.content.trim().toPlainMessageText().trim()
+            if (mineText.isEmpty() || mineText != historyText) return false
+        }
         val localTime = time.toEpochMillisOrNull()
         val historyTime = history.time.toEpochMillisOrNull()
-        if (localTime == null || historyTime == null) return false
+        if (localTime == null || historyTime == null) return true
         return kotlin.math.abs(localTime - historyTime) <= OptimisticHistoryMatchWindowMs
     }
 
