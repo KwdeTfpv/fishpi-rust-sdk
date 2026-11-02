@@ -8,14 +8,21 @@ import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ProcessLifecycleOwner
 import dev.fishpi.mobile.FishPiNoticeType
 import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.data.FishPiNative
 import dev.fishpi.mobile.feature.pluginui.PluginUiController
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Modifier
 import java.security.MessageDigest
@@ -118,6 +125,7 @@ data class PluginRuntimeSnapshot(
 
 class PluginManager private constructor(context: Context) {
     companion object {
+        private const val MAX_PLUGIN_BYTES = 2 * 1024 * 1024
         @Volatile private var INSTANCE: PluginManager? = null
 
         fun init(ctx: Context): PluginManager = INSTANCE ?: synchronized(this) {
@@ -142,6 +150,7 @@ class PluginManager private constructor(context: Context) {
     private val menuActionsByPlugin = mutableMapOf<String, MutableMap<String, PluginMenuAction>>()
     private val chatClientConfigs = ConcurrentHashMap<String, PluginChatClientConfig>()
     @Volatile private var loaded = false
+    @Volatile private var appForeground = true
     var apiKey: String = ""
     var userName: String = ""
     var onSystemMessage: ((String) -> Unit)? = null
@@ -160,6 +169,21 @@ class PluginManager private constructor(context: Context) {
         PluginUiController.get().setActionHandler { pluginId, actionId, values ->
             emitPluginUiAction(pluginId, actionId, values)
         }
+        ProcessLifecycleOwner.get().lifecycle.addObserver(
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START -> {
+                        appForeground = true
+                        sandboxes.forEach { it.resume() }
+                    }
+                    Lifecycle.Event.ON_STOP -> {
+                        appForeground = false
+                        sandboxes.forEach { it.pause() }
+                    }
+                    else -> Unit
+                }
+            },
+        )
     }
 
     private val methodParams = mapOf(
@@ -422,6 +446,7 @@ class PluginManager private constructor(context: Context) {
     }
 
     fun notify(event: String, dataJson: String) {
+        if (!appForeground) return
         for (sb in sandboxes) {
             val scenes = sb.header.scenes.map(String::trim).filter(String::isNotBlank)
             if (scenes.isNotEmpty() && !scenes.contains(currentScene)) continue
@@ -565,8 +590,50 @@ class PluginManager private constructor(context: Context) {
             .apply()
     }
 
+    private fun readPluginSource(uri: Uri): String {
+        val bytes = appContext.contentResolver.openInputStream(uri)?.use { input ->
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            var total = 0
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                total += read
+                if (total > MAX_PLUGIN_BYTES) throw IOException("插件文件过大")
+                output.write(buffer, 0, read)
+            }
+            output.toByteArray()
+        } ?: throw IOException("无法读取所选文件")
+        return String(bytes, Charsets.UTF_8)
+    }
+
+    private fun writePluginSource(fileName: String, source: String) {
+        require(fileName.endsWith(".js", ignoreCase = true)) { "仅支持编辑 .js 插件" }
+        require(!fileName.contains('/') && !fileName.contains('\\')) { "非法插件文件名" }
+        val target = File(pluginDir, fileName)
+        val temp = File(pluginDir, ".$fileName.tmp")
+        temp.writeText(source, Charsets.UTF_8)
+        try {
+            try {
+                Files.move(
+                    temp.toPath(),
+                    target.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE,
+                )
+            } catch (_: AtomicMoveNotSupportedException) {
+                Files.move(temp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+        } finally {
+            temp.delete()
+        }
+    }
+
     fun installPluginFromUri(uri: Uri): String {
         pluginDir.mkdirs()
+        val source = readPluginSource(uri)
+        val header = PluginHeaderParser.parse(source)
+            ?: throw IOException("插件缺少 FishPiPlugin 元信息")
         val rawName = runCatching {
             appContext.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
                 ?.use { cursor ->
@@ -574,13 +641,10 @@ class PluginManager private constructor(context: Context) {
                     if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) else null
                 }
         }.getOrNull()
-        val safeBase = (rawName ?: "plugin-${System.currentTimeMillis()}.js")
+        val safeBase = (rawName ?: header.name)
             .replace(Regex("[^A-Za-z0-9._-]"), "_")
         val finalName = if (safeBase.endsWith(".js", ignoreCase = true)) safeBase else "$safeBase.js"
-        val target = File(pluginDir, finalName)
-        appContext.contentResolver.openInputStream(uri)?.use { input ->
-            target.outputStream().use { output -> input.copyTo(output) }
-        } ?: throw IOException("无法读取所选文件")
+        writePluginSource(finalName, source)
         markPluginSource(finalName, PluginSource.Local)
         val disabled = disabledFileNames().toMutableSet()
         disabled.add(finalName)
@@ -599,11 +663,9 @@ class PluginManager private constructor(context: Context) {
         val finalName = targetFileName.takeIf {
             it.endsWith(".js", ignoreCase = true) && !it.contains('/') && !it.contains('\\')
         } ?: throw IOException("非法目标文件名")
-        val target = File(pluginDir, finalName)
-        runCatching { if (target.exists()) target.delete() }
-        appContext.contentResolver.openInputStream(uri)?.use { input ->
-            target.outputStream().use { output -> input.copyTo(output) }
-        } ?: throw IOException("无法读取所选文件")
+        val source = readPluginSource(uri)
+        PluginHeaderParser.parse(source) ?: throw IOException("插件缺少 FishPiPlugin 元信息")
+        writePluginSource(finalName, source)
         markPluginSource(finalName, PluginSource.Local)
         val disabled = disabledFileNames().toMutableSet()
         disabled.add(finalName)
@@ -634,9 +696,12 @@ class PluginManager private constructor(context: Context) {
         pluginDir.mkdirs()
         val header = PluginHeaderParser.parse(source)
             ?: throw IOException("插件缺少 FishPiPlugin 元信息")
+        if (source.toByteArray(Charsets.UTF_8).size > MAX_PLUGIN_BYTES) {
+            throw IOException("插件文件过大")
+        }
         val finalName = storePluginFileName(preferredName.ifBlank { header.name })
+        writePluginSource(finalName, source)
         val target = File(pluginDir, finalName)
-        target.writeText(source, Charsets.UTF_8)
         markPluginSource(finalName, pluginSource)
         val managerPrefs = storageFor("__manager").edit().remove("approved_hash:$finalName")
         if (pluginSource == PluginSource.Store) {
@@ -684,7 +749,10 @@ class PluginManager private constructor(context: Context) {
     }
 
     fun savePluginSource(fileName: String, source: String) {
-        pluginFile(fileName).writeText(source)
+        if (source.toByteArray(Charsets.UTF_8).size > MAX_PLUGIN_BYTES) {
+            throw IOException("插件文件过大")
+        }
+        writePluginSource(fileName, source)
         markPluginSource(fileName, PluginSource.Local)
         approvePluginForCurrentContent(fileName)
         storageFor("__manager").edit().remove("store_hash:$fileName").apply()

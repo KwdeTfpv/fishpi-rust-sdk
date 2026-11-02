@@ -99,6 +99,14 @@ internal class PluginSandbox(
         } catch (_: Exception) { trimmed }
     }
 
+    fun pause() {
+        try { webView?.onPause() } catch (_: Exception) {}
+    }
+
+    fun resume() {
+        try { webView?.onResume() } catch (_: Exception) {}
+    }
+
     fun destroy() {
         try { webView?.removeJavascriptInterface("__bridge"); webView?.destroy() } catch (_: Exception) {}
         webView = null
