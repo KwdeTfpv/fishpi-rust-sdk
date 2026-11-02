@@ -10,6 +10,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,7 +43,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.fishpi.mobile.data.NotificationPrefs
 import dev.fishpi.mobile.data.SessionStore
+import dev.fishpi.mobile.realtime.KeepAliveStatus
 import dev.fishpi.mobile.realtime.RealtimeLifecycleController
+import dev.fishpi.mobile.realtime.RealtimeNavTarget
 import dev.fishpi.mobile.realtime.RealtimeNotifier
 import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.FishPiTheme
@@ -56,6 +60,7 @@ internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val store = remember { SessionStore(context.applicationContext) }
     var prefs by remember { mutableStateOf(store.getNotificationPrefs()) }
+    val keepAliveStatus by RealtimeLifecycleController.status.collectAsState()
 
     fun update(next: NotificationPrefs, keepAliveChanged: Boolean = false) {
         prefs = next
@@ -65,11 +70,15 @@ internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
         }
     }
 
-    // 授权结果回调：无论是否授权都启动保活（前台服务本身不依赖通知权限，仅通知展示依赖）
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) {
-        update(prefs.copy(keepAlive = true), keepAliveChanged = true)
+    ) { granted ->
+        if (granted && context.notificationsEnabled()) {
+            update(prefs.copy(keepAlive = true), keepAliveChanged = true)
+        } else {
+            update(prefs.copy(keepAlive = false), keepAliveChanged = true)
+            FishPiNotifier.error("未授予通知权限，无法开启后台保活")
+        }
     }
 
     fun enableKeepAlive() {
@@ -80,6 +89,8 @@ internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
             ) != PackageManager.PERMISSION_GRANTED
         if (needsPermission) {
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else if (!context.notificationsEnabled()) {
+            FishPiNotifier.error("系统通知已关闭，请先开启通知权限")
         } else {
             update(prefs.copy(keepAlive = true), keepAliveChanged = true)
         }
@@ -135,6 +146,12 @@ internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
                     )
                     FishPiSettingsRow(
                         icon = { Icon(imageVector = Icons.Rounded.Notifications, contentDescription = null, tint = FishPiTheme.accent) },
+                        title = "保活服务状态",
+                        summary = keepAliveStatusText(keepAliveStatus),
+                        onClick = {},
+                    )
+                    FishPiSettingsRow(
+                        icon = { Icon(imageVector = Icons.Rounded.Notifications, contentDescription = null, tint = FishPiTheme.accent) },
                         title = "忽略电池优化",
                         summary = "允许后台常驻，避免系统休眠时收不到消息",
                         onClick = { context.requestIgnoreBatteryOptimizations() },
@@ -167,8 +184,23 @@ internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
                         summary = "重建消息和保活渠道，恢复默认提醒方式",
                         onClick = {
                             RealtimeNotifier.resetChannels(context)
-                            RealtimeLifecycleController.onKeepAlivePrefChanged()
+                            RealtimeLifecycleController.onNotificationChannelsReset()
                             FishPiNotifier.success("已修复通知渠道")
+                        },
+                    )
+                    FishPiSettingsRow(
+                        icon = { Icon(imageVector = Icons.Rounded.Notifications, contentDescription = null, tint = FishPiTheme.accent) },
+                        title = "发送测试通知",
+                        summary = "检查通知权限、渠道和系统设置是否正常",
+                        onClick = {
+                            val ok = RealtimeNotifier.notify(
+                                context = context,
+                                id = 7001,
+                                title = "摸鱼派",
+                                body = "通知测试成功",
+                                target = RealtimeNavTarget.Notice,
+                            )
+                            if (ok) FishPiNotifier.success("测试通知已发送") else FishPiNotifier.error("通知未发送，请检查权限")
                         },
                     )
                 }
@@ -213,6 +245,18 @@ internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
             }
         }
     }
+}
+
+private fun Context.notificationsEnabled(): Boolean =
+    NotificationManagerCompat.from(this).areNotificationsEnabled()
+
+private fun keepAliveStatusText(status: KeepAliveStatus): String = when (status) {
+    KeepAliveStatus.Stopped -> "已停止"
+    KeepAliveStatus.Starting -> "正在启动"
+    KeepAliveStatus.Running -> "运行中"
+    KeepAliveStatus.StoppedBySystem -> "已被系统停止，请重新开启"
+    KeepAliveStatus.NoSession -> "未登录，无法保活"
+    KeepAliveStatus.Error -> "启动失败，请检查通知权限"
 }
 
 @Composable
@@ -302,7 +346,7 @@ private fun KeywordEditor(
         value = text,
         onValueChange = {
             text = it
-            val parsed = it.split("，", ",", "\n")
+            val parsed = it.split(',', '，', '\n')
                 .map { kw -> kw.trim() }
                 .filter { kw -> kw.isNotBlank() }
                 .distinct()

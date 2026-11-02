@@ -7,12 +7,14 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 
-// 前台服务：仅在保活开关打开时启动，持有进程存活以维持长连接
 class RealtimeKeepAliveService : Service() {
+
+    private var stopReason = KeepAliveStopReason.User
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        stopReason = KeepAliveStopReason.User
         val notification = RealtimeNotifier.buildKeepAliveNotification(this)
         val started = runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -26,28 +28,41 @@ class RealtimeKeepAliveService : Service() {
             }
         }.isSuccess
         if (!started) {
+            stopReason = KeepAliveStopReason.Error
+            RealtimeLifecycleController.onServiceStopped(stopReason)
             stopSelf(startId)
             return START_NOT_STICKY
         }
 
         val current = RealtimeConnectionManager.currentSession()
-        if (current != null) {
-            RealtimeConnectionManager.start(current)
+            ?: RealtimeLifecycleController.restoreSession(this)
+        if (current == null) {
+            stopReason = KeepAliveStopReason.NoSession
+            RealtimeLifecycleController.onServiceStopped(stopReason)
+            stopSelf(startId)
+            return START_NOT_STICKY
         }
+
+        RealtimeConnectionManager.start(current)
+        RealtimeLifecycleController.onServiceStarted()
         return START_STICKY
     }
 
-    // Android 15+ dataSync 前台服务限时到点回调：优雅降级，不硬撑
     override fun onTimeout(startId: Int) {
+        stopReason = KeepAliveStopReason.Timeout
+        RealtimeLifecycleController.onServiceStopped(stopReason)
         stopSelf()
     }
 
     override fun onTimeout(startId: Int, fgsType: Int) {
+        stopReason = KeepAliveStopReason.Timeout
+        RealtimeLifecycleController.onServiceStopped(stopReason)
         stopSelf()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        RealtimeLifecycleController.onServiceStopped(stopReason)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
@@ -68,6 +83,8 @@ class RealtimeKeepAliveService : Service() {
                 true
             }.getOrDefault(false)
         }
+
+        fun refresh(context: Context): Boolean = start(context)
 
         fun stop(context: Context) {
             context.stopService(Intent(context, RealtimeKeepAliveService::class.java))

@@ -27,6 +27,7 @@ class RealtimeNotificationDispatcher(
     var appInForeground: Boolean = false
 
     private var nextId = 2000
+    private val recentKeys = mutableMapOf<String, Long>()
 
     fun start() {
         RealtimeConnectionManager.chatEvents
@@ -85,6 +86,8 @@ class RealtimeNotificationDispatcher(
         }
 
         val sender = message.userNickname.ifBlank { message.userName }
+        val key = "chat:${message.oId.ifBlank { message.content.hashCode().toString() }}:${message.time}"
+        if (!shouldEmit(key)) return
         RealtimeNotifier.notify(
             context = appContext,
             id = notificationId(),
@@ -106,6 +109,7 @@ class RealtimeNotificationDispatcher(
         if (!prefs.privateMessages) {
             return
         }
+        if (!shouldEmit("private:${notice.peer}:${notice.preview}")) return
         RealtimeNotifier.notify(
             context = appContext,
             id = privateNotificationId(notice.peer),
@@ -123,6 +127,7 @@ class RealtimeNotificationDispatcher(
         if (!prefs.notices) {
             return
         }
+        if (!shouldEmit("system:notice")) return
         RealtimeNotifier.notify(
             context = appContext,
             id = 4001,
@@ -132,6 +137,16 @@ class RealtimeNotificationDispatcher(
         )
     }
 
+    @Synchronized
+    private fun shouldEmit(key: String): Boolean {
+        val now = System.currentTimeMillis()
+        recentKeys.entries.removeAll { now - it.value > 30_000L }
+        val last = recentKeys[key]
+        if (last != null && now - last < 10_000L) return false
+        recentKeys[key] = now
+        return true
+    }
+
     private fun notificationId(): Int {
         nextId += 1
         if (nextId > 2999) nextId = 2000
@@ -139,7 +154,7 @@ class RealtimeNotificationDispatcher(
     }
 
     private fun privateNotificationId(peer: String): Int =
-        3000 + (peer.hashCode() and 0x3FF)
+        3000 + (peer.hashCode() and 0x3E7)
 
     private fun String.toNotificationText(): String {
         val withoutQuotes = lineSequence()

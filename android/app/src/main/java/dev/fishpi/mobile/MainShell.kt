@@ -487,10 +487,9 @@ internal fun MainShell(
     }
 
     // 通知分发器需知道聊天室是否可见，避免在聊天室内重复弹通知
-    LaunchedEffect(chatRoomOpen, appInForeground) {
+    LaunchedEffect(chatRoomOpen) {
         (context.applicationContext as? FishPiApplication)?.notificationDispatcher?.let {
             it.chatRoomVisible = chatRoomOpen
-            it.appInForeground = appInForeground
         }
     }
 

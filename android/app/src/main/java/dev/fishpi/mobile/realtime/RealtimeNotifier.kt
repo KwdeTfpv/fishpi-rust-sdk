@@ -66,6 +66,7 @@ object RealtimeNotifier {
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(contentIntent(context, RealtimeNavTarget.Notice, 0))
             .build()
     }

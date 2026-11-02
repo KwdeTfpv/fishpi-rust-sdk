@@ -10,10 +10,8 @@ import dev.fishpi.mobile.data.PrivateChatRealtimeClient
 import dev.fishpi.mobile.data.RedPacketStatusUpdate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -63,12 +61,6 @@ object RealtimeConnectionManager {
     private val chatRoom = ChatRoomRealtimeClient()
     private val privateOverview = PrivateChatRealtimeClient()
     private val notice = NoticeRealtimeClient()
-
-    @Volatile
-    private var noticeReconnectJob: Job? = null
-
-    @Volatile
-    private var privateOverviewReconnectJob: Job? = null
 
     private val droppedChatEvents = AtomicLong()
     private val droppedPrivateNotices = AtomicLong()
@@ -166,36 +158,10 @@ object RealtimeConnectionManager {
             onNotice = { _noticeEvents.tryEmit(Unit) },
             onStatus = { _noticeStatus.value = it },
         )
-
-        noticeReconnectJob?.cancel()
-        noticeReconnectJob = scope.launch {
-            while (true) {
-                delay(15 * 60 * 1000L)
-                val current = session ?: break
-                notice.disconnect()
-                notice.connect(
-                    apiKey = current.apiKey,
-                    onNotice = { _noticeEvents.tryEmit(Unit) },
-                    onStatus = { _noticeStatus.value = it },
-                )
-            }
-        }
-        privateOverviewReconnectJob?.cancel()
-        privateOverviewReconnectJob = scope.launch {
-            while (true) {
-                delay(15 * 60 * 1000L)
-                val current = session ?: break
-                connectPrivateOverview(current)
-            }
-        }
     }
 
     @Synchronized
     fun stop() {
-        noticeReconnectJob?.cancel()
-        noticeReconnectJob = null
-        privateOverviewReconnectJob?.cancel()
-        privateOverviewReconnectJob = null
         started = false
         session = null
         _connected.value = false
@@ -204,6 +170,13 @@ object RealtimeConnectionManager {
         chatRoom.disconnect()
         privateOverview.disconnect()
         notice.disconnect()
+    }
+
+    @Synchronized
+    fun restart() {
+        val current = session ?: return
+        stop()
+        start(current)
     }
 
     fun reconnectChatRoom(onStatus: (ChatRoomEvent.Status) -> Unit) {
