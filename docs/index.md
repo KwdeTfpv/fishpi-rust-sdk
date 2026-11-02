@@ -190,7 +190,11 @@ FishPi Android 尽量少用厚重阴影，所以层级主要通过底色、描�
 
 ## 快速开始
 
-在 `/sdcard/fishpi/plugins/` 下创建一个 `.js` 文件：
+在 App 的插件目录创建一个 `.js` 文件。实际路径以插件管理面板顶部显示为准，通常是：
+
+```text
+/sdcard/Android/data/dev.fishpi.mobile/files/plugins/
+```
 
 ```javascript
 // ==FishPiPlugin==
@@ -201,7 +205,7 @@ FishPi Android 尽量少用厚重阴影，所以层级主要通过底色、描�
 // ==/FishPiPlugin==
 
 on('message', function(msg) {
-    log('收到消息: ' + msg.type + ' / ' + msg.content);
+    log('收到消息: ' + msg.contentKind + ' / ' + msg.content);
 });
 ```
 
@@ -288,47 +292,59 @@ off('message', handleMessage);
   "userNickname": "只有午安",
   "userAvatarURL": "https://...",
   "content": "今天的摸鱼真香！",
-  "md": "今天的摸鱼真香！",
-  "contentHtml": "<p>今天的摸鱼真香！</p>",
-  "imageUrls": [],
-  "linkUrls": [],
+  "contentKind": "markdown",
+  "media": [],
+  "schema": 2,
   "time": "Mon May 11 09:19:11 CST 2026",
   "client": "Android",
+  "barragerColor": "",
   "type": "msg",
+  "eventType": "message",
   "revoked": false,
   "reactionSummary": [
     {
       "value": "thumbsup",
       "emoji": "👍",
       "count": 2,
-      "selected": false,
-      "users": [],
-      "userDetails": []
+      "selected": false
     }
   ],
   "currentUserReaction": "",
-  "redPacket": null,
+  "md": "今天的摸鱼真香！",
+  "contentHtml": "今天的摸鱼真香！",
+  "imageUrls": [],
+  "linkUrls": [],
   "quote": null
 }
 ```
 
-`type` 常见值：
+`contentKind` 是消息内容类型：
 
 | 值 | 说明 |
 |----|------|
-| `msg` | 普通消息 |
+| `markdown` | 普通 Markdown / 文本消息 |
+| `redPacket` | 红包消息 |
+| `music` | 音乐消息 |
+| `weather` | 天气消息 |
+| `barrage` | 弹幕消息 |
+| `system` | 客户端系统消息 |
+
+`media` 是统一媒体列表，每项为 `{ "kind": "image" \| "video" \| "link", "url": "..." }`。图片、视频和链接都从这里读取，顺序与消息正文中首次出现顺序一致。
+
+`type` 是旧版兼容字段，常见值：
+
+| 值 | 说明 |
+|----|------|
+| `msg` | 普通消息、音乐、天气 |
 | `redPacket` | 红包消息 |
 | `barrager` | 弹幕消息 |
 | `system` | 客户端兜底系统消息 |
 
-### quote 子结构
+`eventType` 是事件类型，例如 `message`、`menuAction`。旧插件可以继续读 `md`、`contentHtml`、`imageUrls`、`linkUrls`、`type`，但这些字段是兼容别名：`md` 和 `contentHtml` 都等于 `content`，图片/链接数组由 `media` 派生。
 
-```json
-{
-  "text": "被引用的文本",
-  "imageUrls": ["https://.../a.png"]
-}
-```
+### 兼容字段 quote
+
+`quote` 仍保留在兼容 JSON 中，但当前 native 不再生成引用对象，值固定为 `null`。引用展示由客户端 UI 根据正文生成，插件不应依赖该字段；旧插件读取 `msg.quote` 会得到 `null`。
 
 ### redPacket 子结构
 
@@ -656,12 +672,22 @@ on('menuAction', function(e) {
     "userNickname": "只有午安",
     "userAvatarURL": "https://...",
     "content": "今天的摸鱼真香！",
+    "contentKind": "markdown",
+    "media": [],
+    "schema": 2,
+    "time": "Mon May 11 09:19:11 CST 2026",
+    "client": "Android",
+    "barragerColor": "",
+    "type": "msg",
+    "eventType": "menuAction",
+    "revoked": false,
+    "reactionSummary": [],
+    "currentUserReaction": "",
     "md": "今天的摸鱼真香！",
-    "contentHtml": "<p>今天的摸鱼真香！</p>",
+    "contentHtml": "今天的摸鱼真香！",
     "imageUrls": [],
     "linkUrls": [],
-    "time": "Mon May 11 09:19:11 CST 2026",
-    "type": "menuAction"
+    "quote": null
   }
 }
 ```
@@ -1602,21 +1628,23 @@ on('message', function(msg) {
 
 管理面板与场景无关，列出所有已安装插件；`@scenes` 只影响工具栏 / 菜单入口在各页面的露出。
 
-默认示例插件会从 App assets 复制到 `/sdcard/fishpi/plugins/red-packet-assistant.js`。
+插件目录以管理面板顶部显示的实际路径为准。安装请用「安装」按钮选择 `.js` 文件；App 不会自动把示例插件复制到该目录。
 
 ## 调试
 
 ```bash
 adb logcat -s FishPiPlugin:D
-adb shell ls /sdcard/fishpi/plugins/
-adb shell rm /sdcard/fishpi/plugins/xxx.js
+adb shell ls /sdcard/Android/data/dev.fishpi.mobile/files/plugins/
+adb shell rm /sdcard/Android/data/dev.fishpi.mobile/files/plugins/xxx.js
 ```
+
+Android 11 及以上通过 `adb shell` 访问 `Android/data` 可能受限；以插件管理面板显示的实际路径为准。
 
 常见问题：
 
 | 现象 | 排查 |
 |------|------|
-| 插件没有显示 | 检查文件是否在 `/sdcard/fishpi/plugins/`，后缀是否为 `.js`，文件头是否包含 `@name` |
+| 插件没有显示 | 检查文件是否在管理面板显示的实际插件目录（通常是 `/sdcard/Android/data/dev.fishpi.mobile/files/plugins/`），后缀是否为 `.js`，文件头是否包含 `@name` |
 | 插件不触发 | 检查 `@scenes` 是否包含当前场景，当前聊天室场景为 `chatRoom` |
 | API 返回 `{ ok:false }` | 查看 `error` 字段和 logcat |
 | 快捷入口不显示 | 确认已调用 `fishpi.toolbar.register`，且 entry 的 `id/title` 不为空 |
