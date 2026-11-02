@@ -16,12 +16,21 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Modifier
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -143,6 +152,9 @@ class PluginManager private constructor(context: Context) {
 
     private val nativeMethods = mutableMapOf<String, java.lang.reflect.Method>()
     private val nativeClass = FishPiNative::class.java
+    private val nativeExecutor = Executors.newCachedThreadPool { runnable ->
+        Thread(runnable, "plugin-native").apply { isDaemon = true }
+    }
 
     init {
         PluginUiController.get().setActionHandler { pluginId, actionId, values ->
@@ -341,25 +353,33 @@ class PluginManager private constructor(context: Context) {
                 else -> jsonArg(args, name, m.parameters[i].type)
             }
         }
-        val latch = CountDownLatch(1)
-        var result: JSONObject? = null
-        var error: Throwable? = null
-        Thread {
-            runCatching {
-                val raw = m.invoke(
-                    if (Modifier.isStatic(m.modifiers)) null else FishPiNative, *values,
-                ) as String
-                raw.unwrap()
-            }.onSuccess {
-                result = it
-            }.onFailure {
-                error = it
+        return runNativeCall {
+            val raw = m.invoke(
+                if (Modifier.isStatic(m.modifiers)) null else FishPiNative, *values,
+            ) as String
+            raw.unwrap()
+        }
+    }
+
+    private fun runNativeCall(block: () -> JSONObject): JSONObject {
+        val future = nativeExecutor.submit<JSONObject>(block)
+        return try {
+            future.get(10, TimeUnit.SECONDS)
+        } catch (e: ExecutionException) {
+            val cause = e.cause
+            throw if (cause is InvocationTargetException && cause.targetException != null) {
+                cause.targetException
+            } else {
+                cause ?: e
             }
-            latch.countDown()
-        }.start()
-        latch.await(10, TimeUnit.SECONDS)
-        result?.let { return it }
-        throw error ?: RuntimeException("timeout")
+        } catch (e: TimeoutException) {
+            future.cancel(true)
+            throw RuntimeException("timeout", e)
+        } catch (e: InterruptedException) {
+            future.cancel(true)
+            Thread.currentThread().interrupt()
+            throw RuntimeException("interrupted", e)
+        }
     }
 
     private fun invokeSendChatRoomMessageWithClientType(
@@ -367,24 +387,11 @@ class PluginManager private constructor(context: Context) {
         config: PluginChatClientConfig,
     ): JSONObject {
         val content = args.optString("content", "")
-        val latch = CountDownLatch(1)
-        var result: JSONObject? = null
-        var error: Throwable? = null
-        Thread {
-            runCatching {
-                FishPiNative
-                    .sendChatRoomMessageWithClientType(apiKey, content, config.client, config.version)
-                    .unwrap()
-            }.onSuccess {
-                result = it
-            }.onFailure {
-                error = it
-            }
-            latch.countDown()
-        }.start()
-        latch.await(10, TimeUnit.SECONDS)
-        result?.let { return it }
-        throw error ?: RuntimeException("timeout")
+        return runNativeCall {
+            FishPiNative
+                .sendChatRoomMessageWithClientType(apiKey, content, config.client, config.version)
+                .unwrap()
+        }
     }
 
     private fun jsonArg(args: JSONObject, name: String, type: Class<*>): Any = when (type) {
@@ -689,31 +696,69 @@ class PluginManager private constructor(context: Context) {
         chatClientConfigs.remove(fileName)
         val file = File(pluginDir, fileName)
         if (!file.exists()) return
-        getState(fileName).status = PluginStatus.Loading
-        runCatching {
+        val state = getState(fileName)
+        state.status = PluginStatus.Loading
+        try {
             val script = file.readText()
-            val header = PluginHeaderParser.parse(script) ?: return
+            val header = PluginHeaderParser.parse(script)
+            if (header == null) {
+                state.recordError("load: missing plugin header")
+                state.status = PluginStatus.Error
+                return
+            }
             val sandbox = PluginSandbox(appContext, fileName, header, script)
-            sandbox.start()
+            if (!sandbox.start()) {
+                state.recordError("load: webview init failed")
+                state.status = PluginStatus.Error
+                return
+            }
             sandboxes.add(sandbox)
-            getState(fileName).status = PluginStatus.Running
+            state.status = PluginStatus.Running
             refreshMenuActions()
-        }.onFailure { e ->
-            getState(fileName).recordError("load: ${e.message}")
-            getState(fileName).status = PluginStatus.Error
+        } catch (e: Exception) {
+            state.recordError("load: ${e.message}")
+            state.status = PluginStatus.Error
         }
     }
 
-    fun applySendHook(text: String): String {
-        var result = text
+    suspend fun applySendHook(text: String): String {
         val active = sandboxes.filter { it.header.scenes.contains(currentScene) }
-        if (active.isEmpty()) return result
-        val latch = CountDownLatch(active.size)
-        for (sb in active) {
-            mainHandler.post { sb.applySendHook(result) { modified -> result = modified; latch.countDown() } }
+        if (active.isEmpty()) return text
+        return suspendCancellableCoroutine { continuation ->
+            val result = AtomicReference(text)
+            val remaining = AtomicInteger(active.size)
+            val finished = AtomicBoolean(false)
+            val timeout = Runnable {
+                if (finished.compareAndSet(false, true) && continuation.isActive) {
+                    continuation.resume(result.get())
+                }
+            }
+            mainHandler.postDelayed(timeout, 300)
+
+            fun finish() {
+                if (!finished.compareAndSet(false, true)) return
+                mainHandler.removeCallbacks(timeout)
+                if (continuation.isActive) continuation.resume(result.get())
+            }
+
+            active.forEach { sandbox ->
+                mainHandler.post {
+                    try {
+                        sandbox.applySendHook(result.get()) { modified ->
+                            result.set(modified)
+                            if (remaining.decrementAndGet() == 0) finish()
+                        }
+                    } catch (_: Exception) {
+                        if (remaining.decrementAndGet() == 0) finish()
+                    }
+                }
+            }
+
+            continuation.invokeOnCancellation {
+                finished.set(true)
+                mainHandler.removeCallbacks(timeout)
+            }
         }
-        latch.await(300, TimeUnit.MILLISECONDS)
-        return result
     }
 
     fun destroyAll() {
@@ -1130,9 +1175,18 @@ class PluginManager private constructor(context: Context) {
                     return@runCatching
                 }
                 val script = file.readText()
-                val header = PluginHeaderParser.parse(script) ?: return@runCatching
+                val header = PluginHeaderParser.parse(script)
+                if (header == null) {
+                    getState(file.name).recordError("load: missing plugin header")
+                    getState(file.name).status = PluginStatus.Error
+                    return@runCatching
+                }
                 val sandbox = PluginSandbox(appContext, file.name, header, script)
-                sandbox.start()
+                if (!sandbox.start()) {
+                    getState(file.name).recordError("load: webview init failed")
+                    getState(file.name).status = PluginStatus.Error
+                    return@runCatching
+                }
                 sandboxes.add(sandbox)
                 getState(file.name).status = PluginStatus.Running
             }.onFailure { e ->

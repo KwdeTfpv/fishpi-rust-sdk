@@ -21,7 +21,7 @@ internal class PluginSandbox(
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @SuppressLint("SetJavaScriptEnabled")
-    fun start() {
+    fun start(): Boolean {
         val wv: WebView
         try {
             wv = WebView(context.applicationContext).apply {
@@ -35,7 +35,7 @@ internal class PluginSandbox(
             }
             webView = wv
         } catch (_: Exception) {
-            return
+            return false
         }
 
         val evalFn: (String) -> Unit = { js ->
@@ -50,10 +50,14 @@ internal class PluginSandbox(
             dispatch = PluginManager.get()::dispatch,
         )
 
-        try {
+        return try {
             wv.addJavascriptInterface(bridge, "__bridge")
             wv.loadDataWithBaseURL("https://fishpi.plugin/", SHELL_HTML, "text/html", "UTF-8", null)
-        } catch (_: Exception) {}
+            true
+        } catch (_: Exception) {
+            destroy()
+            false
+        }
     }
 
     private fun injectContext() {
