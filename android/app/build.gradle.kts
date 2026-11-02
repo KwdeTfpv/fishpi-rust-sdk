@@ -15,6 +15,8 @@ if (versionFile.exists()) {
 
 val versionNameOverride = providers.gradleProperty("fishpiVersionName").orNull
 val versionCodeOverride = providers.gradleProperty("fishpiVersionCode").orNull?.toIntOrNull()
+val debugReleaseSigning =
+    providers.gradleProperty("fishpiDebugReleaseSigning").orNull?.toBoolean() == true
 
 val signingProps = Properties()
 val signingFile = project.projectDir.resolve("signing.properties")
@@ -70,6 +72,11 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            if (debugReleaseSigning && hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
         getByName("release") {
             isMinifyEnabled = true
             isShrinkResources = true
