@@ -12,18 +12,52 @@ import androidx.core.app.NotificationManagerCompat
 import dev.fishpi.mobile.MainActivity
 import dev.fishpi.mobile.R
 
-// 负责创建通知渠道、构建点击 intent 并弹出系统通知
 object RealtimeNotifier {
     const val CHANNEL_KEEPALIVE = "fishpi.keepalive"
-    const val CHANNEL_MESSAGES = "fishpi.messages"
+    const val CHANNEL_CHAT = "fishpi.chat"
+    const val CHANNEL_CHAT_MENTIONS = "fishpi.chat.mentions"
+    const val CHANNEL_PRIVATE = "fishpi.private"
+    const val CHANNEL_SYSTEM = "fishpi.system"
     const val KEEPALIVE_NOTIFICATION_ID = 1001
 
-    private const val GROUP_SUMMARY_NOTIFICATION_ID = 1002
-    private const val GROUP_MESSAGES = "fishpi.messages.group"
+    private const val LEGACY_CHANNEL_MESSAGES = "fishpi.messages"
+
+    enum class MessageCategory(
+        val channelId: String,
+        val channelName: String,
+        val importance: Int,
+        val description: String,
+    ) {
+        Chat(
+            channelId = CHANNEL_CHAT,
+            channelName = "聊天室消息",
+            importance = NotificationManager.IMPORTANCE_HIGH,
+            description = "聊天室普通消息",
+        ),
+        ChatMention(
+            channelId = CHANNEL_CHAT_MENTIONS,
+            channelName = "聊天室提及与关键词",
+            importance = NotificationManager.IMPORTANCE_HIGH,
+            description = "有人提到你、引用你或命中关键词",
+        ),
+        Private(
+            channelId = CHANNEL_PRIVATE,
+            channelName = "私聊消息",
+            importance = NotificationManager.IMPORTANCE_HIGH,
+            description = "收到私聊消息",
+        ),
+        System(
+            channelId = CHANNEL_SYSTEM,
+            channelName = "系统通知",
+            importance = NotificationManager.IMPORTANCE_DEFAULT,
+            description = "回复、关注、积分等系统通知",
+        ),
+    }
 
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        manager.deleteNotificationChannel(LEGACY_CHANNEL_MESSAGES)
 
         val keepAlive = NotificationChannel(
             CHANNEL_KEEPALIVE,
@@ -37,22 +71,26 @@ object RealtimeNotifier {
             enableLights(false)
             lockscreenVisibility = Notification.VISIBILITY_SECRET
         }
-        val messages = NotificationChannel(
-            CHANNEL_MESSAGES,
-            "消息通知",
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-            description = "聊天室、私聊与系统通知"
-        }
         manager.createNotificationChannel(keepAlive)
-        manager.createNotificationChannel(messages)
+
+        MessageCategory.values().forEach { category ->
+            val channel = NotificationChannel(
+                category.channelId,
+                category.channelName,
+                category.importance,
+            ).apply {
+                description = category.description
+            }
+            manager.createNotificationChannel(channel)
+        }
     }
 
     fun resetChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        manager.deleteNotificationChannel(CHANNEL_MESSAGES)
         manager.deleteNotificationChannel(CHANNEL_KEEPALIVE)
+        MessageCategory.values().forEach { manager.deleteNotificationChannel(it.channelId) }
+        manager.deleteNotificationChannel(LEGACY_CHANNEL_MESSAGES)
         ensureChannels(context)
     }
 
@@ -77,52 +115,38 @@ object RealtimeNotifier {
         title: String,
         body: String,
         target: RealtimeNavTarget,
+        category: MessageCategory,
     ): Boolean {
         ensureChannels(context)
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
             return false
         }
-        val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
+        val notification = NotificationCompat.Builder(context, category.channelId)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setSmallIcon(R.drawable.ic_client_chat)
             .setLargeIcon(appLogoBitmap(context))
             .setAutoCancel(true)
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setCategory(
+                if (category == MessageCategory.System) {
+                    NotificationCompat.CATEGORY_STATUS
+                } else {
+                    NotificationCompat.CATEGORY_MESSAGE
+                },
+            )
             .setDefaults(NotificationCompat.DEFAULT_ALL)
-            .setGroup(GROUP_MESSAGES)
-            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setContentIntent(contentIntent(context, target, id))
             .build()
         return runCatching {
-            val manager = NotificationManagerCompat.from(context)
-            manager.notify(id, notification)
-            manager.notify(GROUP_SUMMARY_NOTIFICATION_ID, buildMessageGroupSummary(context))
+            NotificationManagerCompat.from(context).notify(id, notification)
             true
         }.getOrElse {
             false
         }
     }
-
-    private fun buildMessageGroupSummary(context: Context): Notification =
-        NotificationCompat.Builder(context, CHANNEL_MESSAGES)
-            .setContentTitle("摸鱼派")
-            .setContentText("有新的消息")
-            .setSmallIcon(R.drawable.ic_client_chat)
-            .setLargeIcon(appLogoBitmap(context))
-            .setAutoCancel(true)
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setOnlyAlertOnce(true)
-            .setGroup(GROUP_MESSAGES)
-            .setGroupSummary(true)
-            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setContentIntent(contentIntent(context, RealtimeNavTarget.Notice, GROUP_SUMMARY_NOTIFICATION_ID))
-            .build()
 
     private fun appLogoBitmap(context: Context): android.graphics.Bitmap? = runCatching {
         val drawable = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_fishpi_logo)

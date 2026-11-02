@@ -25,6 +25,7 @@ class RealtimeBootReceiver : BroadcastReceiver() {
                 title = "后台保活需要恢复",
                 body = "点击打开摸鱼派，恢复后台在线",
                 target = RealtimeNavTarget.Notice,
+                category = RealtimeNotifier.MessageCategory.System,
             )
             return
         }

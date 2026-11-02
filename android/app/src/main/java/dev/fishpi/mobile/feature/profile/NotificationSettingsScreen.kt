@@ -163,7 +163,7 @@ internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
                     FishPiSettingsRow(
                         icon = { Icon(imageVector = Icons.Rounded.Notifications, contentDescription = null, tint = FishPiTheme.accent) },
                         title = "打开系统消息通知设置",
-                        summary = "检查消息通知的声音、震动、横幅或悬浮通知",
+                        summary = "分别管理聊天室、提及、私聊、系统通知",
                         onClick = {
                             RealtimeNotifier.ensureChannels(context)
                             context.openMessageNotificationSettings()
@@ -181,7 +181,7 @@ internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
                     FishPiSettingsRow(
                         icon = { Icon(imageVector = Icons.Rounded.Notifications, contentDescription = null, tint = FishPiTheme.accent) },
                         title = "修复通知渠道",
-                        summary = "重建消息和保活渠道，恢复默认提醒方式",
+                        summary = "重建聊天室、私聊、系统和保活渠道，恢复默认提醒方式",
                         onClick = {
                             RealtimeNotifier.resetChannels(context)
                             RealtimeLifecycleController.onNotificationChannelsReset()
@@ -199,6 +199,7 @@ internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
                                 title = "摸鱼派",
                                 body = "通知测试成功",
                                 target = RealtimeNavTarget.Notice,
+                                category = RealtimeNotifier.MessageCategory.Chat,
                             )
                             if (ok) FishPiNotifier.success("测试通知已发送") else FishPiNotifier.error("通知未发送，请检查权限")
                         },
@@ -275,7 +276,25 @@ private fun ToggleRow(
 }
 
 private fun Context.openMessageNotificationSettings() {
-    openNotificationChannelSettings(RealtimeNotifier.CHANNEL_MESSAGES)
+    val appContext = applicationContext
+    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        }
+    } else {
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", packageName, null)
+        }
+    }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching {
+        appContext.startActivity(intent)
+    }.onFailure {
+        appContext.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(Uri.fromParts("package", packageName, null))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
 }
 
 private fun Context.isIgnoringBatteryOptimizations(): Boolean {

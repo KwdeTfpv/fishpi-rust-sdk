@@ -98,6 +98,7 @@ class RealtimeNotificationDispatcher(
             },
             body = plain.take(120).ifBlank { "[消息]" },
             target = RealtimeNavTarget.ChatRoom(message.oId.ifBlank { null }),
+            category = RealtimeNotifier.MessageCategory.ChatMention,
         )
     }
 
@@ -116,6 +117,7 @@ class RealtimeNotificationDispatcher(
             title = notice.peer,
             body = notice.preview.toNotificationText().take(120).ifBlank { "[新消息]" },
             target = RealtimeNavTarget.PrivateChat(notice.peer),
+            category = RealtimeNotifier.MessageCategory.Private,
         )
     }
 
@@ -134,6 +136,7 @@ class RealtimeNotificationDispatcher(
             title = "摸鱼派",
             body = "你有一条新的系统通知",
             target = RealtimeNavTarget.Notice,
+            category = RealtimeNotifier.MessageCategory.System,
         )
     }
 
