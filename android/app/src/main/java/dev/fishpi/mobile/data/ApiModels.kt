@@ -56,6 +56,13 @@ enum class ChatContentKind(val wire: String) {
     System("system"),
     ;
 
+    fun legacyType(): String = when (this) {
+        RedPacket -> "redPacket"
+        Barrage -> "barrage"
+        System -> "system"
+        else -> "msg"
+    }
+
     companion object {
         fun fromWire(value: String): ChatContentKind =
             values().firstOrNull { it.wire.equals(value, ignoreCase = true) } ?: Markdown
@@ -146,7 +153,13 @@ data class ChatRoomMessage(
         put("time", time)
         put("client", client)
         put("barragerColor", barragerColor)
-        put("type", eventType)
+        put("type", contentKind.legacyType())
+        put("eventType", eventType)
+        put("md", content)
+        put("contentHtml", content)
+        put("imageUrls", org.json.JSONArray(mediaUrls(ChatMediaKind.Image)))
+        put("linkUrls", org.json.JSONArray(mediaUrls(ChatMediaKind.Link)))
+        put("quote", org.json.JSONObject.NULL)
         put("revoked", revoked)
         put("reactionSummary", org.json.JSONArray(reactionSummary.map {
             org.json.JSONObject().apply {
