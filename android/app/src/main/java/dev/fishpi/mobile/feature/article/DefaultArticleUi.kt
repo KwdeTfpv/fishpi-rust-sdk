@@ -215,6 +215,7 @@ internal fun DefaultArticleUi(
     state: ArticleState,
     dispatch: (ArticleAction) -> Unit,
     active: Boolean = true,
+    backLayerKey: String = "article",
     onCloseDetail: () -> Unit = { dispatch(ArticleAction.CloseDetail) },
     pendingJump: Boolean = false,
     pendingJumpSummary: ArticleSummary? = null,
@@ -352,7 +353,7 @@ internal fun DefaultArticleUi(
     }
 
     BackLayer(
-        key = "article-detail",
+        key = "$backLayerKey-detail",
         priority = 200,
         enabled = active && (state.selected != null || pendingJump || pendingJumpSummary != null),
         onBack = onCloseDetail,

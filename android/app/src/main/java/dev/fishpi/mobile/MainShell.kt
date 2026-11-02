@@ -581,6 +581,7 @@ internal fun MainShell(
                                 ArticleRoute(
                                     session = session,
                                     active = tabActive,
+                                    backLayerKey = "article-base",
                                     onDetailActiveChange = { articleDetailActive = it },
                                     onOpenUserProfile = { username -> openProfileOverlay(username) },
                                 )
@@ -794,6 +795,7 @@ internal fun MainShell(
                             ArticleRoute(
                                 session = session,
                                 active = navigator.topOverlay == overlay,
+                                backLayerKey = "article-overlay",
                                 jumpArticleId = overlay.articleId,
                                 jumpSummary = overlay.summary,
                                 jumpRequest = 1,

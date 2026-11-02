@@ -30,6 +30,7 @@ import dev.fishpi.mobile.ui.media.rememberChatAttachmentPicker
 internal fun ArticleRoute(
     session: AppSession,
     active: Boolean,
+    backLayerKey: String = "article",
     jumpArticleId: String? = null,
     jumpSummary: ArticleSummary? = null,
     jumpRequest: Int = 0,
@@ -167,6 +168,7 @@ internal fun ArticleRoute(
                 state = state,
                 dispatch = dispatch,
                 active = active,
+                backLayerKey = backLayerKey,
                 onCloseDetail = {
                     if (state.selected != null) {
                         controller.dispatch(ArticleAction.CloseDetail)
@@ -192,7 +194,7 @@ internal fun ArticleRoute(
     }
 
     BackLayer(
-        key = "article-publish",
+        key = "$backLayerKey-publish",
         priority = 210,
         enabled = active && state.publishOpen,
         onBack = { controller.dispatch(ArticleAction.ClosePublish) },
