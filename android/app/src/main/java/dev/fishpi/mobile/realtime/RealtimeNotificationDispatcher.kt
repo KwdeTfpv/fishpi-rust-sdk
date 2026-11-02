@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.realtime
 
 import android.content.Context
+import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.data.ChatContentKind
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.data.NotificationPrefs
@@ -46,10 +47,6 @@ class RealtimeNotificationDispatcher(
     }
 
     private fun onChatMessage(message: ChatRoomMessage) {
-        // 聊天室可见时不打扰
-        if (chatRoomVisible && appInForeground) {
-            return
-        }
         if (message.contentKind == ChatContentKind.System ||
             message.contentKind == ChatContentKind.Barrage ||
             message.userName.isBlank()
@@ -88,6 +85,18 @@ class RealtimeNotificationDispatcher(
         val sender = message.userNickname.ifBlank { message.userName }
         val key = "chat:${message.oId.ifBlank { message.content.hashCode().toString() }}:${message.time}"
         if (!shouldEmit(key)) return
+        if (chatRoomVisible && appInForeground) {
+            val label = when {
+                quotedSelf || mentioned -> "你"
+                else -> hitKeyword ?: "关键词"
+            }
+            FishPiNotifier.show(
+                message = "${sender}提到了 $label",
+                avatarUrl = message.userAvatarURL,
+                durationMs = 3_000L,
+            )
+            return
+        }
         RealtimeNotifier.notify(
             context = appContext,
             id = notificationId(),
