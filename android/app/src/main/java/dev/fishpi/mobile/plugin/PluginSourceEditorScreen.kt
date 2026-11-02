@@ -5,7 +5,6 @@ import android.view.ViewGroup
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.TextView
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -57,6 +56,7 @@ import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.chatui.ChatMarkdownRenderCache
 import dev.fishpi.mobile.chatui.MarkwonContentRenderer
 import dev.fishpi.mobile.chatui.MarkwonContentStyle
+import dev.fishpi.mobile.ui.back.BackLayer
 import dev.fishpi.mobile.ui.components.FishPiIconButton
 import kotlinx.coroutines.Job
 import org.json.JSONObject
@@ -66,6 +66,7 @@ import org.json.JSONTokener
 internal fun PluginSourceEditorScreen(
     plugin: PluginInfo,
     manager: PluginManager,
+    active: Boolean,
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
 ) {
@@ -107,7 +108,12 @@ internal fun PluginSourceEditorScreen(
             }
     }
 
-    BackHandler(onBack = ::requestClose)
+    BackLayer(
+        key = "plugin-source-editor",
+        priority = 905,
+        enabled = active,
+        onBack = ::requestClose,
+    )
 
     if (closeConfirmOpen) {
         AlertDialog(

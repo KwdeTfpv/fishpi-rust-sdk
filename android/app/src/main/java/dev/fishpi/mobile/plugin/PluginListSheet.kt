@@ -1,6 +1,5 @@
 package dev.fishpi.mobile.plugin
 
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -30,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.FishPiTheme
+import dev.fishpi.mobile.ui.back.BackLayer
 import dev.fishpi.mobile.ui.components.FishPiIconButton
 import dev.fishpi.mobile.ui.components.consumeTaps
 import dev.fishpi.mobile.ui.components.silentTap
@@ -38,7 +38,7 @@ import org.json.JSONObject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PluginListSheet(onDismiss: () -> Unit) {
+fun PluginListSheet(onDismiss: () -> Unit, active: Boolean = true) {
     val pm = remember { PluginManager.get() }
     var plugins by remember { mutableStateOf(pm.pluginInfos()) }
     var detailPlugin by remember { mutableStateOf<PluginInfo?>(null) }
@@ -313,6 +313,7 @@ fun PluginListSheet(onDismiss: () -> Unit) {
             PluginSettingsPanel(
                 plugin = plugin,
                 manager = pm,
+                active = active,
                 onDismiss = { settingsPlugin = null },
                 onMessage = { text -> FishPiNotifier.success(text) },
             )
@@ -322,6 +323,7 @@ fun PluginListSheet(onDismiss: () -> Unit) {
             PluginSourceEditorScreen(
                 plugin = plugin,
                 manager = pm,
+                active = active,
                 onDismiss = { editorPlugin = null },
                 onSaved = { plugins = pm.pluginInfos() },
             )
@@ -380,6 +382,7 @@ private fun UnreadablePluginCard(
 private fun PluginSettingsPanel(
     plugin: PluginInfo,
     manager: PluginManager,
+    active: Boolean,
     onDismiss: () -> Unit,
     onMessage: (String) -> Unit,
 ) {
@@ -395,7 +398,12 @@ private fun PluginSettingsPanel(
         entries = manager.getPluginStorage(plugin.fileName).toList().sortedBy { it.first }
     }
 
-    BackHandler(onBack = onDismiss)
+    BackLayer(
+        key = "plugin-settings",
+        priority = 900,
+        enabled = active,
+        onBack = onDismiss,
+    )
 
     deleteKeyConfirm?.let { key ->
         AlertDialog(

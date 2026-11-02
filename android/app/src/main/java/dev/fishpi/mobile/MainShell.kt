@@ -174,6 +174,7 @@ internal fun MainShell(
     onImportThemePackage: suspend (String) -> Result<String>,
     onSaveEditedTheme: (String) -> Result<String>,
     onSaveStoreTheme: (String, Long, String) -> Result<String>,
+    storeThemeInstalled: (String, Long) -> Boolean,
     storeThemeSaveState: (String, Long, String) -> StoreThemeSaveState,
     onDeleteCustomTheme: (String) -> Boolean,
     chatWallpaperUri: String,
@@ -780,6 +781,7 @@ internal fun MainShell(
                                     apiKey = session.apiKey,
                                     active = navigator.topOverlay == overlay,
                                     onImportTheme = onSaveStoreTheme,
+                                    themeInstalled = storeThemeInstalled,
                                     themeSaveState = storeThemeSaveState,
                                 )
                             }

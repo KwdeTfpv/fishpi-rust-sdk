@@ -14,6 +14,7 @@ internal fun ExtensionStoreRoute(
     apiKey: String,
     active: Boolean = true,
     onImportTheme: (String, Long, String) -> Result<String>,
+    themeInstalled: (String, Long) -> Boolean,
     themeSaveState: (String, Long, String) -> StoreThemeSaveState,
 ) {
     val controller = remember(apiKey) {
@@ -44,6 +45,7 @@ internal fun ExtensionStoreRoute(
         active = active,
         dispatch = controller::dispatch,
         onImportTheme = onImportTheme,
+        themeInstalled = themeInstalled,
         themeSaveState = themeSaveState,
     )
 }

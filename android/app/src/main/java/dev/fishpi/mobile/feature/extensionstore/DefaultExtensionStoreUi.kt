@@ -66,6 +66,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -147,6 +148,7 @@ internal fun DefaultExtensionStoreUi(
     active: Boolean = true,
     dispatch: (ExtensionStoreAction) -> Unit,
     onImportTheme: (String, Long, String) -> Result<String>,
+    themeInstalled: (String, Long) -> Boolean,
     themeSaveState: (String, Long, String) -> StoreThemeSaveState,
 ) {
     val scope = rememberCoroutineScope()
@@ -165,6 +167,14 @@ internal fun DefaultExtensionStoreUi(
     var manageOpen by remember { mutableStateOf(false) }
     var editingInitial by remember { mutableStateOf<ExtensionStoreItem?>(null) }
 
+    LaunchedEffect(detailItem?.id) {
+        if (detailItem == null) {
+            detailById = emptyMap()
+            versionsById = emptyMap()
+            commentsById = emptyMap()
+        }
+    }
+
     LaunchedEffect(state.editingDraft) {
         val draft = state.editingDraft
         if (draft != null) {
@@ -178,6 +188,9 @@ internal fun DefaultExtensionStoreUi(
         val ownership = item.ownershipIn(state.purchasedItems, versions)
         if (item.type == ExtensionStoreClient.TypeAppTheme) {
             val themeContent = contentById[item.id]?.takeIf { it.isNotBlank() } ?: item.code
+            if (themeContent.isBlank() && themeInstalled(item.identifier, item.id)) {
+                return StoreItemAction.Installed
+            }
             val currentThemeState = if (themeContent.isNotBlank()) {
                 themeSaveState(item.identifier, item.id, themeContent)
             } else {
@@ -185,12 +198,16 @@ internal fun DefaultExtensionStoreUi(
             }
             return item.themeActionState(ownership, currentThemeState)
         }
+        val installedInfo = pluginManager.storePluginInfo(item.preferredStoreName())
+        val loadedContent = contentById[item.id]
+        if (installedInfo != null) {
+            val currentInstalled = loadedContent.isNullOrBlank() ||
+                pluginManager.storePluginMatchesSource(item.preferredStoreName(), loadedContent)
+            return if (currentInstalled) StoreItemAction.Installed else StoreItemAction.Update
+        }
         return item.actionState(
             ownership = ownership,
-            currentInstalled = item.isCurrentInstalled(
-                pluginManager = pluginManager,
-                loadedContent = contentById[item.id],
-            ),
+            currentInstalled = false,
         )
     }
 
@@ -244,20 +261,10 @@ internal fun DefaultExtensionStoreUi(
 
 
     if (uploadOpen) {
-        BackLayer(
-            key = "extension-store-upload",
-            priority = 340,
-            enabled = active,
-            onBack = {
-                if (!state.isUploading) {
-                    uploadOpen = false
-                    editingInitial = null
-                }
-            },
-        )
         StoreUploadPage(
             initialType = editingInitial?.type ?: state.selectedFilter.type ?: ExtensionStoreClient.TypeAppExtension,
             initial = editingInitial,
+            active = active,
             uploading = state.isUploading,
             onBack = {
                 if (!state.isUploading) {
@@ -291,11 +298,14 @@ internal fun DefaultExtensionStoreUi(
         StoreDraftsPage(
             drafts = state.drafts,
             isLoading = state.isLoadingDrafts,
+            isLoadingMore = state.isLoadingMoreDrafts,
+            hasMore = state.draftsHasMore,
             error = state.draftsError,
             openingId = state.openingDraftId,
             deletingId = state.deletingDraftId,
             onBack = { draftsOpen = false },
             onRefresh = { dispatch(ExtensionStoreAction.LoadDrafts) },
+            onLoadMore = { dispatch(ExtensionStoreAction.LoadMoreDrafts) },
             onOpenDraft = { dispatch(ExtensionStoreAction.OpenDraft(it)) },
             onDeleteDraft = { dispatch(ExtensionStoreAction.DeleteDraft(it)) },
         )
@@ -309,7 +319,7 @@ internal fun DefaultExtensionStoreUi(
             enabled = active,
             onBack = { manageOpen = false },
         )
-        PluginListSheet(onDismiss = { manageOpen = false })
+        PluginListSheet(onDismiss = { manageOpen = false }, active = active)
         return
     }
 
@@ -392,14 +402,22 @@ internal fun DefaultExtensionStoreUi(
             onQueryChange = { dispatch(ExtensionStoreAction.ChangeQuery(it)) },
             selectedFilter = state.selectedFilter,
             onFilterChange = { dispatch(ExtensionStoreAction.ChangeFilter(it)) },
-            canRefresh = state.session != null && !state.isLoading,
+            canRefresh = !state.isLoading && !state.isAuthenticating,
             onRefresh = { dispatch(ExtensionStoreAction.Refresh) },
         )
         when {
             state.isAuthenticating -> StoreStateRow("正在进行鱼排扩展集市鉴权", busy = true)
-            state.authError != null -> StoreStateRow(state.authError)
+            state.authError != null -> StoreStateRow(
+                text = state.authError,
+                actionLabel = "重新鉴权",
+                onAction = { dispatch(ExtensionStoreAction.RetryAuth) },
+            )
             state.isLoading -> StoreStateRow("正在加载鱼排扩展集市", busy = true)
-            state.loadError != null -> StoreStateRow(state.loadError)
+            state.loadError != null && state.items.isEmpty() -> StoreStateRow(
+                text = state.loadError,
+                actionLabel = "重试",
+                onAction = { dispatch(ExtensionStoreAction.Refresh) },
+            )
             state.items.isEmpty() -> StoreStateRow(state.selectedFilter.emptyMessage(state.total))
             else -> LazyColumn(
                 modifier = Modifier.weight(1f),
@@ -420,6 +438,14 @@ internal fun DefaultExtensionStoreUi(
                         onInstall = { installItem(item) },
                         onPurchase = { purchaseConfirmItem = item },
                     )
+                }
+                if (state.hasMore) {
+                    item(key = "load-more") {
+                        StoreLoadMoreRow(
+                            loading = state.isLoadingMore,
+                            onClick = { dispatch(ExtensionStoreAction.LoadMore) },
+                        )
+                    }
                 }
             }
         }
@@ -570,7 +596,12 @@ private fun StoreControls(
 }
 
 @Composable
-private fun StoreStateRow(text: String, busy: Boolean = false) {
+private fun StoreStateRow(
+    text: String,
+    busy: Boolean = false,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -581,7 +612,34 @@ private fun StoreStateRow(text: String, busy: Boolean = false) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (busy) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-        Text(text = text, color = FishPiTheme.weakText)
+        Text(text = text, color = FishPiTheme.weakText, modifier = Modifier.weight(1f))
+        if (actionLabel != null && onAction != null) {
+            TextButton(onClick = onAction) {
+                Text(actionLabel, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoreLoadMoreRow(
+    loading: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (loading) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+        } else {
+            TextButton(onClick = onClick) {
+                Text("加载更多", fontSize = 12.sp)
+            }
+        }
     }
 }
 
@@ -624,6 +682,7 @@ private fun PurchaseConfirmDialog(
 @Composable
 private fun StoreUploadPage(
     initialType: String,
+    active: Boolean,
     uploading: Boolean,
     onBack: () -> Unit,
     onSubmit: (ExtensionStoreUploadRequest) -> Unit,
@@ -641,6 +700,7 @@ private fun StoreUploadPage(
     var description by remember(editKey) { mutableStateOf(initial?.description.orEmpty()) }
     var identifier by remember(editKey) { mutableStateOf(initial?.identifier.orEmpty()) }
     var price by remember(editKey) { mutableStateOf(initial?.price?.trim()?.ifBlank { "0" } ?: "0") }
+    var upgradeFromId by remember(editKey) { mutableStateOf(initial?.upgradeFromId?.toString().orEmpty()) }
     var code by remember(editKey) {
         mutableStateOf(
             initial?.code?.takeIf { it.isNotBlank() }
@@ -648,6 +708,29 @@ private fun StoreUploadPage(
         )
     }
     var error by remember(editKey) { mutableStateOf<String?>(null) }
+    var discardConfirm by remember(editKey) { mutableStateOf(false) }
+    val baselineCode = remember(editKey) {
+        initial?.code?.takeIf { it.isNotBlank() }
+            ?: if (type == ExtensionStoreClient.TypeAppTheme) defaultAppThemeCode() else defaultAppExtensionCode()
+    }
+    val dirty = name != (initial?.name.orEmpty()) ||
+        description != (initial?.description.orEmpty()) ||
+        identifier != (initial?.identifier.orEmpty()) ||
+        price != (initial?.price?.trim()?.ifBlank { "0" } ?: "0") ||
+        upgradeFromId != (initial?.upgradeFromId?.toString().orEmpty()) ||
+        code != baselineCode
+
+    fun requestBack() {
+        if (uploading) return
+        if (dirty) discardConfirm = true else onBack()
+    }
+
+    BackLayer(
+        key = "extension-store-upload",
+        priority = 340,
+        enabled = active,
+        onBack = { requestBack() },
+    )
 
     fun switchType(nextType: String) {
         if (type == nextType) return
@@ -671,6 +754,10 @@ private fun StoreUploadPage(
             code = cleanCode,
         )
         if (error != null) return
+        if (cleanCode.toByteArray(Charsets.UTF_8).size > 2 * 1024 * 1024) {
+            error = "内容不能超过 2 MB"
+            return
+        }
         onSubmit(
             ExtensionStoreUploadRequest(
                 name = cleanName,
@@ -680,6 +767,7 @@ private fun StoreUploadPage(
                 type = type,
                 code = cleanCode,
                 language = if (type == ExtensionStoreClient.TypeAppTheme) "json" else "javascript",
+                upgradeFromId = upgradeFromId.trim().toLongOrNull(),
                 isDraft = isDraft,
                 draftId = initial?.id,
             ),
@@ -700,7 +788,7 @@ private fun StoreUploadPage(
             subtitle = if (type == ExtensionStoreClient.TypeAppTheme) "提交 APP 主题配置，审核通过后上架" else "提交 APP 插件脚本，审核通过后上架",
             titleFontWeight = FontWeight.Bold,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-            leading = { PlainBackButton(onClick = onBack) },
+            leading = { PlainBackButton(onClick = { requestBack() }) },
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -743,6 +831,14 @@ private fun StoreUploadPage(
                 onValueChange = { identifier = it },
                 placeholder = "me.name.tool",
                 singleLine = true,
+            )
+            CompactUploadField(
+                label = "升级自作品 ID（选填）",
+                value = upgradeFromId,
+                onValueChange = { next -> upgradeFromId = next.filter { it.isDigit() }.take(20) },
+                placeholder = "旧版本作品 ID",
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             )
             CompactUploadField(
                 label = "简介",
@@ -801,17 +897,43 @@ private fun StoreUploadPage(
             }
         }
     }
+
+    if (discardConfirm) {
+        AlertDialog(
+            onDismissRequest = { discardConfirm = false },
+            title = { Text("放弃编辑？") },
+            text = { Text("当前内容还没有保存，返回后会丢失。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        discardConfirm = false
+                        onBack()
+                    },
+                ) {
+                    Text("放弃")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { discardConfirm = false }) {
+                    Text("继续编辑")
+                }
+            },
+        )
+    }
 }
 
 @Composable
 private fun StoreDraftsPage(
     drafts: List<ExtensionStoreItem>,
     isLoading: Boolean,
+    isLoadingMore: Boolean,
+    hasMore: Boolean,
     error: String?,
     openingId: Long?,
     deletingId: Long?,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
+    onLoadMore: () -> Unit,
     onOpenDraft: (ExtensionStoreItem) -> Unit,
     onDeleteDraft: (ExtensionStoreItem) -> Unit,
 ) {
@@ -846,7 +968,11 @@ private fun StoreDraftsPage(
         )
         when {
             isLoading -> StoreStateRow("正在加载我的草稿", busy = true)
-            error != null -> StoreStateRow(error)
+            error != null && drafts.isEmpty() -> StoreStateRow(
+                text = error,
+                actionLabel = "重试",
+                onAction = onRefresh,
+            )
             drafts.isEmpty() -> StoreStateRow("草稿箱里还没有作品，去「发布」页存一个草稿吧")
             else -> LazyColumn(
                 modifier = Modifier.weight(1f),
@@ -862,6 +988,11 @@ private fun StoreDraftsPage(
                         onClick = { onOpenDraft(draft) },
                         onDelete = { deleteConfirm = draft },
                     )
+                }
+                if (hasMore) {
+                    item(key = "drafts-load-more") {
+                        StoreLoadMoreRow(loading = isLoadingMore, onClick = onLoadMore)
+                    }
                 }
             }
         }
@@ -1264,6 +1395,7 @@ private fun StoreItemDetailPage(
     var preview by remember(item.id, item.type) { mutableStateOf(item.code) }
     var previewLoading by remember(item.id, item.type) { mutableStateOf(item.code.isBlank()) }
     var previewError by remember(item.id, item.type) { mutableStateOf<String?>(null) }
+    var reloadKey by remember(item.id, item.type) { mutableStateOf(0) }
     var detailLoading by remember(item.id) { mutableStateOf(versions.isEmpty() && comments.isEmpty()) }
     var compareVersionId by remember(item.id) { mutableStateOf<Long?>(null) }
     var compareVersionContent by remember(item.id) { mutableStateOf<Map<Long, String>>(emptyMap()) }
@@ -1271,7 +1403,17 @@ private fun StoreItemDetailPage(
     var compareVersionError by remember(item.id) { mutableStateOf<String?>(null) }
     var commentDraft by remember(item.id) { mutableStateOf("") }
     var commentPosting by remember(item.id) { mutableStateOf(false) }
+    var commentList by remember(item.id) { mutableStateOf(comments.take(30)) }
+    var commentPage by remember(item.id) { mutableStateOf(1) }
+    var commentHasMore by remember(item.id) { mutableStateOf(comments.size > 30) }
+    var commentLoadingMore by remember(item.id) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(comments) {
+        commentList = comments.take(30)
+        commentPage = 1
+        commentHasMore = comments.size > 30
+    }
     val compareVersion = versions.firstOrNull { it.id == compareVersionId && it.id != item.id }
     val pagerState = rememberPagerState(pageCount = { 2 })
 
@@ -1297,6 +1439,17 @@ private fun StoreItemDetailPage(
                 compareVersionLoadingId = null
             }
         }
+    }
+
+    fun loadMoreComments() {
+        if (commentLoadingMore || !commentHasMore) return
+        commentLoadingMore = true
+        val nextPage = commentPage + 1
+        val end = (nextPage * 30).coerceAtMost(comments.size)
+        commentList = comments.take(end)
+        commentPage = nextPage
+        commentHasMore = end < comments.size
+        commentLoadingMore = false
     }
 
     fun submitComment() {
@@ -1325,7 +1478,7 @@ private fun StoreItemDetailPage(
         }
     }
 
-    LaunchedEffect(item.id, item.type) {
+    LaunchedEffect(item.id, item.type, reloadKey) {
         previewLoading = true
         previewError = null
         val detailResult = runCatching {
@@ -1335,9 +1488,13 @@ private fun StoreItemDetailPage(
         }
         val loadedVersions = runCatching {
             withContext(Dispatchers.IO) { ExtensionStoreClient.shared.getItemVersions(item.id, token) }
+        }.onFailure {
+            FishPiNotifier.error("版本加载失败：${it.message ?: "未知错误"}")
         }.getOrDefault(emptyList())
         val loadedComments = runCatching {
             withContext(Dispatchers.IO) { ExtensionStoreClient.shared.getItemComments(item.id, token) }
+        }.onFailure {
+            FishPiNotifier.error("评论加载失败：${it.message ?: "未知错误"}")
         }.getOrDefault(emptyList())
         val detail = detailResult.getOrNull() ?: item
         onDetailLoaded(detail, loadedVersions, loadedComments)
@@ -1346,9 +1503,14 @@ private fun StoreItemDetailPage(
                 preview = detail.code
                 onPreviewLoaded(detail.code)
             } else if (preview.isBlank()) {
-                val content = withContext(Dispatchers.IO) { ExtensionStoreClient.shared.downloadItemContent(detail) }
-                preview = content
-                onPreviewLoaded(content)
+                runCatching {
+                    withContext(Dispatchers.IO) { ExtensionStoreClient.shared.downloadItemContent(detail) }
+                }.onSuccess { content ->
+                    preview = content
+                    onPreviewLoaded(content)
+                }.onFailure { throwable ->
+                    previewError = throwable.message ?: "内容预览加载失败"
+                }
             }
         }.onFailure {
             if (preview.isBlank()) {
@@ -1403,6 +1565,7 @@ private fun StoreItemDetailPage(
                     loading = previewLoading,
                     error = previewError,
                     isJson = item.type == ExtensionStoreClient.TypeAppTheme,
+                    onRetry = { reloadKey += 1 },
                 )
                 StoreVersionDiffPreview(
                     current = preview,
@@ -1416,8 +1579,11 @@ private fun StoreItemDetailPage(
             } else {
                 StoreCommentsSection(
                     modifier = Modifier.fillMaxSize(),
-                    comments = comments,
+                    comments = commentList,
                     loading = detailLoading,
+                    loadingMore = commentLoadingMore,
+                    hasMore = commentHasMore,
+                    onLoadMore = ::loadMoreComments,
                     draft = commentDraft,
                     posting = commentPosting,
                     onDraftChange = { commentDraft = it },
@@ -1577,7 +1743,7 @@ private fun StoreVersionStrip(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
             ) {
-                versions.sortedByDescending { it.version.toIntOrNull() ?: 0 }.forEach { version ->
+                versions.sortedByDescending { it.version.storeVersionRank() }.forEach { version ->
                     StoreVersionChip(
                         text = "v${version.version.ifBlank { "1" }}",
                         selected = version.id == currentId,
@@ -1645,11 +1811,13 @@ private fun StoreVersionDiffPreview(
 ) {
     if (previous == null) return
     val oldCode = previousContent ?: previous.code
-    val diffLines = remember(current, oldCode, isJson) {
-        buildStoreDiff(
-            oldText = if (isJson) oldCode.prettyJsonOrRaw() else oldCode.trim(),
-            newText = if (isJson) current.prettyJsonOrRaw() else current.trim(),
-        )
+    val diffLines by produceState<List<StoreDiffLine>>(emptyList(), current, oldCode, isJson) {
+        value = withContext(Dispatchers.Default) {
+            buildStoreDiff(
+                oldText = if (isJson) oldCode.prettyJsonOrRaw() else oldCode.trim(),
+                newText = if (isJson) current.prettyJsonOrRaw() else current.trim(),
+            )
+        }
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         StoreSectionTitle(
@@ -1713,6 +1881,9 @@ private fun StoreCommentsSection(
     modifier: Modifier = Modifier,
     comments: List<ExtensionStoreComment>,
     loading: Boolean,
+    loadingMore: Boolean,
+    hasMore: Boolean,
+    onLoadMore: () -> Unit,
     draft: String,
     posting: Boolean,
     onDraftChange: (String) -> Unit,
@@ -1737,6 +1908,11 @@ private fun StoreCommentsSection(
             ) {
                 items(comments, key = { it.id }) { comment ->
                     StoreCommentRow(comment)
+                }
+                if (hasMore) {
+                    item(key = "comments-load-more") {
+                        StoreLoadMoreRow(loading = loadingMore, onClick = onLoadMore)
+                    }
                 }
             }
             !loading -> Text(
@@ -1942,13 +2118,18 @@ private fun StoreCodePreview(
     loading: Boolean,
     error: String?,
     isJson: Boolean,
+    onRetry: (() -> Unit)? = null,
 ) {
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
-    val display = remember(content, isJson) {
-        if (isJson) content.prettyJsonOrRaw() else content.trim()
+    val rendered by produceState<Pair<String, AnnotatedString>?>(null, content, isJson) {
+        value = withContext(Dispatchers.Default) {
+            val display = if (isJson) content.prettyJsonOrRaw() else content.trim()
+            display to display.highlightStoreCode(isJson = isJson)
+        }
     }
-    val highlighted = remember(display, isJson) { display.highlightStoreCode(isJson = isJson) }
+    val display = rendered?.first ?: ""
+    val highlighted = rendered?.second ?: AnnotatedString("")
     val verticalScroll = rememberScrollState()
     val horizontalScroll = rememberScrollState()
 
@@ -1997,7 +2178,17 @@ private fun StoreCodePreview(
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     Text("正在加载预览", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 }
-                error != null -> Text(error, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                error != null -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(error, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    if (onRetry != null) {
+                        TextButton(onClick = onRetry) {
+                            Text("重试", fontSize = 12.sp)
+                        }
+                    }
+                }
                 display.isBlank() -> Text("暂无可预览内容", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 else -> SelectionContainer {
                     Text(
@@ -2130,6 +2321,16 @@ private fun ExtensionStoreItem.isFree(): Boolean =
 
 private fun ExtensionStoreItem.priceLabel(): String =
     pricePoints().let { if (it <= 0) "免费" else "$it 积分" }
+
+private fun String.storeVersionRank(): Long =
+    split('.').take(3).mapIndexed { index, part ->
+        val value = (part.toLongOrNull() ?: 0L).coerceAtMost(999L)
+        value * when (index) {
+            0 -> 1_000_000L
+            1 -> 1_000L
+            else -> 1L
+        }
+    }.sum()
 
 private fun validateUploadForm(
     name: String,
@@ -2265,17 +2466,6 @@ private fun ExtensionStoreItem.ownershipIn(
         upgradeFromId?.let { it in purchasedIds } == true
     return StoreOwnership(current = current, previous = previous)
 }
-
-private fun ExtensionStoreItem.isCurrentInstalled(
-    pluginManager: PluginManager,
-    loadedContent: String?,
-): Boolean =
-    if (type == ExtensionStoreClient.TypeAppTheme) {
-        false
-    } else {
-        val pluginContent = loadedContent?.takeIf { it.isNotBlank() } ?: code
-        pluginContent.isNotBlank() && pluginManager.storePluginMatchesSource(preferredStoreName(), pluginContent)
-    }
 
 private fun ExtensionStoreItem.preferredStoreName(): String =
     identifier.ifBlank { name }.ifBlank { "store-plugin-$id" }

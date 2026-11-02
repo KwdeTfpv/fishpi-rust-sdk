@@ -516,16 +516,20 @@ internal fun buildEditableThemeJson(
         .toString()
 }
 
+internal fun storeThemeKey(identifier: String, itemId: Long): String =
+    "store:${identifier.trim().ifBlank { "item-$itemId" }}"
+        .lowercase()
+        .replace(ThemeKeySanitizeRegex, "-")
+        .trim('-')
+
 internal fun buildStoreThemeJson(
     rawJson: String,
     identifier: String,
     itemId: Long,
-): String {
-    val storeIdentifier = identifier.trim().ifBlank { "item-$itemId" }
-    return JSONObject(rawJson)
-        .put("key", "store:$storeIdentifier")
+): String =
+    JSONObject(rawJson)
+        .put("key", storeThemeKey(identifier, itemId))
         .toString()
-}
 
 internal fun Color.toThemeHex(): String =
     "#%06X".format(0xFFFFFF and toArgb())

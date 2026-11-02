@@ -92,24 +92,20 @@ class ExtensionStoreClient private constructor(
         page: Int = 1,
         limit: Int = 30,
     ): ExtensionStorePage {
-        if (type.isNullOrBlank()) {
-            val extensions = getPublishedItems(search, TypeAppExtension, page, limit)
-            val themes = getPublishedItems(search, TypeAppTheme, page, limit)
-            val items = (extensions.items + themes.items)
-                .distinctBy { it.id }
-                .sortedByDescending { it.id }
-                .take(limit)
-            return ExtensionStorePage(items = items, total = extensions.total + themes.total)
-        }
+        val selectedType = type?.takeIf { it.isNotBlank() }
         val params = buildList {
             val keyword = search.trim()
             if (keyword.isNotBlank()) add("search=${keyword.urlEncode()}")
-            add("type=${type.urlEncode()}")
+            if (selectedType != null) add("type=${selectedType.urlEncode()}")
             add("page=$page")
             add("limit=$limit")
         }.joinToString("&")
         val data = requestJson("GET", "/items?$params").unwrapData()
-        return when (data) {
+        return parsePublishedPage(data)
+    }
+
+    private fun parsePublishedPage(data: Any?): ExtensionStorePage =
+        when (data) {
             is JSONObject -> {
                 val items = data.optJSONArray("items")
                     ?.mapObjects { it.toExtensionStoreItem() }
@@ -123,7 +119,6 @@ class ExtensionStoreClient private constructor(
             }
             else -> ExtensionStorePage(emptyList(), 0)
         }
-    }
 
     fun getMyPurchases(token: String, type: String? = null): List<ExtensionStoreItem> {
         if (type.isNullOrBlank()) {
@@ -147,14 +142,25 @@ class ExtensionStoreClient private constructor(
         }
     }
 
-    fun getMyDrafts(token: String, type: String? = null): List<ExtensionStoreItem> {
+    fun getMyDrafts(
+        token: String,
+        type: String? = null,
+        page: Int = 1,
+        limit: Int = 30,
+    ): List<ExtensionStoreItem> {
         if (type.isNullOrBlank()) {
-            return (getMyDrafts(token, TypeAppExtension) + getMyDrafts(token, TypeAppTheme))
+            val all = (
+                getMyDrafts(token, TypeAppExtension, limit = Int.MAX_VALUE) +
+                    getMyDrafts(token, TypeAppTheme, limit = Int.MAX_VALUE)
+                )
                 .distinctBy { it.id }
                 .sortedByDescending { it.id }
+            val offset = (page - 1).coerceAtLeast(0) * limit
+            return all.drop(offset).take(limit)
         }
+        val selectedType = type
         val params = buildList {
-            add("type=${type.urlEncode()}")
+            add("type=${selectedType.urlEncode()}")
         }.joinToString("&")
         val path = "/items/my-drafts?$params"
         val data = requestJson(
@@ -192,7 +198,10 @@ class ExtensionStoreClient private constructor(
         }
     }
 
-    fun getItemComments(id: Long, token: String? = null): List<ExtensionStoreComment> {
+    fun getItemComments(
+        id: Long,
+        token: String? = null,
+    ): List<ExtensionStoreComment> {
         val data = requestJson(
             method = "GET",
             path = "/items/$id/comments",
@@ -276,7 +285,6 @@ class ExtensionStoreClient private constructor(
             .put("type", type)
             .put("code", code)
             .put("language", language)
-            .put("matchUrls", JSONArray())
             .put("isDraft", isDraft)
             .put("dependencyIds", JSONArray())
         upgradeFromId?.let { body.put("upgradeFromId", it) }
@@ -292,6 +300,8 @@ class ExtensionStoreClient private constructor(
 
     private fun downloadText(rawUrl: String): String {
         val connection = openConnection(normalizeUrl(rawUrl), "GET")
+        val contentType = connection.contentType.orEmpty()
+        require(!contentType.startsWith("text/html", ignoreCase = true)) { "扩展内容返回了 HTML 页面" }
         return connection.readResponseBytes().toString(Charsets.UTF_8)
     }
 
@@ -369,7 +379,11 @@ class ExtensionStoreClient private constructor(
                 val port = if (base.port > 0) ":${base.port}" else ""
                 "${base.protocol}://${base.host}$port$trimmed"
             }
-            else -> trimmed
+            else -> {
+                val url = URL(trimmed)
+                require(url.protocol == "http" || url.protocol == "https") { "扩展内容地址协议不受支持" }
+                url.toString()
+            }
         }
     }
 

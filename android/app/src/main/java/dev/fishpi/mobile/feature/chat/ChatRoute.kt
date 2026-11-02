@@ -106,6 +106,7 @@ internal fun ChatRoute(
     if (overlays.pluginManagerOpen.value) {
         dev.fishpi.mobile.plugin.PluginListSheet(
             onDismiss = { overlays.pluginManagerOpen.value = false },
+            active = active,
         )
     }
 
