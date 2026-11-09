@@ -100,10 +100,6 @@ internal fun String.markdownBlocks(): List<MarkdownBlock> {
     return blocks
 }
 
-/** 结构块的字符区间，用作媒体提取的保护区。 */
-internal fun String.structuralMarkdownRanges(): List<IntRange> =
-    markdownBlocks().filter { it.isStructural }.map { it.start until it.end }
-
 private fun String.splitMarkdownLines(): List<MdLine> {
     val lines = mutableListOf<MdLine>()
     var lineStart = 0

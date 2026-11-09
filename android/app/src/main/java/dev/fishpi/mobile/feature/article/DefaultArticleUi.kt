@@ -4,9 +4,6 @@ import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.components.*
 import dev.fishpi.mobile.ui.animal.AnimalStatusPill
 
-import dev.fishpi.mobile.shared.message.previewableContentLinkUrls
-
-import android.content.Context
 import dev.fishpi.mobile.*
 import android.text.Html
 import android.text.method.LinkMovementMethod
@@ -15,7 +12,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.togetherWith
-import androidx.compose.ui.zIndex
 import dev.fishpi.mobile.ui.motion.FishPiMotion
 import dev.fishpi.mobile.ui.overlay.LocalMediaOverlay
 import dev.fishpi.mobile.ui.back.BackLayer
@@ -61,7 +57,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SuggestionChip
@@ -160,22 +155,15 @@ import dev.fishpi.mobile.feature.article.publish.ArticlePublishAction
 import dev.fishpi.mobile.feature.article.publish.ArticlePublishEditorTarget
 import dev.fishpi.mobile.feature.article.publish.ArticlePublishState
 import dev.fishpi.mobile.feature.article.publish.ArticleRecommendedTags
-import dev.fishpi.mobile.utils.HtmlAnchorHrefRegex
+import dev.fishpi.mobile.utils.ArticleContentToken
+import dev.fishpi.mobile.utils.articleContentTokens
 import dev.fishpi.mobile.utils.HtmlTagRegex
 import dev.fishpi.mobile.utils.WhitespaceRegex
-import dev.fishpi.mobile.utils.MarkdownLinkRegex
 import dev.fishpi.mobile.utils.MarkdownImageRegex
-import dev.fishpi.mobile.utils.PlainUrlRegex
 import dev.fishpi.mobile.utils.adaptiveComposeImageRatio
-import dev.fishpi.mobile.utils.cleanImageSplitTextSegment
 import dev.fishpi.mobile.utils.cleanMarkdownUrl
-import dev.fishpi.mobile.utils.extractImageTokens
+import dev.fishpi.mobile.utils.unrenderedHtmlImageUrls
 import dev.fishpi.mobile.utils.isAbsoluteWebUrl
-import dev.fishpi.mobile.utils.isDirectVideoUrl
-import dev.fishpi.mobile.utils.MarkdownMediaType
-import dev.fishpi.mobile.utils.normalizeWebUrl
-import dev.fishpi.mobile.utils.structuralMarkdownRanges
-import dev.fishpi.mobile.utils.trimUrlPunctuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -2490,7 +2478,6 @@ private fun ArticleCommentRow(
                 replyTo?.let {
                     ArticleReplyContext(reply = it)
                 }
-                val htmlImageUrls = remember(comment.content) { comment.content.htmlCommentImageUrls() }
                 ArticleMarkdownContent(
                     source = comment.content.withResolvedArticleImageUrls(comment.imageUrls),
                     contentKey = "article-comment|${comment.id}|${comment.content.hashCode()}|${comment.imageUrls.hashCode()}",
@@ -2505,12 +2492,13 @@ private fun ArticleCommentRow(
                     onLinkClick = onLinkClick,
                     onVideoClick = onVideoClick,
                 )
-                if (htmlImageUrls.isNotEmpty()) {
+                val deferredImageUrls = remember(comment.content) { comment.content.unrenderedHtmlImageUrls() }
+                if (deferredImageUrls.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        htmlImageUrls.forEachIndexed { index, url ->
+                        deferredImageUrls.forEachIndexed { index, url ->
                             ArticleInlineImage(
                                 url = url,
-                                onClick = { onImageClick(htmlImageUrls, index) },
+                                onClick = { onImageClick(deferredImageUrls, index) },
                             )
                         }
                     }
@@ -2912,144 +2900,6 @@ private fun ArticleCommentAction(
         )
     }
 }
-
-private sealed interface ArticleContentToken {
-    data class Text(val markdown: String) : ArticleContentToken
-    data class Image(val url: String) : ArticleContentToken
-    data class Video(val url: String, val label: String) : ArticleContentToken
-    data class LinkPreview(val url: String) : ArticleContentToken
-}
-
-private data class ArticleRangeToken(
-    val start: Int,
-    val end: Int,
-    val token: ArticleContentToken,
-    val consumesSource: Boolean,
-)
-
-private fun String.articleContentTokens(
-    linkUrls: List<String>,
-    imageUrls: List<String>,
-): List<ArticleContentToken> {
-    if (isBlank()) return emptyList()
-    val protectedRanges = structuralMarkdownRanges()
-    val imageTokens = articleImageRangeTokens(protectedRanges)
-    val videoTokens = articleVideoRangeTokens(protectedRanges)
-    val renderedImages = imageTokens.mapNotNull { (it.token as? ArticleContentToken.Image)?.url }
-    val previewUrls = previewableContentLinkUrls(
-        content = this,
-        linkUrls = linkUrls,
-        imageUrls = imageUrls,
-        renderableImageUrls = renderedImages,
-    ).filterNot { it.isDirectVideoUrl() }
-    val previewTokens = articlePreviewRangeTokens(previewUrls, protectedRanges)
-    val rangeTokens = (imageTokens + videoTokens + previewTokens)
-        .sortedWith(compareBy<ArticleRangeToken> { it.start }.thenBy { if (it.consumesSource) 0 else 1 })
-    val output = mutableListOf<ArticleContentToken>()
-    var cursor = 0
-    rangeTokens.forEach { rangeToken ->
-        if (rangeToken.start < cursor) return@forEach
-        val before = substring(cursor, rangeToken.start).cleanImageSplitTextSegment()
-        if (before.isNotBlank()) output += ArticleContentToken.Text(before)
-        output += rangeToken.token
-        cursor = if (rangeToken.consumesSource) rangeToken.end else rangeToken.start
-    }
-    val tail = substring(cursor).cleanImageSplitTextSegment()
-    if (tail.isNotBlank()) output += ArticleContentToken.Text(tail)
-    return output
-}
-
-private fun String.articleImageRangeTokens(protectedRanges: List<IntRange>): List<ArticleRangeToken> {
-    return extractImageTokens()
-        .mapNotNull { token ->
-            if (token.start in protectedRanges) return@mapNotNull null
-            if (token.type == MarkdownMediaType.Video) {
-                return@mapNotNull ArticleRangeToken(
-                    start = token.start,
-                    end = token.end,
-                    token = ArticleContentToken.Video(token.url.normalizeWebUrl(), "视频"),
-                    consumesSource = true,
-                )
-            }
-            ArticleRangeToken(
-                start = token.start,
-                end = token.end,
-                token = ArticleContentToken.Image(token.url.normalizeWebUrl()),
-                consumesSource = true,
-            )
-        }
-        .sortedBy { it.start }
-        .distinctBy { it.start to it.end }
-        .toList()
-}
-
-private fun String.articleVideoRangeTokens(protectedRanges: List<IntRange>): List<ArticleRangeToken> {
-    return MarkdownLinkRegex.findAll(this)
-        .mapNotNull { match ->
-            if (match.range.first in protectedRanges) return@mapNotNull null
-            val label = match.value.substringAfter('[').substringBefore(']').trim()
-            val url = match.groupValues.getOrNull(1).orEmpty().substringBefore(' ').normalizeWebUrl()
-            if (!url.isDirectVideoUrl()) return@mapNotNull null
-            ArticleRangeToken(
-                start = match.range.first,
-                end = match.range.last + 1,
-                token = ArticleContentToken.Video(url, label.ifBlank { "视频" }),
-                consumesSource = true,
-            )
-        }
-        .sortedBy { it.start }
-        .distinctBy { it.start to it.end }
-        .toList()
-}
-
-private fun String.articlePreviewRangeTokens(
-    previewUrls: List<String>,
-    protectedRanges: List<IntRange>,
-): List<ArticleRangeToken> {
-    if (previewUrls.isEmpty()) return emptyList()
-    val remaining = previewUrls.toMutableSet()
-    val tokens = mutableListOf<ArticleRangeToken>()
-    fun add(url: String, index: Int) {
-        if (index < 0 || index in protectedRanges || !remaining.remove(url)) return
-        tokens += ArticleRangeToken(index, index, ArticleContentToken.LinkPreview(url), false)
-    }
-    val htmlAnchorRanges = mutableListOf<IntRange>()
-    HtmlAnchorHrefRegex.findAll(this).forEach { match ->
-        val url = match.groupValues.getOrNull(2).orEmpty().normalizeWebUrl()
-        htmlAnchorRanges += match.range
-        if (url in remaining) add(url, match.range.last + 1)
-    }
-    MarkdownLinkRegex.findAll(this).forEach { match ->
-        val url = match.groupValues.getOrNull(1).orEmpty().substringBefore(' ').normalizeWebUrl()
-        if (url in remaining) add(url, match.range.last + 1)
-    }
-    PlainUrlRegex.findAll(this).forEach { match ->
-        if (htmlAnchorRanges.any { match.range.first in it }) return@forEach
-        val url = match.value.trimUrlPunctuation().normalizeWebUrl()
-        if (url in remaining) add(url, match.range.last + 1)
-    }
-    return tokens.sortedBy { it.start }
-}
-
-private operator fun List<IntRange>.contains(index: Int): Boolean = any { index in it }
-
-private val HtmlCommentImageTagRegex = Regex("<img\\b[^>]*>", RegexOption.IGNORE_CASE)
-private val HtmlCommentImageSrcRegex = Regex("""<img\b[^>]*\bsrc\s*=\s*(['"])(.*?)\1[^>]*>""", RegexOption.IGNORE_CASE)
-private val HtmlCommentEmojiClassRegex = Regex("""\bclass\s*=\s*(['"])[^'"]*\bemoji\b[^'"]*\1""", RegexOption.IGNORE_CASE)
-
-private fun String.htmlCommentImageUrls(): List<String> =
-    HtmlCommentImageTagRegex.findAll(this)
-        .filterNot { tag -> HtmlCommentEmojiClassRegex.containsMatchIn(tag.value) }
-        .mapNotNull { tag ->
-            HtmlCommentImageSrcRegex.find(tag.value)
-                ?.groupValues
-                ?.getOrNull(2)
-                ?.cleanMarkdownUrl()
-                ?.normalizeWebUrl()
-        }
-        .filter(String::isNotBlank)
-        .distinct()
-        .toList()
 
 private fun String.withResolvedArticleImageUrls(imageUrls: List<String>): String {
     if (isBlank() || imageUrls.isEmpty()) return this
