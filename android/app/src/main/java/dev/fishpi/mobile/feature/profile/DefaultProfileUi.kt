@@ -11,8 +11,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
-import android.text.Html
-import android.text.method.LinkMovementMethod
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -89,11 +87,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
@@ -101,7 +97,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import android.widget.TextView
 import dev.fishpi.mobile.data.FishPiUser
 import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.data.ArticleSummary
@@ -2118,7 +2113,6 @@ private fun ProfileArticleRow(article: ArticleSummary, onClick: () -> Unit) {
 
 @Composable
 private fun ProfileBreezemoonRow(item: BreezemoonView) {
-    val textColor = FishPiTheme.onSurface.toArgb()
     val accent = FishPiTheme.accent
     Row(
         modifier = Modifier
@@ -2155,19 +2149,11 @@ private fun ProfileBreezemoonRow(item: BreezemoonView) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            AndroidView(
-                modifier = Modifier.fillMaxWidth(),
-                factory = { context ->
-                    TextView(context).apply {
-                        textSize = 15f
-                        setLineSpacing(0f, 1.2f)
-                        movementMethod = LinkMovementMethod.getInstance()
-                    }
-                },
-                update = { view ->
-                    view.setTextColor(textColor)
-                    view.text = Html.fromHtml(item.content, Html.FROM_HTML_MODE_LEGACY)
-                },
+            BreezemoonRichContent(
+                html = item.content,
+                accent = accent,
+                textSizeSp = 15f,
+                lineSpacingMultiplier = 1.2f,
             )
         }
     }

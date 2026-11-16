@@ -10,19 +10,7 @@ import dev.fishpi.mobile.ui.components.IconActionButton
 import dev.fishpi.mobile.ui.components.UiLayerScaffold
 import dev.fishpi.mobile.ui.components.statusSuccessColor
 
-import android.graphics.Typeface
 import dev.fishpi.mobile.*
-import android.text.Html
-import android.text.SpannableStringBuilder
-import android.text.Spanned
-import android.text.TextPaint
-import android.text.method.LinkMovementMethod
-import android.text.style.ClickableSpan
-import android.text.style.ForegroundColorSpan
-import android.text.style.StyleSpan
-import android.text.style.URLSpan
-import android.view.View
-import android.widget.TextView
 import dev.fishpi.mobile.ui.back.BackLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,14 +18,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationTarget
@@ -70,7 +56,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -78,7 +63,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
@@ -87,16 +71,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 import dev.fishpi.mobile.data.BreezemoonView
 import dev.fishpi.mobile.feature.chat.ChatUserProfileOverlay
 import dev.fishpi.mobile.ui.components.ChatToolAction
 import dev.fishpi.mobile.ui.components.AppToolGridPanel
+import dev.fishpi.mobile.ui.components.BreezemoonRichContent
 import dev.fishpi.mobile.ui.components.ComposerAttachmentStrip
 import dev.fishpi.mobile.ui.animal.AnimalStatusPill
-import dev.fishpi.mobile.utils.toFishPiMemberNameOrNull
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -263,7 +246,7 @@ internal fun DefaultBreezemoonUi(
                 horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem * 0.75f),
             ) {
                 Box(
-                    modifier = Modifier.weight(1f).height(IntrinsicSize.Min)
+                    modifier = Modifier.weight(1f)
                         .clip(RoundedCornerShape(FishPiTheme.radiusBox + 8.dp))
                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.84f))
                         .border(FishPiTheme.borderWidth, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f + FishPiTheme.depth * 0.08f), RoundedCornerShape(FishPiTheme.radiusBox + 8.dp))
@@ -470,81 +453,16 @@ private fun BreezemoonCard(
                     .fillMaxWidth()
                     .padding(top = 1.dp),
             ) {
-                BreezemoonHtmlContent(item.content, accent, onOpenUser)
+                BreezemoonRichContent(
+                    html = item.content,
+                    accent = accent,
+                    onOpenUser = onOpenUser,
+                )
             }
         }
     }
 }
 
-@Composable
-private fun BreezemoonHtmlContent(
-    html: String,
-    accent: Color,
-    onOpenUser: (String) -> Unit,
-) {
-    val color = MaterialTheme.colorScheme.onSurface
-    val accentArgb = accent.toArgb()
-    val currentOpenUser by rememberUpdatedState(onOpenUser)
-    val text = remember(html, accentArgb) {
-        val spanned = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY)
-        var s = 0
-        var e = spanned.length
-        while (s < e && spanned[s].isWhitespace()) s++
-        while (e > s && spanned[e - 1].isWhitespace()) e--
-        spanned.subSequence(s, e).withBreezemoonMemberLinks(accentArgb) { currentOpenUser(it) }
-    }
-    AndroidView(
-        modifier = Modifier.fillMaxWidth(),
-        factory = { context ->
-            TextView(context).apply {
-                textSize = 13f
-                includeFontPadding = false
-                setPadding(0, 0, 0, 0)
-                minHeight = 0
-                minimumHeight = 0
-                setLineSpacing(0f, 1.35f)
-                movementMethod = LinkMovementMethod.getInstance()
-            }
-        },
-        update = { view ->
-            view.setTextColor(color.toArgb())
-            view.text = text
-        },
-    )
-}
-
-private fun CharSequence.withBreezemoonMemberLinks(
-    accentColor: Int,
-    onOpenUser: (String) -> Unit,
-): SpannableStringBuilder {
-    val spannable = SpannableStringBuilder(this)
-    spannable.getSpans(0, spannable.length, URLSpan::class.java).forEach { span ->
-        val username = span.url.toFishPiMemberNameOrNull(allowRelative = true) ?: return@forEach
-        val start = spannable.getSpanStart(span)
-        val end = spannable.getSpanEnd(span)
-        val flags = spannable.getSpanFlags(span).takeIf { it != 0 } ?: Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-        spannable.removeSpan(span)
-        spannable.setSpan(
-            object : ClickableSpan() {
-                override fun onClick(widget: View) {
-                    onOpenUser(username)
-                }
-
-                override fun updateDrawState(ds: TextPaint) {
-                    ds.color = accentColor
-                    ds.typeface = Typeface.DEFAULT_BOLD
-                    ds.isUnderlineText = false
-                }
-            },
-            start,
-            end,
-            flags,
-        )
-        spannable.setSpan(ForegroundColorSpan(accentColor), start, end, flags)
-        spannable.setSpan(StyleSpan(Typeface.BOLD), start, end, flags)
-    }
-    return spannable
-}
 
 
 
