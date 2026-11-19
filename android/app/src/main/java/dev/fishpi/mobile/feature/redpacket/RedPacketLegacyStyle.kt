@@ -68,13 +68,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import coil3.compose.SubcomposeAsyncImage
 import dev.fishpi.mobile.data.ChatOnlineUser
 import dev.fishpi.mobile.data.RedPacketGot
-import dev.fishpi.mobile.data.RedPacketPreview
-import dev.fishpi.mobile.FishPiErrorRed
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.rememberFishPiImageLoader
 import dev.fishpi.mobile.ui.components.FishPiIconButton
 import dev.fishpi.mobile.ui.components.ControlSurface
-import dev.fishpi.mobile.ui.components.IconActionButton
 import dev.fishpi.mobile.ui.components.PlainBackButton
 import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.components.consumeTaps
@@ -83,6 +80,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import dev.fishpi.mobile.ui.components.FishPiAvatar
 
 private val RedPacketTop = Color(0xFFE94E2F)
 private val RedPacketBottom = Color(0xFFC92F23)
@@ -114,142 +112,6 @@ private fun redPacketPageColors(): RedPacketPageColors {
         divider = FishPiTheme.outline.copy(alpha = if (isDark) 0.48f else 0.32f),
         accentSoft = if (isDark) RedPacketTop.copy(alpha = 0.18f) else RedPacketAccentSoft,
     )
-}
-
-@Composable
-internal fun RedPacketCard(
-    preview: RedPacketPreview,
-    onClick: () -> Unit,
-) {
-    val status = when {
-        preview.finished -> "已抢完"
-        !preview.openable -> "不可领取"
-        preview.needGesture -> "猜拳拆红包"
-        else -> "拆红包"
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        RedPacketSoftTop,
-                        RedPacketBottom,
-                        RedPacketSoftBottom,
-                    ),
-                ),
-            )
-            .border(FishPiTheme.borderWidth, RedPacketGold.copy(alpha = 0.32f), RoundedCornerShape(24.dp))
-            .clickable(enabled = preview.openable, onClick = onClick)
-            .padding(16.dp),
-    ) {
-        Column {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                RedPacketSeal(openable = preview.openable)
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = preview.typeName.ifBlank { "鱼派红包" },
-                        color = RedPacketGold,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = preview.message.ifBlank { "摸鱼者，事竟成" },
-                        color = Color.White.copy(alpha = 0.94f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "${preview.got}/${preview.count} 个 · ${preview.money} 积分",
-                    color = Color.White.copy(alpha = 0.86f),
-                )
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(RedPacketGold.copy(alpha = if (preview.openable) 1f else 0.55f))
-                        .padding(horizontal = 13.dp, vertical = 7.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = status,
-                        color = RedPacketBottom,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RedPacketSeal(
-    openable: Boolean,
-    sizeDp: Int = 54,
-) {
-    Box(
-        modifier = Modifier
-            .size(sizeDp.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        if (openable) RedPacketGold else RedPacketGoldDeep.copy(alpha = 0.68f),
-                        Color.White.copy(alpha = 0.36f),
-                    ),
-                ),
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "魚",
-            color = RedPacketBottom,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-}
-
-@Composable
-internal fun RedPacketGestureDialog(
-    selectedGesture: Int? = null,
-    onDismiss: () -> Unit,
-    onPick: (Int) -> Unit,
-) {
-    RedPacketDialogFrame(onDismiss = onDismiss) {
-        RedPacketCompactHeader(
-            title = "猜拳红包",
-            subtitle = "出拳",
-            onDismiss = onDismiss,
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            RedPacketGesture.all.forEach { gesture ->
-                RedPacketGestureOption(
-                    gesture = gesture,
-                    selected = selectedGesture == gesture.value,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onPick(gesture.value) },
-                )
-            }
-        }
-    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -1467,235 +1329,36 @@ private fun RedPacketGestureOption(
 }
 
 @Composable
-private fun RedPacketTypeSelector(
-    types: List<Pair<String, String>>,
-    selectedType: String,
-    enabled: Boolean,
-    onTypeChange: (String) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedLabel = types.firstOrNull { it.first == selectedType }?.second ?: "拼手气"
-    Box {
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .clickable(enabled = enabled) { expanded = true }
-                .padding(horizontal = 1.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = "${selectedLabel}红包",
-                color = if (enabled) RedPacketTop else FishPiTheme.weakText,
-                fontWeight = FontWeight.SemiBold,
-            )
-            FishPiIconButton(
-                icon = Icons.Rounded.KeyboardArrowDown,
-                contentDescription = "选择红包类型",
-                onClick = { if (enabled) expanded = true },
-                tint = if (enabled) RedPacketTop else FishPiTheme.weakText,
-                background = Color.Transparent,
-                sizeDp = 26,
-                iconSizeDp = 18,
-                enabled = enabled,
-            )
-        }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(FishPiTheme.surface),
-        ) {
-            types.forEach { (key, label) ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = "${label}红包",
-                            color = if (key == selectedType) RedPacketTop else FishPiTheme.onSurface,
-                            fontWeight = if (key == selectedType) FontWeight.Bold else FontWeight.Medium,
-                        )
-                    },
-                    onClick = {
-                        expanded = false
-                        onTypeChange(key)
-                    },
-                    enabled = enabled,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RedPacketCompactTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    placeholder: String? = null,
-    singleLine: Boolean = false,
-) {
-    val shape = RoundedCornerShape(10.dp)
-    val borderColor = FishPiTheme.surfaceContainer.copy(alpha = if (enabled) 1f else 0.56f)
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(FishPiTheme.surfaceContainer.copy(alpha = if (enabled) 0.46f else 0.26f))
-            .border(FishPiTheme.borderWidth, borderColor, shape)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            text = label,
-            color = if (enabled) FishPiTheme.onSurface else FishPiTheme.weakText.copy(alpha = 0.54f),
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            enabled = enabled,
-            singleLine = singleLine,
-            textStyle = TextStyle(
-                color = if (enabled) FishPiTheme.onSurface else FishPiTheme.weakText,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-            ),
-            modifier = Modifier.weight(1f),
-            decorationBox = { innerTextField ->
-                Box(contentAlignment = Alignment.CenterStart) {
-                    if (value.isBlank() && placeholder != null) {
-                        Text(
-                            text = placeholder,
-                            color = FishPiTheme.weakText.copy(alpha = 0.62f),
-                            fontSize = 14.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    innerTextField()
-                }
-            },
-        )
-    }
-}
-
-@Composable
-private fun RedPacketSectionLabel(text: String) {
-    Text(
-        text = text,
-        color = FishPiTheme.weakText,
-        fontWeight = FontWeight.SemiBold,
-    )
-}
-
-@Composable
-private fun RedPacketChoiceChip(
-    text: String,
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-) {
-    val background = when {
-        !enabled -> FishPiTheme.surfaceContainer.copy(alpha = 0.68f)
-        selected -> RedPacketTop
-        else -> FishPiTheme.surfaceContainer.copy(alpha = 0.80f)
-    }
-    val foreground = when {
-        !enabled -> FishPiTheme.weakText.copy(alpha = 0.58f)
-        selected -> Color.White
-        else -> FishPiTheme.onSurface
-    }
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(9.dp))
-            .background(background)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text = text, color = foreground, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-private fun RedPacketReceiverRow(item: RedPacketGot) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        RedPacketReceiverAvatar(
-            avatar = item.avatar,
-            name = item.userName,
-        )
-        Text(
-            text = item.userName.ifBlank { "匿名用户" },
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(text = "${item.userMoney} 积分", color = RedPacketTop)
-    }
-}
-
-@Composable
 private fun RedPacketReceiverAvatar(
     avatar: String,
     name: String,
     sizeDp: Int = 28,
 ) {
-    val modifier = Modifier
-        .size(sizeDp.dp)
-        .clip(CircleShape)
-        .background(redPacketPageColors().accentSoft)
-
-    if (avatar.isBlank()) {
-        RedPacketAvatarPlaceholder(name = name, modifier = modifier)
-        return
-    }
-
-    SubcomposeAsyncImage(
-        model = avatar,
-        imageLoader = rememberFishPiImageLoader(),
+    FishPiAvatar(
+        avatarUrl = avatar,
+        displayName = name.ifBlank { "用户" },
         contentDescription = "${name.ifBlank { "用户" }}头像",
-        contentScale = ContentScale.Crop,
-        loading = { RedPacketAvatarPlaceholder(name = name, modifier = modifier) },
-        error = { RedPacketAvatarPlaceholder(name = name, modifier = modifier) },
-        modifier = modifier,
+        size = sizeDp.dp,
+        fallbackBackground = redPacketPageColors().accentSoft,
+        fallbackContentColor = RedPacketTop,
     )
 }
-
 @Composable
 private fun RedPacketLargeAvatar(
     avatar: String,
     name: String,
 ) {
-    val modifier = Modifier
-        .size(64.dp)
-        .clip(CircleShape)
-        .background(redPacketPageColors().accentSoft)
-        .border(2.dp, RedPacketTop.copy(alpha = 0.16f), CircleShape)
-
-    if (avatar.isBlank()) {
-        RedPacketAvatarPlaceholder(name = name, modifier = modifier)
-        return
-    }
-
-    SubcomposeAsyncImage(
-        model = avatar,
-        imageLoader = rememberFishPiImageLoader(),
+    FishPiAvatar(
+        avatarUrl = avatar,
+        displayName = name.ifBlank { "用户" },
         contentDescription = "${name.ifBlank { "用户" }}头像",
-        contentScale = ContentScale.Crop,
-        loading = { RedPacketAvatarPlaceholder(name = name, modifier = modifier) },
-        error = { RedPacketAvatarPlaceholder(name = name, modifier = modifier) },
-        modifier = modifier,
+        size = 64.dp,
+        ringColor = RedPacketTop.copy(alpha = 0.16f),
+        ringWidth = 2.dp,
+        fallbackBackground = redPacketPageColors().accentSoft,
+        fallbackContentColor = RedPacketTop,
     )
 }
-
 private fun String.toRedPacketRecordTime(): String {
     val value = trim()
     if (value.length >= 16 && value[4] == '-' && value[7] == '-') {
@@ -1704,19 +1367,3 @@ private fun String.toRedPacketRecordTime(): String {
     return value
 }
 
-@Composable
-private fun RedPacketAvatarPlaceholder(
-    name: String,
-    modifier: Modifier,
-) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = name.firstOrNull()?.toString()?.ifBlank { "魚" } ?: "魚",
-            color = RedPacketTop,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-}

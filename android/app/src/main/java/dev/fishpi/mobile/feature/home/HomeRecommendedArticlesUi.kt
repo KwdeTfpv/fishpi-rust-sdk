@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.home
 
+import dev.fishpi.mobile.ui.components.FishPiAsyncImage
 import dev.fishpi.mobile.ui.components.FishPiPillButton
 import dev.fishpi.mobile.FishPiTheme
 
@@ -37,7 +38,6 @@ import androidx.compose.material.icons.rounded.NightsStay
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -66,7 +66,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.SubcomposeAsyncImage
 import dev.fishpi.mobile.data.HomeWorkSettings
 import dev.fishpi.mobile.data.UserActivityView
 import dev.fishpi.mobile.feature.home.model.HomeArticleUiModel
@@ -74,156 +73,22 @@ import dev.fishpi.mobile.feature.home.model.HomeWorkSettingsDraft
 import dev.fishpi.mobile.feature.home.model.homeTimeMinutes
 import dev.fishpi.mobile.feature.home.model.isHomeTimeText
 import dev.fishpi.mobile.feature.home.model.toHomeTimeParts
-import dev.fishpi.mobile.rememberFishPiImageLoader
 import java.util.Calendar
 import java.util.Locale
+import dev.fishpi.mobile.ui.components.FishPiAvatar
 
-
-@Composable
-internal fun HomeSectionHeader(
-    title: String,
-    action: String,
-    onAction: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(width = 4.dp, height = 20.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
-        )
-        Text(
-            text = title,
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 8.dp),
-        )
-        Row(
-            modifier = Modifier.clickable(onClick = onAction),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text = action, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-        }
-    }
-}
-
-@Composable
-internal fun HomeArticleCard(article: HomeArticleUiModel, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(FishPiTheme.radiusBox + 8.dp),
-        colors = CardDefaults.cardColors(containerColor = homeArticleCardColor()),
-        border = BorderStroke(FishPiTheme.borderWidth, homeIslandBorderColor()),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HomeArticleAvatar(article = article)
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = article.author.ifBlank { "鱼油" },
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(text = article.time, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
-                }
-            }
-            Text(
-                text = article.title.ifBlank { "[无标题]" },
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (article.preview.isNotBlank()) {
-                Text(
-                    text = article.preview,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (article.thumbnail.isNotBlank()) {
-                SubcomposeAsyncImage(
-                    model = article.thumbnail,
-                    imageLoader = rememberFishPiImageLoader(),
-                    contentDescription = "帖子封面",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(2.05f)
-                        .clip(RoundedCornerShape(FishPiTheme.radiusBox + 4.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    homeArticleTags(article.tags).take(2).forEach { tag ->
-                        Text(
-                            text = tag,
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
-                                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.56f))
-                                .padding(horizontal = 9.dp, vertical = 4.dp),
-                        )
-                    }
-                }
-                HomeArticleMetric(Icons.Rounded.Visibility, article.viewCount)
-                HomeArticleMetric(Icons.Rounded.ModeComment, article.commentCount)
-                HomeArticleMetric(Icons.Rounded.ThumbUp, article.goodCount)
-            }
-        }
-    }
-}
 
 @Composable
 internal fun HomeArticleAvatar(article: HomeArticleUiModel) {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = article.author.trim().take(1).ifBlank { "帖" },
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Bold,
-        )
-        if (article.avatar.isNotBlank()) {
-            SubcomposeAsyncImage(
-                model = article.avatar,
-                imageLoader = rememberFishPiImageLoader(),
-                contentDescription = "${article.author.ifBlank { "作者" }}头像",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-    }
+    FishPiAvatar(
+        avatarUrl = article.avatar,
+        displayName = article.author.ifBlank { "帖" },
+        contentDescription = "${article.author.ifBlank { "作者" }}头像",
+        size = 40.dp,
+        fallbackBackground = MaterialTheme.colorScheme.surfaceContainerHigh,
+        fallbackContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
-
 @Composable
 internal fun HomeArticleMetric(icon: ImageVector, value: Long) {
     Row(

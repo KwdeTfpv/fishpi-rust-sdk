@@ -37,7 +37,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.SubcomposeAsyncImage
 import dev.fishpi.mobile.data.EmojiGroupView
 import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.data.FishPiApiClient
@@ -143,10 +142,6 @@ internal class EmojiPanelState {
         )
     }
 }
-
-@Composable
-internal fun rememberEmojiPanelState(vararg keys: Any?): EmojiPanelState =
-    remember(*keys) { EmojiPanelState() }
 
 @Composable
 internal fun EmojiPackPanel(
@@ -260,15 +255,10 @@ internal fun EmojiPackPanel(
                                         .clickable { onPickEmoji(item) },
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    SubcomposeAsyncImage(
+                                    FishPiAsyncImage(
                                         model = item.url,
-                                        imageLoader = rememberFishPiImageLoader(),
                                         contentDescription = item.name.ifBlank { "表情" },
                                         contentScale = ContentScale.Crop,
-                                        loading = { Text(text = "鱼", color = FishPiTheme.weakText) },
-                                        error = {
-                                            Text(text = "表情", color = FishPiTheme.weakText, fontSize = 12.sp)
-                                        },
                                         modifier = Modifier.fillMaxSize(),
                                     )
                                 }

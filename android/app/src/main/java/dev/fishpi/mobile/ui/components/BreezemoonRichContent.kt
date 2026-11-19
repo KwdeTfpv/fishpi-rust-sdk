@@ -12,7 +12,6 @@ import android.text.style.StyleSpan
 import android.text.style.URLSpan
 import android.view.View
 import android.widget.TextView
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,7 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
@@ -36,9 +34,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import coil3.compose.SubcomposeAsyncImage
 import dev.fishpi.mobile.FishPiTheme
-import dev.fishpi.mobile.rememberFishPiImageLoader
 import dev.fishpi.mobile.ui.overlay.LocalMediaOverlay
 import dev.fishpi.mobile.utils.toFishPiMemberNameOrNull
 
@@ -183,18 +179,15 @@ private fun BreezemoonContentImage(
     } else {
         Modifier.fillMaxWidth(0.72f).aspectRatio(CONTENT_IMAGE_FALLBACK_RATIO)
     }
-    SubcomposeAsyncImage(
+    FishPiAsyncImage(
         model = url,
-        imageLoader = rememberFishPiImageLoader(),
         contentDescription = "清风明月图片",
         contentScale = ContentScale.Fit,
-        onSuccess = { state ->
-            naturalSize = IntSize(state.result.image.width, state.result.image.height)
+        shape = RoundedCornerShape(FishPiTheme.radiusField),
+        onSuccess = { size ->
+            naturalSize = size
         },
-        modifier = sizeModifier
-            .clip(RoundedCornerShape(FishPiTheme.radiusField))
-            .background(FishPiTheme.surfaceContainer)
-            .clickable(onClick = onClick),
+        modifier = sizeModifier.clickable(onClick = onClick),
     )
 }
 

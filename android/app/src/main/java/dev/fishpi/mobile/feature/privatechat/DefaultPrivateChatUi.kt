@@ -51,7 +51,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
@@ -62,10 +61,10 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import coil3.compose.SubcomposeAsyncImage
 import dev.fishpi.mobile.AppSession
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.ui.components.ChatInputBar
+import dev.fishpi.mobile.ui.components.FishPiAvatar
 import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.bottomBarContentPadding
 import dev.fishpi.mobile.feature.chat.render.renderHintCacheKey
@@ -94,7 +93,6 @@ import dev.fishpi.mobile.shared.message.native.rememberNativeMessageListControll
 import dev.fishpi.mobile.ui.components.ChatToolAction
 import dev.fishpi.mobile.shared.message.messageTimeSeparator
 import dev.fishpi.mobile.ui.media.rememberChatAttachmentPicker
-import dev.fishpi.mobile.rememberFishPiImageLoader
 import dev.fishpi.mobile.ui.components.silentTap
 import dev.fishpi.mobile.ui.glass.FishPiGlassRole
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
@@ -720,26 +718,12 @@ private fun PrivateConversation(
 
 @Composable
 private fun PrivateAvatar(url: String, name: String, sizeDp: Int = 44) {
-    val modifier = Modifier
-        .size(sizeDp.dp)
-        .clip(CircleShape)
-        .background(MaterialTheme.colorScheme.primaryContainer)
-    if (url.isBlank()) {
-        Box(modifier = modifier, contentAlignment = Alignment.Center) {
-            Text(text = name.firstOrNull()?.toString() ?: "鱼", color = MaterialTheme.colorScheme.primary)
-        }
-        return
-    }
-    SubcomposeAsyncImage(
-        model = url,
-        imageLoader = rememberFishPiImageLoader(),
+    FishPiAvatar(
+        avatarUrl = url,
+        displayName = name,
         contentDescription = "$name 头像",
-        contentScale = ContentScale.Crop,
-        error = {
-            Box(modifier = modifier, contentAlignment = Alignment.Center) {
-                Text(text = name.firstOrNull()?.toString() ?: "鱼", color = MaterialTheme.colorScheme.primary)
-            }
-        },
-        modifier = modifier,
+        size = sizeDp.dp,
+        fallbackBackground = MaterialTheme.colorScheme.primaryContainer,
+        fallbackContentColor = MaterialTheme.colorScheme.primary,
     )
 }

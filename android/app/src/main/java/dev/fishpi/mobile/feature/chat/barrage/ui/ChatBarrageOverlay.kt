@@ -41,6 +41,7 @@ import dev.fishpi.mobile.rememberFishPiImageLoader
 import dev.fishpi.mobile.feature.chat.barrage.ChatBarrageUiModel
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import dev.fishpi.mobile.ui.components.FishPiAvatar
 
 @Composable
 internal fun ChatBarrageOverlay(
@@ -148,42 +149,15 @@ private fun BarrageAvatar(
     item: ChatBarrageUiModel,
     accent: Color,
 ) {
-    Box(
-        modifier = Modifier
-            .size(24.dp)
-            .clip(CircleShape)
-            .background(accent.copy(alpha = 0.18f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (item.avatarUrl.isNotBlank()) {
-            SubcomposeAsyncImage(
-                model = item.avatarUrl,
-                imageLoader = rememberFishPiImageLoader(),
-                contentDescription = null,
-                modifier = Modifier.matchParentSize(),
-                contentScale = ContentScale.Crop,
-                loading = { BarrageAvatarFallback(item, accent) },
-                error = { BarrageAvatarFallback(item, accent) },
-            )
-        } else {
-            BarrageAvatarFallback(item, accent)
-        }
-    }
-}
-
-@Composable
-private fun BarrageAvatarFallback(
-    item: ChatBarrageUiModel,
-    accent: Color,
-) {
-    Text(
-        text = item.author.trim().take(1).ifBlank { "鱼" },
-        color = accent,
-        style = MaterialTheme.typography.labelSmall,
-        maxLines = 1,
+    FishPiAvatar(
+        avatarUrl = item.avatarUrl,
+        displayName = item.author.ifBlank { "鱼" },
+        contentDescription = "${item.author} 头像",
+        size = 24.dp,
+        fallbackBackground = accent.copy(alpha = 0.18f),
+        fallbackContentColor = accent,
     )
 }
-
 private fun parseBarrageColor(raw: String): Color =
     parseRgbaColor(raw)
         ?: runCatching { Color(android.graphics.Color.parseColor(raw.ifBlank { "#FFFFFF" })) }

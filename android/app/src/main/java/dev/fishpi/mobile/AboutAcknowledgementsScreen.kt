@@ -48,6 +48,7 @@ import coil3.compose.SubcomposeAsyncImage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import dev.fishpi.mobile.ui.components.FishPiAvatar
 
 private const val AboutRepositoryUrl = "https://github.com/KwdeTfpv/fishpi-rust-sdk"
 private const val AboutLicenseName = "MIT License"
@@ -393,36 +394,13 @@ private fun AboutAvatar(
     name: String,
     avatarUrl: String,
 ) {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .background(FishPiTheme.accent.copy(alpha = 0.12f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        val fallback: @Composable () -> Unit = {
-            Text(
-                text = name.trim().take(1).ifBlank { "?" },
-                color = FishPiTheme.accent,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-        if (avatarUrl.isNotBlank()) {
-            SubcomposeAsyncImage(
-                model = avatarUrl,
-                imageLoader = rememberFishPiImageLoader(),
-                contentDescription = "$name 头像",
-                contentScale = ContentScale.Crop,
-                loading = { fallback() },
-                error = { fallback() },
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            fallback()
-        }
-    }
+    FishPiAvatar(
+        avatarUrl = avatarUrl,
+        displayName = name,
+        contentDescription = "$name 头像",
+        size = 40.dp,
+    )
 }
-
 @Composable
 private fun AboutInfoRow(
     title: String,

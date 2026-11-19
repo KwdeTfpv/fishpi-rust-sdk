@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.PlatformTextStyle
@@ -59,25 +60,39 @@ internal fun FishPiAvatar(
     modifier: Modifier = Modifier,
     size: Dp = 64.dp,
     fallback: FishPiAvatarFallback = FishPiAvatarFallback.Text,
+    shape: Shape = CircleShape,
+    ringColor: Color? = null,
+    ringWidth: Dp = 0.dp,
+    fallbackBackground: Color? = null,
+    fallbackContentColor: Color? = null,
 ) {
+    val surfaceModifier = if (ringColor != null && ringWidth > 0.dp) {
+        Modifier
+            .border(ringWidth, ringColor, shape)
+            .padding(ringWidth)
+    } else {
+        Modifier
+    }
     Box(
         modifier = modifier
             .size(size)
-            .clip(CircleShape)
-            .background(FishPiTheme.accent.copy(alpha = 0.10f)),
+            .clip(shape)
+            .background(fallbackBackground ?: FishPiTheme.accent.copy(alpha = 0.10f))
+            .then(surfaceModifier),
         contentAlignment = Alignment.Center,
     ) {
+        val fallbackTint = fallbackContentColor ?: FishPiTheme.accent
         val fallbackContent: @Composable () -> Unit = {
             when (fallback) {
                 FishPiAvatarFallback.Text -> Text(
                     text = displayName.fishPiAvatarInitial(),
-                    color = FishPiTheme.accent,
+                    color = fallbackTint,
                     fontWeight = FontWeight.SemiBold,
                 )
                 FishPiAvatarFallback.Icon -> Icon(
                     imageVector = Icons.Rounded.AccountCircle,
                     contentDescription = null,
-                    tint = FishPiTheme.accent,
+                    tint = fallbackTint,
                     modifier = Modifier.size(size * 0.66f),
                 )
             }
@@ -174,39 +189,6 @@ internal fun FishPiUserSummaryCard(
             apiKey = apiKey,
             emptyText = user.role.ifBlank { "暂无可展示勋章" },
         )
-    }
-}
-
-@Composable
-internal fun FishPiMedalWall(
-    medals: List<MedalView>,
-    apiKey: String,
-    emptyText: String,
-    isLoading: Boolean,
-    modifier: Modifier = Modifier,
-    titleColor: Color = FishPiTheme.onSurface,
-    loadingText: String = "正在加载勋章...",
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-            .fishPiGlassSurface(
-                backdrop = LocalFishPiGlassBackdrop.current,
-                shape = RoundedCornerShape(FishPiTheme.radiusBox),
-                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
-                borderColor = FishPiTheme.outline.copy(alpha = 0.12f),
-                borderWidth = FishPiTheme.borderWidth,
-            )
-            .padding(FishPiTheme.spacingSection),
-        verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
-    ) {
-        Text(text = "勋章墙", color = titleColor, fontWeight = FontWeight.Bold)
-        when {
-            isLoading -> Text(text = loadingText, color = FishPiTheme.weakText)
-            medals.isEmpty() -> Text(text = emptyText, color = FishPiTheme.weakText)
-            else -> FishPiMedalRow(medals = medals, apiKey = apiKey)
-        }
     }
 }
 
@@ -327,9 +309,8 @@ private fun MedalIcon(
         contentAlignment = Alignment.Center,
     ) {
         if (imageUrl.isNotBlank()) {
-            SubcomposeAsyncImage(
+            FishPiAsyncImage(
                 model = imageUrl,
-                imageLoader = rememberFishPiImageLoader(),
                 contentDescription = label,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -349,9 +330,8 @@ private fun MedalIcon(
 internal fun FishPiRoleBadge(role: String) {
     val imageUrl = fishPiRoleImageUrl(role)
     if (imageUrl != null) {
-        SubcomposeAsyncImage(
+        FishPiAsyncImage(
             model = imageUrl,
-            imageLoader = rememberFishPiImageLoader(),
             contentDescription = role,
             contentScale = ContentScale.Fit,
             modifier = Modifier

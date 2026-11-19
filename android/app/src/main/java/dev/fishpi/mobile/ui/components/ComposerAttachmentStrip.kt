@@ -15,7 +15,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BrokenImage
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,11 +32,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.SubcomposeAsyncImage
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.data.AttachmentUpload
 import dev.fishpi.mobile.data.ComposerAttachment
-import dev.fishpi.mobile.rememberFishPiImageLoader
 import dev.fishpi.mobile.ui.overlay.LocalMediaOverlay
 
 @Composable
@@ -45,7 +45,6 @@ internal fun ComposerAttachmentStrip(
     modifier: Modifier = Modifier,
 ) {
     if (attachments.isEmpty()) return
-    val imageLoader = rememberFishPiImageLoader()
     val imageViewer = LocalMediaOverlay.current
     val previewable = attachments.filterNot { it.isVideo }
     LazyRow(
@@ -80,26 +79,13 @@ internal fun ComposerAttachmentStrip(
                         },
                     ),
             ) {
-                SubcomposeAsyncImage(
+                FishPiAsyncImage(
                     model = attachment.previewUri,
-                    imageLoader = imageLoader,
                     contentDescription = "附件 ${attachment.index}",
                     contentScale = ContentScale.Crop,
+                    placeholderIcon = if (attachment.isVideo) Icons.Rounded.PlayArrow else Icons.Rounded.Image,
+                    errorIcon = if (attachment.isVideo) Icons.Rounded.PlayArrow else Icons.Rounded.BrokenImage,
                     modifier = Modifier.fillMaxSize(),
-                    loading = {},
-                    error = {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.PlayArrow,
-                                contentDescription = null,
-                                tint = FishPiTheme.weakText,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    },
                 )
 
                 if (!attachment.referenced) {
