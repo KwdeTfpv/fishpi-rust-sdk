@@ -35,6 +35,13 @@ internal data class NativeMessageTheme(
     val spacingControlDp: Float = 10f,
     val borderWidthDp: Float = 1f,
     val depth: Float = 0.1f,
+    val avatarSizeDp: Float = 38f,
+    val stackedAvatarSizeDp: Float = 20f,
+    val avatarFallbackTextSizeSp: Float = 15f,
+    val bubbleTopMarginDp: Float = 2f,
+    val bubblePaddingHorizontalExtraDp: Float = 1f,
+    val bubblePaddingTopExtraDp: Float = -2f,
+    val bubblePaddingBottomExtraDp: Float = -1f,
 ) {
     companion object {
         fun fromPalette(palette: FishPiPalette): NativeMessageTheme =

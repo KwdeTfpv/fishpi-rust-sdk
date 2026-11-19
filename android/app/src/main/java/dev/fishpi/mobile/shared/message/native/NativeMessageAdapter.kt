@@ -8,15 +8,11 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
-import android.graphics.Canvas
-import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.graphics.Typeface
 import android.graphics.drawable.Animatable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.Drawable
-import android.os.Handler
-import android.os.Looper
 import android.net.Uri
 import android.text.TextUtils
 import android.view.Gravity
@@ -54,8 +50,6 @@ import dev.fishpi.mobile.feature.redpacket.toRedPacketUiModel
 import dev.fishpi.mobile.ui.overlay.PlaybackSession
 import dev.fishpi.mobile.utils.adaptiveImageBoxSize
 import dev.fishpi.mobile.utils.cleanImageSplitTextSegment
-import dev.fishpi.mobile.utils.decodeBasicHtmlEntities
-import dev.fishpi.mobile.utils.HtmlTagRegex
 import dev.fishpi.mobile.utils.WhitespaceRegex
 import dev.fishpi.mobile.utils.MarkdownMediaType
 import dev.fishpi.mobile.utils.toFishPiGeneratedBadgeOrNull
@@ -82,8 +76,6 @@ internal class NativeMessageAdapter(
 ) : RecyclerView.Adapter<NativeMessageViewHolder>() {
     var currentItems: List<ChatListItem> = emptyList()
         private set
-    private val avatarDrawableStore = SharedAvatarDrawableStore()
-    private val messageDrawableStore = SharedMessageDrawableStore()
 
     private val pendingEntranceKeys = HashSet<String>()
     private val playedEntranceKeys = object : LinkedHashSet<String>() {
@@ -131,15 +123,11 @@ internal class NativeMessageAdapter(
                 }
             }
             currentItems = items
-            avatarDrawableStore.retainAvatarUrls(items)
-            messageDrawableStore.retainMediaUrls(items)
             notifyItemRangeInserted(previous.size, items.size - previous.size)
             return true
         }
         val diff = DiffUtil.calculateDiff(ChatItemDiff(previous, items))
         currentItems = items
-        avatarDrawableStore.retainAvatarUrls(items)
-        messageDrawableStore.retainMediaUrls(items)
         diff.dispatchUpdatesTo(this)
         return true
     }
@@ -167,8 +155,6 @@ internal class NativeMessageAdapter(
             onReactionClick = onReactionClick,
             onRepeatClick = onRepeatClick,
             onVideoFullscreenClick = onVideoFullscreenClick,
-            avatarDrawableStore = avatarDrawableStore,
-            messageDrawableStore = messageDrawableStore,
         )
     }
 
@@ -522,8 +508,6 @@ internal class NativeMessageViewHolder(
     private val onReactionClick: (ChatRoomMessage, String) -> Unit,
     private val onRepeatClick: (ChatRoomMessage) -> Unit,
     private val onVideoFullscreenClick: (String, PlaybackSession) -> Unit,
-    private val avatarDrawableStore: SharedAvatarDrawableStore,
-    private val messageDrawableStore: SharedMessageDrawableStore,
 ) : RecyclerView.ViewHolder(view) {
     private var renderJob: Job? = null
     private var sourcePopup: PopupWindow? = null
@@ -874,15 +858,15 @@ internal class NativeMessageViewHolder(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply {
-            topMargin = dp(2)
+            topMargin = themePx(theme.bubbleTopMarginDp)
         }
         frame.elevation = 0f
         frame.enableMessageLongPress(message, isMine, frame)
         frame.content.setPadding(
-            if (standaloneCard) 0 else themeControlPx() + dp(1),
-            if (standaloneCard) 0 else themeControlPx() - dp(2),
-            if (standaloneCard) 0 else themeControlPx() + dp(1),
-            if (standaloneCard) 0 else themeControlPx() - dp(1),
+            if (standaloneCard) 0 else themeControlPx() + themePx(theme.bubblePaddingHorizontalExtraDp),
+            if (standaloneCard) 0 else themeControlPx() + themePx(theme.bubblePaddingTopExtraDp),
+            if (standaloneCard) 0 else themeControlPx() + themePx(theme.bubblePaddingHorizontalExtraDp),
+            if (standaloneCard) 0 else themeControlPx() + themePx(theme.bubblePaddingBottomExtraDp),
         )
 
         when {
@@ -1194,7 +1178,7 @@ internal class NativeMessageViewHolder(
                 .target(
                     onSuccess = { image ->
                         if (icon.tag == badge.imageUrl) {
-                            icon.setImageDrawable(image.asDrawable(context.resources))
+                            icon.applyLoadedDrawable(image.asDrawable(context.resources))
                         }
                     },
                 )
@@ -1235,83 +1219,49 @@ internal class NativeMessageViewHolder(
                 visibility = View.INVISIBLE
                 tag = url
             }
-            if (url.isAnimatedImageUrl()) {
-                val decodeWidthPx = minOf(maxWidthPx, dp(176))
-                val decodeHeightPx = minOf(maxHeightPx, dp(240))
-                val animatedView = SharedMessageImageView(
-                    context = context,
-                    store = messageDrawableStore,
-                    imageLoaderProvider = imageLoaderProvider,
-                    url = url,
-                    decodeWidthPx = decodeWidthPx,
-                    decodeHeightPx = decodeHeightPx,
-                    onDrawableReady = { drawable ->
-                        val nextSize = adaptiveImageBoxSize(
-                            imageWidth = drawable.intrinsicWidth,
-                            imageHeight = drawable.intrinsicHeight,
-                            maxWidth = maxWidthPx,
-                            maxHeight = maxHeightPx,
-                            minHeight = minHeightPx,
-                            fallbackWidth = maxWidthPx,
-                            fallbackHeight = dp(163),
-                        )
-                        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply {
-                            width = nextSize.first
-                            height = nextSize.second
+            addView(imageView, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ))
+            val animated = url.isAnimatedImageUrl()
+            val decodeWidthPx = if (animated) minOf(maxWidthPx, dp(176)) else maxWidthPx
+            val decodeHeightPx = if (animated) minOf(maxHeightPx, dp(240)) else maxHeightPx
+            val request = ImageRequest.Builder(context)
+                .data(url)
+                .size(Size(decodeWidthPx, decodeHeightPx))
+                .precision(Precision.EXACT)
+                .target(
+                    onSuccess = { image ->
+                        if (imageView.tag == url) {
+                            val drawable = image.asDrawable(context.resources)
+                            val nextSize = adaptiveImageBoxSize(
+                                imageWidth = drawable.intrinsicWidth,
+                                imageHeight = drawable.intrinsicHeight,
+                                maxWidth = maxWidthPx,
+                                maxHeight = maxHeightPx,
+                                minHeight = minHeightPx,
+                                fallbackWidth = maxWidthPx,
+                                fallbackHeight = dp(163),
+                            )
+                            layoutParams = (layoutParams as LinearLayout.LayoutParams).apply {
+                                width = nextSize.first
+                                height = nextSize.second
+                            }
+                            requestLayout()
+                            imageView.setMediaDrawable(drawable)
+                            imageView.visibility = View.VISIBLE
+                            placeholder.visibility = View.GONE
                         }
-                        requestLayout()
-                        placeholder.visibility = View.GONE
                     },
                     onError = {
-                        placeholder.visibility = View.VISIBLE
+                        if (imageView.tag == url) {
+                            imageView.visibility = View.GONE
+                            placeholder.visibility = View.VISIBLE
+                        }
                     },
                 )
-                addView(animatedView, FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                ))
-            } else {
-                addView(imageView, FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                ))
-                val request = ImageRequest.Builder(context)
-                    .data(url)
-                    .size(Size(maxWidthPx, maxHeightPx))
-                    .precision(Precision.EXACT)
-                    .target(
-                        onSuccess = { image ->
-                            if (imageView.tag == url) {
-                                val drawable = image.asDrawable(context.resources)
-                                val nextSize = adaptiveImageBoxSize(
-                                    imageWidth = drawable.intrinsicWidth,
-                                    imageHeight = drawable.intrinsicHeight,
-                                    maxWidth = maxWidthPx,
-                                    maxHeight = maxHeightPx,
-                                    minHeight = minHeightPx,
-                                    fallbackWidth = maxWidthPx,
-                                    fallbackHeight = dp(163),
-                                )
-                                layoutParams = (layoutParams as LinearLayout.LayoutParams).apply {
-                                    width = nextSize.first
-                                    height = nextSize.second
-                                }
-                                requestLayout()
-                                imageView.setMediaDrawable(drawable)
-                                imageView.visibility = View.VISIBLE
-                                placeholder.visibility = View.GONE
-                            }
-                        },
-                        onError = {
-                            if (imageView.tag == url) {
-                                imageView.visibility = View.GONE
-                                placeholder.visibility = View.VISIBLE
-                            }
-                        },
-                    )
-                    .build()
-                imageLoaderProvider().enqueue(request)
-            }
+                .build()
+            imageLoaderProvider().enqueue(request)
         })
     }
 
@@ -1695,7 +1645,7 @@ internal class NativeMessageViewHolder(
             }
             clipToOutline = true
             elevation = dp(1).toFloat()
-            layoutParams = LinearLayout.LayoutParams(dp(38), dp(38)).apply {
+            layoutParams = LinearLayout.LayoutParams(themePx(theme.avatarSizeDp), themePx(theme.avatarSizeDp)).apply {
                 topMargin = themeItemPx()
             }
             setOnClickListener {
@@ -1710,7 +1660,7 @@ internal class NativeMessageViewHolder(
             val label = TextView(context).apply {
                 text = message.userName.ifBlank { message.displayName }.trim().take(1).ifBlank { "鱼" }
                 setTextColor(theme.accent)
-                textSize = 15f
+                textSize = theme.avatarFallbackTextSizeSp
                 typeface = Typeface.DEFAULT_BOLD
                 gravity = Gravity.CENTER
             }
@@ -1719,24 +1669,38 @@ internal class NativeMessageViewHolder(
                 ViewGroup.LayoutParams.MATCH_PARENT,
             ))
             if (message.userAvatarURL.isNotBlank()) {
-                val avatarSizePx = dp(38)
-                val image = SharedAvatarImageView(
-                    context = context,
-                    store = avatarDrawableStore,
-                    imageLoaderProvider = imageLoaderProvider,
-                    avatarSizePx = avatarSizePx,
-                ).apply {
+                val avatarUrl = message.userAvatarURL
+                val avatarSizePx = themePx(theme.avatarSizeDp)
+                val image = AvatarImageView(context).apply {
+                    scaleType = ImageView.ScaleType.CENTER_CROP
                     visibility = View.INVISIBLE
-                    setAvatarUrl(message.userAvatarURL)
-                    onAvailabilityChanged = { available ->
-                        visibility = if (available) View.VISIBLE else View.INVISIBLE
-                        label.visibility = if (available) View.GONE else View.VISIBLE
-                    }
+                    tag = avatarUrl
                 }
                 addView(image, FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 ))
+                val request = ImageRequest.Builder(context)
+                    .data(avatarUrl)
+                    .size(Size(avatarSizePx, avatarSizePx))
+                    .precision(Precision.EXACT)
+                    .target(
+                        onSuccess = { result ->
+                            if (image.tag == avatarUrl) {
+                                label.visibility = View.GONE
+                                image.visibility = View.VISIBLE
+                                image.setAvatarDrawable(result.asDrawable(context.resources))
+                            }
+                        },
+                        onError = {
+                            if (image.tag == avatarUrl) {
+                                image.visibility = View.INVISIBLE
+                                label.visibility = View.VISIBLE
+                            }
+                        },
+                    )
+                    .build()
+                imageLoaderProvider().enqueue(request)
             }
         }
     }
@@ -1801,7 +1765,7 @@ internal class NativeMessageViewHolder(
 
     private fun repeatAvatar(url: String, index: Int): View {
         return FrameLayout(view.context).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(20), dp(20)).apply {
+            layoutParams = LinearLayout.LayoutParams(themePx(theme.stackedAvatarSizeDp), themePx(theme.stackedAvatarSizeDp)).apply {
                 marginStart = if (index > 0) dp(-6) else 0
             }
             background = roundRect(0x00000000, fieldRadius).apply {
@@ -1809,20 +1773,31 @@ internal class NativeMessageViewHolder(
             }
             clipToOutline = true
             if (url.isNotBlank()) {
+                val avatarSizePx = themePx(theme.stackedAvatarSizeDp)
+                val image = AvatarImageView(context).apply {
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    tag = url
+                }
                 addView(
-                    SharedAvatarImageView(
-                        context = context,
-                        store = avatarDrawableStore,
-                        imageLoaderProvider = imageLoaderProvider,
-                        avatarSizePx = dp(20),
-                    ).apply {
-                        setAvatarUrl(url)
-                    },
+                    image,
                     FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     ),
                 )
+                val request = ImageRequest.Builder(context)
+                    .data(url)
+                    .size(Size(avatarSizePx, avatarSizePx))
+                    .precision(Precision.EXACT)
+                    .target(
+                        onSuccess = { result ->
+                            if (image.tag == url) {
+                                image.setAvatarDrawable(result.asDrawable(context.resources))
+                            }
+                        },
+                    )
+                    .build()
+                imageLoaderProvider().enqueue(request)
             }
         }
     }
@@ -1888,6 +1863,8 @@ internal class NativeMessageViewHolder(
     private fun dp(value: Int): Int = (value * view.resources.displayMetrics.density).toInt()
 
     private fun dp(value: Float): Float = value * view.resources.displayMetrics.density
+
+    private fun themePx(value: Float): Int = (value * view.resources.displayMetrics.density).toInt()
 }
 
 
@@ -1900,431 +1877,32 @@ private fun String.isAnimatedImageUrl(): Boolean {
 
 private fun View.dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-internal class SharedAvatarDrawableStore {
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private val entries = LinkedHashMap<String, Entry>()
-
-    fun subscribe(
-        url: String,
-        view: SharedAvatarImageView,
-        imageLoader: ImageLoader,
-        avatarSizePx: Int,
-    ) {
-        if (url.isBlank()) {
-            view.onSharedAvatarAvailabilityChanged(false)
-            return
-        }
-        val entry = entries.getOrPut(url) { Entry(url) }
-        entry.subscribers.add(view)
-        view.onSharedAvatarAvailabilityChanged(entry.drawable != null)
-        entry.drawable?.let {
-            if (entry.subscribers.isNotEmpty()) {
-                (it as? Animatable)?.start()
-            }
-            view.postInvalidateOnAnimation()
-        }
-        if (entry.drawable == null && !entry.loading) {
-            load(entry, view, imageLoader, avatarSizePx)
-        }
-    }
-
-    fun unsubscribe(url: String, view: SharedAvatarImageView) {
-        val entry = entries[url] ?: return
-        entry.subscribers.remove(view)
-        if (entry.subscribers.isEmpty()) {
-            (entry.drawable as? Animatable)?.stop()
-        }
-    }
-
-    fun drawableFor(url: String): Drawable? = entries[url]?.drawable
-
-    fun retainAvatarUrls(items: List<ChatListItem>) {
-        val activeUrls = items
-            .takeLast(220)
-            .flatMap { item ->
-                buildList {
-                    item.message.userAvatarURL.takeIf(String::isNotBlank)?.let(::add)
-                    item.repeatStack?.participantAvatars
-                        ?.filter(String::isNotBlank)
-                        ?.let(::addAll)
-                }
-            }
-            .toHashSet()
-        val iterator = entries.iterator()
-        while (iterator.hasNext()) {
-            val (_, entry) = iterator.next()
-            if (entry.url !in activeUrls && entry.subscribers.isEmpty()) {
-                (entry.drawable as? Animatable)?.stop()
-                entry.drawable?.callback = null
-                iterator.remove()
-            }
-        }
-    }
-
-    private fun load(
-        entry: Entry,
-        view: SharedAvatarImageView,
-        imageLoader: ImageLoader,
-        avatarSizePx: Int,
-    ) {
-        entry.loading = true
-        val context = view.context.applicationContext
-        val resources = view.resources
-        val request = ImageRequest.Builder(context)
-            .data(entry.url)
-            .size(Size(avatarSizePx, avatarSizePx))
-            .precision(Precision.EXACT)
-            .target(
-                onSuccess = { result ->
-                    if (entries[entry.url] === entry) {
-                        val drawable = result.asDrawable(resources)
-                        entry.loading = false
-                        entry.drawable?.callback = null
-                        entry.drawable = drawable
-                        drawable.callback = entry.callback
-                        if (entry.subscribers.isNotEmpty()) {
-                            (drawable as? Animatable)?.start()
-                        }
-                        entry.subscribers.forEach { subscriber ->
-                            subscriber.onSharedAvatarAvailabilityChanged(true)
-                            subscriber.postInvalidateOnAnimation()
-                        }
-                    }
-                },
-                onError = {
-                    if (entries[entry.url] === entry) {
-                        entry.loading = false
-                        entry.subscribers.forEach { subscriber ->
-                            subscriber.onSharedAvatarAvailabilityChanged(false)
-                        }
-                    }
-                },
-            )
-            .build()
-        imageLoader.enqueue(request)
-    }
-
-    private inner class Entry(val url: String) {
-        var loading: Boolean = false
-        var drawable: Drawable? = null
-        val subscribers = LinkedHashSet<SharedAvatarImageView>()
-        val callback = object : Drawable.Callback {
-            override fun invalidateDrawable(who: Drawable) {
-                subscribers.forEach { it.postInvalidateOnAnimation() }
-            }
-
-            override fun scheduleDrawable(who: Drawable, what: Runnable, `when`: Long) {
-                mainHandler.postAtTime(what, `when`)
-            }
-
-            override fun unscheduleDrawable(who: Drawable, what: Runnable) {
-                mainHandler.removeCallbacks(what)
-            }
-        }
-    }
-}
-
-internal class SharedAvatarImageView(
-    context: Context,
-    private val store: SharedAvatarDrawableStore,
-    private val imageLoaderProvider: () -> ImageLoader,
-    private val avatarSizePx: Int,
-) : View(context) {
-    private val drawRect = Rect()
-    private var avatarUrl: String = ""
-    var onAvailabilityChanged: (Boolean) -> Unit = {}
-
-    override fun hasOverlappingRendering(): Boolean = false
-
-    fun setAvatarUrl(url: String) {
-        if (avatarUrl == url) return
-        release()
-        avatarUrl = url
-        if (isAttachedToWindow && isShown) {
-            subscribe()
-        }
-    }
-
-    fun release() {
-        if (avatarUrl.isNotBlank()) {
-            store.unsubscribe(avatarUrl, this)
-        }
-    }
-
-    fun resumeAvatar() {
-        if (isAttachedToWindow && isShown && avatarUrl.isNotBlank()) {
-            subscribe()
-        }
-    }
-
-    fun onSharedAvatarAvailabilityChanged(available: Boolean) {
-        onAvailabilityChanged(available)
-        invalidate()
-    }
-
+private class AvatarImageView(context: Context) : ImageView(context) {
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        subscribe()
+        startAvatarAnimation()
     }
 
     override fun onDetachedFromWindow() {
-        release()
+        (drawable as? Animatable)?.stop()
         super.onDetachedFromWindow()
     }
 
     override fun onVisibilityAggregated(isVisible: Boolean) {
         super.onVisibilityAggregated(isVisible)
-        if (isVisible) {
-            subscribe()
-        } else {
-            release()
+        if (isVisible) startAvatarAnimation() else (drawable as? Animatable)?.stop()
+    }
+
+    fun setAvatarDrawable(drawable: Drawable) {
+        (this.drawable as? Animatable)?.stop()
+        setImageDrawable(drawable)
+        startAvatarAnimation()
+    }
+
+    private fun startAvatarAnimation() {
+        if (isAttachedToWindow) {
+            (drawable as? Animatable)?.start()
         }
-    }
-
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        val drawable = store.drawableFor(avatarUrl) ?: return
-        val drawableWidth = drawable.intrinsicWidth.takeIf { it > 0 } ?: width
-        val drawableHeight = drawable.intrinsicHeight.takeIf { it > 0 } ?: height
-        val scale = maxOf(
-            width.toFloat() / drawableWidth.toFloat(),
-            height.toFloat() / drawableHeight.toFloat(),
-        )
-        val scaledWidth = (drawableWidth * scale).toInt()
-        val scaledHeight = (drawableHeight * scale).toInt()
-        val left = (width - scaledWidth) / 2
-        val top = (height - scaledHeight) / 2
-        drawRect.set(left, top, left + scaledWidth, top + scaledHeight)
-        drawable.bounds = drawRect
-        drawable.draw(canvas)
-    }
-
-    private fun subscribe() {
-        store.subscribe(
-            url = avatarUrl,
-            view = this,
-            imageLoader = imageLoaderProvider(),
-            avatarSizePx = avatarSizePx,
-        )
-    }
-}
-
-internal class SharedMessageDrawableStore {
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private val entries = LinkedHashMap<String, Entry>()
-
-    fun subscribe(
-        url: String,
-        decodeWidthPx: Int,
-        decodeHeightPx: Int,
-        view: SharedMessageImageView,
-        imageLoader: ImageLoader,
-    ) {
-        if (url.isBlank()) {
-            view.onSharedMessageDrawableError()
-            return
-        }
-        val key = key(url, decodeWidthPx, decodeHeightPx)
-        val entry = entries.getOrPut(key) { Entry(key, url) }
-        entry.subscribers.add(view)
-        entry.drawable?.let { drawable ->
-            if (entry.subscribers.isNotEmpty()) {
-                (drawable as? Animatable)?.start()
-            }
-            view.onSharedMessageDrawableReady(drawable)
-            view.postInvalidateOnAnimation()
-        }
-        if (entry.drawable == null && !entry.loading) {
-            load(entry, view, imageLoader, decodeWidthPx, decodeHeightPx)
-        }
-    }
-
-    fun unsubscribe(
-        url: String,
-        decodeWidthPx: Int,
-        decodeHeightPx: Int,
-        view: SharedMessageImageView,
-    ) {
-        val entry = entries[key(url, decodeWidthPx, decodeHeightPx)] ?: return
-        entry.subscribers.remove(view)
-        if (entry.subscribers.isEmpty()) {
-            (entry.drawable as? Animatable)?.stop()
-        }
-    }
-
-    fun drawableFor(url: String, decodeWidthPx: Int, decodeHeightPx: Int): Drawable? =
-        entries[key(url, decodeWidthPx, decodeHeightPx)]?.drawable
-
-    fun retainMediaUrls(items: List<ChatListItem>) {
-        val activeUrls = items
-            .takeLast(180)
-            .flatMap { it.message.allRenderableImageUrls() }
-            .filter { it.isAnimatedImageUrl() }
-            .toHashSet()
-        val iterator = entries.iterator()
-        while (iterator.hasNext()) {
-            val (_, entry) = iterator.next()
-            if (entry.url !in activeUrls && entry.subscribers.isEmpty()) {
-                (entry.drawable as? Animatable)?.stop()
-                entry.drawable?.callback = null
-                iterator.remove()
-            }
-        }
-    }
-
-    private fun load(
-        entry: Entry,
-        view: SharedMessageImageView,
-        imageLoader: ImageLoader,
-        decodeWidthPx: Int,
-        decodeHeightPx: Int,
-    ) {
-        entry.loading = true
-        val context = view.context.applicationContext
-        val resources = view.resources
-        val request = ImageRequest.Builder(context)
-            .data(entry.url)
-            .size(Size(decodeWidthPx, decodeHeightPx))
-            .precision(Precision.EXACT)
-            .target(
-                onSuccess = { result ->
-                    if (entries[entry.key] === entry) {
-                        val drawable = result.asDrawable(resources)
-                        entry.loading = false
-                        entry.drawable?.callback = null
-                        entry.drawable = drawable
-                        drawable.callback = entry.callback
-                        if (entry.subscribers.isNotEmpty()) {
-                            (drawable as? Animatable)?.start()
-                        }
-                        entry.subscribers.forEach { subscriber ->
-                            subscriber.onSharedMessageDrawableReady(drawable)
-                            subscriber.postInvalidateOnAnimation()
-                        }
-                    }
-                },
-                onError = {
-                    if (entries[entry.key] === entry) {
-                        entry.loading = false
-                        entry.subscribers.forEach { subscriber ->
-                            subscriber.onSharedMessageDrawableError()
-                        }
-                    }
-                },
-            )
-            .build()
-        imageLoader.enqueue(request)
-    }
-
-    private fun key(url: String, decodeWidthPx: Int, decodeHeightPx: Int): String =
-        "$decodeWidthPx:$decodeHeightPx:$url"
-
-    private inner class Entry(
-        val key: String,
-        val url: String,
-    ) {
-        var loading: Boolean = false
-        var drawable: Drawable? = null
-        val subscribers = LinkedHashSet<SharedMessageImageView>()
-        val callback = object : Drawable.Callback {
-            override fun invalidateDrawable(who: Drawable) {
-                subscribers.forEach { it.postInvalidateOnAnimation() }
-            }
-
-            override fun scheduleDrawable(who: Drawable, what: Runnable, `when`: Long) {
-                mainHandler.postAtTime(what, `when`)
-            }
-
-            override fun unscheduleDrawable(who: Drawable, what: Runnable) {
-                mainHandler.removeCallbacks(what)
-            }
-        }
-    }
-}
-
-internal class SharedMessageImageView(
-    context: Context,
-    private val store: SharedMessageDrawableStore,
-    private val imageLoaderProvider: () -> ImageLoader,
-    private val url: String,
-    private val decodeWidthPx: Int,
-    private val decodeHeightPx: Int,
-    private val onDrawableReady: (Drawable) -> Unit,
-    private val onError: () -> Unit,
-) : View(context) {
-    private val drawRect = Rect()
-    private var ready = false
-
-    override fun hasOverlappingRendering(): Boolean = false
-
-    fun release() {
-        store.unsubscribe(url, decodeWidthPx, decodeHeightPx, this)
-    }
-
-    fun resumeMedia() {
-        if (isAttachedToWindow && isShown) {
-            subscribe()
-        }
-    }
-
-    fun onSharedMessageDrawableReady(drawable: Drawable) {
-        if (!ready) {
-            ready = true
-            onDrawableReady(drawable)
-        }
-        invalidate()
-    }
-
-    fun onSharedMessageDrawableError() {
-        ready = false
-        onError()
-    }
-
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        subscribe()
-    }
-
-    override fun onDetachedFromWindow() {
-        release()
-        super.onDetachedFromWindow()
-    }
-
-    override fun onVisibilityAggregated(isVisible: Boolean) {
-        super.onVisibilityAggregated(isVisible)
-        if (isVisible) {
-            subscribe()
-        } else {
-            release()
-        }
-    }
-
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        val drawable = store.drawableFor(url, decodeWidthPx, decodeHeightPx) ?: return
-        val drawableWidth = drawable.intrinsicWidth.takeIf { it > 0 } ?: width
-        val drawableHeight = drawable.intrinsicHeight.takeIf { it > 0 } ?: height
-        val scale = minOf(
-            width.toFloat() / drawableWidth.toFloat(),
-            height.toFloat() / drawableHeight.toFloat(),
-        )
-        val scaledWidth = (drawableWidth * scale).toInt()
-        val scaledHeight = (drawableHeight * scale).toInt()
-        val left = (width - scaledWidth) / 2
-        val top = (height - scaledHeight) / 2
-        drawRect.set(left, top, left + scaledWidth, top + scaledHeight)
-        drawable.bounds = drawRect
-        drawable.draw(canvas)
-    }
-
-    private fun subscribe() {
-        store.subscribe(
-            url = url,
-            decodeWidthPx = decodeWidthPx,
-            decodeHeightPx = decodeHeightPx,
-            view = this,
-            imageLoader = imageLoaderProvider(),
-        )
     }
 }
 
@@ -2378,12 +1956,6 @@ private class MessageMediaImageView(context: Context) : ImageView(context) {
 
 private fun View.stopAnimatedDrawables() {
     when (this) {
-        is SharedMessageImageView -> {
-            release()
-        }
-        is SharedAvatarImageView -> {
-            release()
-        }
         is MessageMediaImageView -> {
             clearMediaDrawable()
         }
@@ -2401,12 +1973,6 @@ private fun View.stopAnimatedDrawables() {
 
 private fun View.pauseAnimatedDrawables() {
     when (this) {
-        is SharedMessageImageView -> {
-            release()
-        }
-        is SharedAvatarImageView -> {
-            release()
-        }
         is MessageMediaImageView -> {
             pauseAnimation()
         }
@@ -2423,12 +1989,6 @@ private fun View.pauseAnimatedDrawables() {
 
 private fun View.resumeAnimatedDrawables() {
     when (this) {
-        is SharedMessageImageView -> {
-            resumeMedia()
-        }
-        is SharedAvatarImageView -> {
-            resumeAvatar()
-        }
         is MessageMediaImageView -> {
             resumeAnimationIfVisible()
         }
@@ -2442,6 +2002,17 @@ private fun View.resumeAnimatedDrawables() {
                 getChildAt(index).resumeAnimatedDrawables()
             }
         }
+    }
+}
+
+private fun ImageView.applyLoadedDrawable(drawable: Drawable) {
+    setImageDrawable(drawable)
+    resumeLoadedAnimation()
+}
+
+private fun ImageView.resumeLoadedAnimation() {
+    if (isAttachedToWindow) {
+        (drawable as? Animatable)?.start()
     }
 }
 
