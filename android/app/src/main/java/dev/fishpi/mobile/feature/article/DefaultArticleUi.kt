@@ -342,7 +342,6 @@ internal fun DefaultArticleUi(
 
     BackLayer(
         key = "$backLayerKey-detail",
-        priority = 200,
         enabled = active && (state.selected != null || pendingJump || pendingJumpSummary != null),
         onBack = onCloseDetail,
     )

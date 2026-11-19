@@ -195,7 +195,6 @@ internal fun ArticleRoute(
 
     BackLayer(
         key = "$backLayerKey-publish",
-        priority = 210,
         enabled = active && state.publishOpen,
         onBack = { controller.dispatch(ArticleAction.ClosePublish) },
     )

@@ -206,8 +206,13 @@ class FishPiApiClient private constructor() {
         }
     }
 
-    fun openRedPacket(apiKey: String, messageId: String, gesture: Int? = null): RedPacketOpenResult {
-        val data = dataObject(FishPiNative.openRedPacket(apiKey, messageId, gesture ?: -1))
+    fun openRedPacket(
+        apiKey: String,
+        messageId: String,
+        gesture: Int? = null,
+        viewOnly: Boolean = false,
+    ): RedPacketOpenResult {
+        val data = dataObject(FishPiNative.openRedPacket(apiKey, messageId, gesture ?: -1, viewOnly))
         val info = data.optJSONObject("info") ?: JSONObject()
         return RedPacketOpenResult(
             message = info.optString("message"),

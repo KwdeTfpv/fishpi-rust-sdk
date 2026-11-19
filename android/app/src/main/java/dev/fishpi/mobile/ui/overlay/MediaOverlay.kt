@@ -94,7 +94,6 @@ private fun MediaOverlaySurface(controller: MediaOverlayController) {
 
     BackLayer(
         key = "media-overlay",
-        priority = 1000,
         enabled = true,
         onBack = controller::dismiss,
     )

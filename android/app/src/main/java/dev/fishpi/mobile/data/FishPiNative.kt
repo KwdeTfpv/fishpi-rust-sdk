@@ -70,7 +70,7 @@ object FishPiNative {
 
     external fun reactChatRoomMessage(apiKey: String, messageId: String, value: String): String
 
-    external fun openRedPacket(apiKey: String, messageId: String, gesture: Int): String
+    external fun openRedPacket(apiKey: String, messageId: String, gesture: Int, viewOnly: Boolean): String
 
     external fun sendRedPacket(
         apiKey: String,

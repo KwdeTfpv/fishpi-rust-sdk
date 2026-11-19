@@ -976,6 +976,13 @@ pub(crate) fn redpacket_preview_from_value(value: &Value, self_username: &str) -
         .get("gesture")
         .or_else(|| obj.get("GestureType"))
         .and_then(value_to_gesture_index);
+    let o_id = obj
+        .get("oId")
+        .map(|v| match v {
+            Value::String(text) => text.trim().to_string(),
+            other => other.to_string().trim_matches('"').to_string(),
+        })
+        .unwrap_or_default();
     let receivers = obj
         .get("recivers")
         .or_else(|| obj.get("receivers"))
@@ -1012,6 +1019,7 @@ pub(crate) fn redpacket_preview_from_value(value: &Value, self_username: &str) -
     }
 
     Some(json!({
+        "oId": o_id,
         "type": type_raw,
         "typeName": type_name,
         "money": money,

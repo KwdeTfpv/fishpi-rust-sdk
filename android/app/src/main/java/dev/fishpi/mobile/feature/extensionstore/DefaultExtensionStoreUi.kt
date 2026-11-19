@@ -291,7 +291,6 @@ internal fun DefaultExtensionStoreUi(
     if (draftsOpen) {
         BackLayer(
             key = "extension-store-drafts",
-            priority = 330,
             enabled = active,
             onBack = { draftsOpen = false },
         )
@@ -315,7 +314,6 @@ internal fun DefaultExtensionStoreUi(
     if (manageOpen) {
         BackLayer(
             key = "extension-store-manage",
-            priority = 320,
             enabled = active,
             onBack = { manageOpen = false },
         )
@@ -330,7 +328,6 @@ internal fun DefaultExtensionStoreUi(
         val versions = versionsById[item.id].orEmpty()
         BackLayer(
             key = "extension-store-detail",
-            priority = 310,
             enabled = active,
             onBack = { detailItem = null },
         )
@@ -727,7 +724,6 @@ private fun StoreUploadPage(
 
     BackLayer(
         key = "extension-store-upload",
-        priority = 340,
         enabled = active,
         onBack = { requestBack() },
     )

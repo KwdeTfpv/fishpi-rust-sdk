@@ -32,8 +32,7 @@ internal class BackLayerController {
             .withIndex()
             .filter { it.value.enabled }
             .maxWithOrNull(
-                compareBy<IndexedValue<BackLayerEntry>> { it.value.priority }
-                    .thenBy { it.index },
+                compareBy<IndexedValue<BackLayerEntry>> { it.index },
             )
             ?.value
             ?: return false
@@ -44,7 +43,6 @@ internal class BackLayerController {
 
 internal class BackLayerEntry(
     val key: Any,
-    val priority: Int,
     enabled: Boolean,
     initialOnBack: () -> Unit,
 ) {
@@ -59,13 +57,12 @@ internal val LocalBackLayer = staticCompositionLocalOf<BackLayerController> {
 @Composable
 internal fun BackLayer(
     key: Any,
-    priority: Int,
     enabled: Boolean,
     onBack: () -> Unit,
 ) {
     val controller = LocalBackLayer.current
     val entry = remember(controller, key) {
-        BackLayerEntry(key = key, priority = priority, enabled = enabled, initialOnBack = onBack)
+        BackLayerEntry(key = key, enabled = enabled, initialOnBack = onBack)
     }
     DisposableEffect(controller, entry) {
         controller.register(entry)

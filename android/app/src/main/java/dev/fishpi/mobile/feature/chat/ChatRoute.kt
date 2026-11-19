@@ -98,7 +98,6 @@ internal fun ChatRoute(
 
     BackLayer(
         key = "chat-plugin-manager",
-        priority = 430,
         enabled = active && overlays.pluginManagerOpen.value,
         onBack = { overlays.pluginManagerOpen.value = false },
     )
@@ -112,7 +111,6 @@ internal fun ChatRoute(
 
     BackLayer(
         key = "chat-emoji-manager",
-        priority = 440,
         enabled = active && overlays.emojiManagerOpen.value,
         onBack = {
             overlays.emojiManagerOpen.value = false

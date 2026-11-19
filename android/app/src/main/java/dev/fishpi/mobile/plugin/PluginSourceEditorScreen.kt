@@ -110,7 +110,6 @@ internal fun PluginSourceEditorScreen(
 
     BackLayer(
         key = "plugin-source-editor",
-        priority = 905,
         enabled = active,
         onBack = ::requestClose,
     )

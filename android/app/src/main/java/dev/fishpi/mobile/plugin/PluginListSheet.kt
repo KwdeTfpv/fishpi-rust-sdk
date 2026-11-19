@@ -400,7 +400,6 @@ private fun PluginSettingsPanel(
 
     BackLayer(
         key = "plugin-settings",
-        priority = 900,
         enabled = active,
         onBack = onDismiss,
     )

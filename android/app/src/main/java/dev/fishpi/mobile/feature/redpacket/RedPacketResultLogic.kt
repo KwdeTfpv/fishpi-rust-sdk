@@ -30,7 +30,7 @@ fun redPacketGestureResultText(
 
     val selfRecord = who.firstOrNull { item ->
         item.userName.equals(selfUsername, ignoreCase = true)
-    }
+    } ?: who.singleOrNull()
     if (selfRecord != null) {
         return when {
             selfRecord.userMoney > 0L -> "$senderLabel $gestureText，输了 ${selfRecord.userMoney} 积分，你赢了"

@@ -78,6 +78,7 @@ private fun JSONObject.toMusicPreview(): MusicPreview {
 
 private fun JSONObject.toRedPacketPreview(): RedPacketPreview {
     return RedPacketPreview(
+        oId = optString("oId"),
         type = optString("type"),
         typeName = optString("typeName", "红包"),
         money = optLong("money"),

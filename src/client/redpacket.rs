@@ -58,16 +58,31 @@ impl RedPacketApi {
         o_id: impl Into<String>,
         gesture: Option<GestureType>,
     ) -> Result<RedPacketInfo, Error> {
+        self.open_with(o_id, gesture, false).await
+    }
+
+    /// 只读取红包详情，不领取。
+    pub async fn view(&self, o_id: impl Into<String>) -> Result<RedPacketInfo, Error> {
+        self.open_with(o_id, None, true).await
+    }
+
+    pub async fn open_with(
+        &self,
+        o_id: impl Into<String>,
+        gesture: Option<GestureType>,
+        view_only: bool,
+    ) -> Result<RedPacketInfo, Error> {
         let o_id = o_id.into();
+        let mut payload = serde_json::Map::new();
+        payload.insert("oId".to_string(), json!(o_id));
+        if view_only {
+            payload.insert("viewOnly".to_string(), json!(true));
+        } else if let Some(gesture) = gesture {
+            payload.insert("gesture".to_string(), json!(gesture as u8));
+        }
         let wire: WireRedPacketInfo = self
             .0
-            .post_data(
-                "chat-room/red-packet/open",
-                &json!({
-                    "oId": o_id,
-                    "gesture": gesture.map(|g| g as u8),
-                }),
-            )
+            .post_data("chat-room/red-packet/open", &serde_json::Value::Object(payload))
             .await?;
         Ok(wire.into())
     }

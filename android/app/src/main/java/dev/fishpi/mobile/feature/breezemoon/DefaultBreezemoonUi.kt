@@ -388,7 +388,6 @@ internal fun DefaultBreezemoonUi(
 
     BackLayer(
         key = "breezemoon-user-profile",
-        priority = 300,
         enabled = active && state.profileUsername != null,
         onBack = { dispatch(BreezemoonAction.DismissUserProfile) },
     )

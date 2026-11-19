@@ -6,7 +6,7 @@ use fishpi_sdk::client::RedPacketSend;
 use fishpi_sdk::domain::redpacket::RedPacketType;
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
-use jni::sys::jstring;
+use jni::sys::{jboolean, jstring};
 use serde_json::{Value, json};
 
 #[unsafe(no_mangle)]
@@ -16,6 +16,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_openRedPacket(
     api_key: JString,
     message_id: JString,
     gesture: i32,
+    view_only: jboolean,
 ) -> jstring {
     let result = (|| {
         let token = string_arg(&mut env, api_key)?;
@@ -25,7 +26,7 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_openRedPacket(
                 let client = current_user(&token).await?;
                 let info = client
                     .redpacket()
-                    .open(id, gesture_from_index(gesture))
+                    .open_with(id, gesture_from_index(gesture), view_only != 0)
                     .await
                     .map_err(|err| format!("拆红包失败: {err}"))?;
                 Ok(redpacket_info_to_json(info))

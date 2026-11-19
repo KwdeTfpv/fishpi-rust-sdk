@@ -84,6 +84,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import dev.fishpi.mobile.ui.back.BackLayer
+import dev.fishpi.mobile.ui.back.LocalBackLayer
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -208,7 +209,6 @@ internal fun MainShell(
     val navigator = rememberShellNavigator()
     BackLayer(
         key = "shell-overlay",
-        priority = 100,
         enabled = navigator.overlays.isNotEmpty(),
         onBack = { navigator.back() },
     )
@@ -510,8 +510,12 @@ internal fun MainShell(
         }
     }
 
+    val backLayers = LocalBackLayer.current
     BackHandler {
         if (navigator.back()) {
+            return@BackHandler
+        }
+        if (backLayers.dismissTop()) {
             return@BackHandler
         }
         val now = System.currentTimeMillis()

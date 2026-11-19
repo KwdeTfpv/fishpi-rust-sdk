@@ -382,55 +382,46 @@ internal fun DefaultProfileUi(
 
     BackLayer(
         key = "profile-web-login-scanner",
-        priority = 600,
         enabled = active && showWebLoginScanner,
         onBack = { showWebLoginScanner = false },
     )
     BackLayer(
         key = "profile-web-login-confirm",
-        priority = 590,
         enabled = active && state.webLoginTargetId != null && !state.isWebLoginAuthorizing,
         onBack = { dispatch(ProfileAction.DismissWebLoginConfirm) },
     )
     BackLayer(
         key = "profile-transfer",
-        priority = 580,
         enabled = active && state.transferOpen,
         onBack = { dispatch(ProfileAction.DismissTransfer) },
     )
     BackLayer(
         key = "profile-close",
-        priority = 500,
         enabled = active && (state.closeOnBack || !state.isSelfProfile) && !isOverlayOpen,
         onBack = { dispatch(ProfileAction.CloseProfile) },
     )
     BackLayer(
         key = "profile-content",
-        priority = 510,
         enabled = active && state.contentOpen && !isOverlayOpen,
         onBack = { dispatch(ProfileAction.DismissContent) },
     )
     BackLayer(
         key = "profile-settings",
-        priority = 520,
         enabled = active && state.settingsOpen && !state.filterSettingsOpen && !state.themeEditorOpen,
         onBack = { dispatch(ProfileAction.DismissSettings) },
     )
     BackLayer(
         key = "profile-filter-settings",
-        priority = 530,
         enabled = active && state.filterSettingsOpen,
         onBack = { dispatch(ProfileAction.DismissFilterSettings) },
     )
     BackLayer(
         key = "profile-theme-editor",
-        priority = 540,
         enabled = active && state.themeEditorOpen,
         onBack = { dispatch(ProfileAction.DismissThemeEditor) },
     )
     BackLayer(
         key = "profile-about",
-        priority = 550,
         enabled = active && state.aboutOpen,
         onBack = { dispatch(ProfileAction.DismissAbout) },
     )

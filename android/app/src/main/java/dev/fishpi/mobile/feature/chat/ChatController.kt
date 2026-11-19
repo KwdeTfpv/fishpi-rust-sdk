@@ -1346,11 +1346,17 @@ internal class ChatController(
 
     private fun openRedPacket(message: ChatRoomMessage, gesture: Int? = null) {
         val packet = message.redPacket ?: return
-        if (message.oId.isBlank() || (!packet.openable && !packet.finished)) return
+        val packetId = packet.oId.ifBlank { message.oId }
+        if (packetId.isBlank() || (!packet.openable && !packet.finished)) return
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    api.openRedPacket(apiKey, message.oId, gesture)
+                    api.openRedPacket(
+                        apiKey = apiKey,
+                        messageId = packetId,
+                        gesture = gesture,
+                        viewOnly = gesture == null && !packet.openable,
+                    )
                 }
             }.onSuccess { result ->
                 updateInteraction {

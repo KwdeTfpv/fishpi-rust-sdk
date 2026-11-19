@@ -241,13 +241,11 @@ internal fun DefaultPrivateChatUi(
 
     BackLayer(
         key = "private-chat-link-preview",
-        priority = 300,
         enabled = environment.active && conversation.previewLinkUrl != null,
         onBack = { dispatch(PrivateChatAction.DismissLinkPreview) },
     )
     BackLayer(
         key = "private-chat-conversation",
-        priority = 310,
         enabled = environment.active && conversation.selectedPeer != null &&
             conversation.actionMessage == null && conversation.previewLinkUrl == null,
         onBack = { dispatch(PrivateChatAction.CloseConversation) },

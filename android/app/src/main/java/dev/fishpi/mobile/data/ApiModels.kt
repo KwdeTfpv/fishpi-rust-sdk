@@ -203,6 +203,7 @@ data class MusicPreview(
 )
 
 data class RedPacketPreview(
+    val oId: String = "",
     val type: String,
     val typeName: String,
     val money: Long,

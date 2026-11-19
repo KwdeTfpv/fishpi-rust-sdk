@@ -1313,84 +1313,72 @@ private fun DefaultChatUiContent(
 
     BackLayer(
         key = "chat-link-preview",
-        priority = 350,
         enabled = active && previewLinkUrl != null,
         onBack = { bridge.dismissLinkPreview() },
     )
 
     BackLayer(
         key = "chat-action-anchor",
-        priority = 320,
         enabled = active && actionAnchor != null,
         onBack = { actionAnchor = null },
     )
 
     BackLayer(
         key = "chat-message-actions",
-        priority = 330,
         enabled = active && actionMessage != null,
         onBack = { bridge.dismissMessageActions() },
     )
 
     BackLayer(
         key = "chat-attachment-panel",
-        priority = 300,
         enabled = active && attachmentPanelOpen,
         onBack = { bridge.closeAttachmentPanel() },
     )
 
     BackLayer(
         key = "chat-barrage-composer",
-        priority = 360,
         enabled = active && barrageComposer.open && !barrageComposer.isSending,
         onBack = { dispatch(ChatAction.DismissBarragerComposer) },
     )
 
     BackLayer(
         key = "chat-topic-editor",
-        priority = 370,
         enabled = active && topicEditorOpen,
         onBack = { topicEditorOpen = false },
     )
 
     BackLayer(
         key = "chat-actions",
-        priority = 290,
         enabled = active && chatActionsOpen,
         onBack = { chatActionsOpen = false },
     )
 
     BackLayer(
         key = "chat-qr-scanner",
-        priority = 380,
         enabled = active && qrScannerOpen,
         onBack = { qrScannerOpen = false },
     )
 
     BackLayer(
         key = "chat-red-packet-composer",
-        priority = 390,
         enabled = active && redPacketComposerOpen && !isSendingRedPacket,
         onBack = { dispatch(ChatAction.DismissRedPacketComposer) },
     )
 
     BackLayer(
         key = "chat-gesture-red-packet",
-        priority = 400,
         enabled = active && gestureRedPacket != null,
         onBack = { dispatch(ChatAction.ClearGestureRedPacket) },
     )
 
     BackLayer(
         key = "chat-red-packet-result",
-        priority = 410,
         enabled = active && redPacketResult != null,
         onBack = { dispatch(ChatAction.ClearRedPacketResult) },
     )
 
     BackLayer(
         key = "chat-blocked-messages",
-        priority = 420,
         enabled = active && blockedMessagesOpen,
         onBack = { bridge.dismissBlockedMessages() },
     )
