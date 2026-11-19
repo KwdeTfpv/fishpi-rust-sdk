@@ -48,13 +48,32 @@ private fun glassBorderBrush(borderColor: Color): Brush = Brush.verticalGradient
     1f to Color.Black.copy(alpha = 0.10f),
 )
 
+internal enum class FishPiSurfaceTone { Base, Elevated, Floating, Sheet }
+
+@Composable
+internal fun FishPiSurfaceTone.containerColor(): Color = when (this) {
+    FishPiSurfaceTone.Base -> FishPiTheme.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha)
+    FishPiSurfaceTone.Elevated -> FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha)
+    FishPiSurfaceTone.Floating -> FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha)
+    FishPiSurfaceTone.Sheet -> FishPiTheme.surface.copy(alpha = 0.82f)
+}
+
+@Composable
+internal fun FishPiSurfaceTone.borderColor(): Color = when (this) {
+    FishPiSurfaceTone.Base -> FishPiTheme.outline.copy(alpha = 0.12f + FishPiTheme.depth * 0.08f)
+    FishPiSurfaceTone.Elevated -> FishPiTheme.outline.copy(alpha = 0.14f + FishPiTheme.depth * 0.08f)
+    FishPiSurfaceTone.Floating -> FishPiTheme.outline.copy(alpha = 0.18f + FishPiTheme.depth * 0.10f)
+    FishPiSurfaceTone.Sheet -> FishPiTheme.outline.copy(alpha = 0.18f)
+}
+
 @Composable
 internal fun Modifier.fishPiGlassSurface(
     backdrop: Backdrop?,
     shape: Shape,
-    containerColor: Color,
-    borderColor: Color = Color.Transparent,
-    borderWidth: Dp = 0.dp,
+    tone: FishPiSurfaceTone? = null,
+    containerColor: Color? = null,
+    borderColor: Color? = null,
+    borderWidth: Dp? = null,
     blurRadius: Dp = FishPiTheme.glass.blurRadius.dp,
     refractionHeight: Dp = FishPiTheme.glass.refractionHeight.dp,
     refractionAmount: Dp = FishPiTheme.glass.refractionAmount.dp,
@@ -65,6 +84,9 @@ internal fun Modifier.fishPiGlassSurface(
     role: FishPiGlassRole = FishPiGlassRole.Control,
     exportedBackdrop: LayerBackdrop? = null,
 ): Modifier {
+    val fillColor = containerColor ?: tone?.containerColor() ?: Color.Transparent
+    val strokeColor = borderColor ?: tone?.borderColor() ?: Color.Transparent
+    val strokeWidth = borderWidth ?: if (tone != null) FishPiTheme.borderWidth else 0.dp
     val glassEnabled = FishPiTheme.glassEnabled
     val motionProbe = LocalGlassInMotion.current
     val inMotion by remember(motionProbe) {
@@ -77,8 +99,8 @@ internal fun Modifier.fishPiGlassSurface(
         inMotion,
         backdrop,
         shape,
-        containerColor,
-        borderWidth,
+        fillColor,
+        strokeWidth,
         blurRadius,
         refractionHeight,
         refractionAmount,
@@ -91,7 +113,7 @@ internal fun Modifier.fishPiGlassSurface(
         if (!shouldDrawBackdrop) {
             Modifier
                 .clip(shape)
-                .background(containerColor)
+                .background(fillColor)
                 .then(if (glassEnabled) Modifier.background(SoftSheenBrush) else Modifier)
         } else if (inMotion) {
             Modifier.drawBackdrop(
@@ -107,7 +129,7 @@ internal fun Modifier.fishPiGlassSurface(
                 },
                 exportedBackdrop = exportedBackdrop,
                 onDrawSurface = {
-                    drawRect(containerColor)
+                    drawRect(fillColor)
                     drawRect(brush = SoftSheenBrush)
                 },
             )
@@ -135,22 +157,22 @@ internal fun Modifier.fishPiGlassSurface(
                 },
                 exportedBackdrop = exportedBackdrop,
                 onDrawSurface = {
-                    drawRect(containerColor)
+                    drawRect(fillColor)
                     drawRect(brush = SoftSheenBrush)
                 },
             )
         }
     }
-    val border = remember(borderWidth, borderColor, glassEnabled, shape) {
-        if (borderWidth > 0.dp) {
+    val border = remember(strokeWidth, strokeColor, glassEnabled, shape) {
+        if (strokeWidth > 0.dp) {
             if (glassEnabled) {
                 Modifier.border(
-                    width = borderWidth,
-                    brush = glassBorderBrush(borderColor),
+                    width = strokeWidth,
+                    brush = glassBorderBrush(strokeColor),
                     shape = shape,
                 )
             } else {
-                Modifier.border(width = borderWidth, color = borderColor, shape = shape)
+                Modifier.border(width = strokeWidth, color = strokeColor, shape = shape)
             }
         } else {
             Modifier

@@ -30,6 +30,7 @@ import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.ui.theme.FishPiType
+import dev.fishpi.mobile.ui.glass.FishPiSurfaceTone
 
 /**
  * 「设置分组卡片」。
@@ -56,8 +57,7 @@ internal fun FishPiSettingsSection(
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = shape,
-                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
-                borderColor = FishPiTheme.outline.copy(alpha = 0.12f),
+                tone = FishPiSurfaceTone.Elevated,
                 borderWidth = FishPiTheme.borderWidth,
             )
             .padding(contentPadding),

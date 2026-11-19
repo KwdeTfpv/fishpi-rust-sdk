@@ -1,5 +1,7 @@
 package dev.fishpi.mobile.feature.chat
 
+import dev.fishpi.mobile.FishPiTheme
+import dev.fishpi.mobile.ui.theme.FishPiType
 import androidx.activity.compose.BackHandler
 import dev.fishpi.mobile.feature.chat.render.blockedChatItems
 import dev.fishpi.mobile.shared.message.formatTopicReferenceMarkdown
@@ -178,6 +180,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import dev.fishpi.mobile.ui.components.FishPiAvatar
+import dev.fishpi.mobile.ui.components.FishPiSurfaceKind
+import dev.fishpi.mobile.ui.components.fishPiSurface
+import dev.fishpi.mobile.ui.glass.FishPiSurfaceTone
 
 private val ChatIconButtonSize = 36.dp
 private const val ChatPluginFloatPrefsName = "chat_plugin_float"
@@ -1665,8 +1670,7 @@ internal fun ChatFilterSettingsOverlay(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-                        .background(FishPiTheme.surfaceContainer)
+                        .fishPiSurface(FishPiSurfaceKind.Card, stroked = false)
                         .clickable {
                             onSave(ChatFilterConfig(
                                 showAvatars = config.showAvatars,
@@ -1702,8 +1706,7 @@ private fun ChatSendOnEnterSettingRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-            .background(FishPiTheme.surfaceContainer)
+            .fishPiSurface(FishPiSurfaceKind.Card, stroked = false)
             .clickable(onClick = onToggle)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1728,8 +1731,7 @@ private fun ChatAvatarSettingRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-            .background(FishPiTheme.surfaceContainer)
+            .fishPiSurface(FishPiSurfaceKind.Card, stroked = false)
             .clickable(onClick = onToggle)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1785,12 +1787,11 @@ private fun FilterRuleEditor(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-            .background(FishPiTheme.surfaceContainer)
+            .fishPiSurface(FishPiSurfaceKind.Card, stroked = false)
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(text = title, color = FishPiTheme.accent, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        Text(text = title, color = FishPiTheme.accent, fontWeight = FontWeight.SemiBold, fontSize = FishPiType.Size.heading)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             TextField(
                 value = value,
@@ -1816,14 +1817,13 @@ private fun FilterRuleEditor(
             }
         }
         if (rules.isEmpty()) {
-            Text(text = "暂无规则", color = FishPiTheme.weakText, fontSize = 13.sp)
+            Text(text = "暂无规则", color = FishPiTheme.weakText, fontSize = FishPiType.Size.secondary)
         } else {
             rules.forEach { rule ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(FishPiTheme.radiusField))
-                        .background(FishPiTheme.surface)
+                        .fishPiSurface(FishPiSurfaceKind.Field, stroked = false)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -1883,12 +1883,12 @@ private fun BlockedMessagesOverlay(
                     text = "已屏蔽消息",
                     color = FishPiTheme.onSurface,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
+                    fontSize = FishPiType.Size.title,
                 )
                 Text(
                     text = if (messages.isEmpty()) "暂无被屏蔽消息" else "${messages.size} 条消息被当前规则隐藏",
                     color = FishPiTheme.weakText,
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                 )
             }
             FishPiIconButton(
@@ -2315,7 +2315,7 @@ private fun ChatActionOverflowMenu(
                 Text(
                     text = if (noticeUnread > 99) "99+" else noticeUnread.toString(),
                     color = palette.background,
-                    fontSize = 9.sp,
+                    fontSize = FishPiType.Size.nano,
                     lineHeight = 10.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
@@ -2341,7 +2341,7 @@ private fun ChatTopicEditorDialog(
                 .widthIn(max = 460.dp)
                 .fishPiGlassSurface(
                     backdrop = LocalFishPiGlassBackdrop.current,
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(FishPiTheme.radiusField),
                     containerColor = FishPiTheme.surface.copy(alpha = 0.82f),
                     borderColor = FishPiTheme.outline.copy(alpha = 0.18f),
                     borderWidth = FishPiTheme.borderWidth,
@@ -2388,7 +2388,7 @@ private fun ChatTopicEditorDialog(
                             .padding(horizontal = 12.dp, vertical = 11.dp),
                         textStyle = TextStyle(
                             color = FishPiTheme.onSurface,
-                            fontSize = 15.sp,
+                            fontSize = FishPiType.Size.heading,
                             lineHeight = 20.sp,
                         ),
                         maxLines = 3,
@@ -2515,8 +2515,7 @@ private fun ChatPluginFloatingPanel(
                 .fishPiGlassSurface(
                     backdrop = LocalFishPiGlassBackdrop.current,
                     shape = panelShape,
-                    containerColor = palette.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
-                    borderColor = palette.outline.copy(alpha = 0.18f),
+                    tone = FishPiSurfaceTone.Floating,
                     borderWidth = FishPiTheme.borderWidth,
                     role = FishPiGlassRole.Floating,
                 )
@@ -3232,7 +3231,7 @@ private fun FavoriteEmojiSelectorSheet(
                 .fillMaxWidth(0.85f)
                 .fishPiGlassSurface(
                     backdrop = LocalFishPiGlassBackdrop.current,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(FishPiTheme.radiusBox),
                     containerColor = FishPiTheme.surface.copy(alpha = 0.78f),
                     borderColor = FishPiTheme.outline.copy(alpha = 0.18f),
                     borderWidth = FishPiTheme.borderWidth,

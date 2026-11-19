@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.ui.components
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import dev.fishpi.mobile.*
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
@@ -56,6 +57,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.fishpi.mobile.ui.glass.FishPiSurfaceTone
 
 @Composable
 internal fun FishPiPillButton(
@@ -225,7 +227,7 @@ internal fun TextField(
             Text(
                 text = it,
                 color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
+                fontSize = FishPiType.Size.caption,
                 fontWeight = FontWeight.SemiBold,
             )
         }
@@ -246,7 +248,7 @@ internal fun TextField(
                 singleLine = singleLine,
                 maxLines = maxLines,
                 minLines = minLines,
-                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp),
+                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = FishPiType.Size.heading),
                 decorationBox = { innerTextField ->
                     Box {
                         if (value.isBlank() && placeholder != null) {
@@ -262,7 +264,7 @@ internal fun TextField(
             Text(
                 text = errorText,
                 color = MaterialTheme.colorScheme.error,
-                fontSize = 12.sp,
+                fontSize = FishPiType.Size.caption,
                 fontWeight = FontWeight.Medium,
             )
         }
@@ -307,7 +309,7 @@ internal fun TextField(
             Text(
                 text = it,
                 color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
+                fontSize = FishPiType.Size.caption,
                 fontWeight = FontWeight.SemiBold,
             )
         }
@@ -328,14 +330,14 @@ internal fun TextField(
                 singleLine = singleLine,
                 maxLines = maxLines,
                 minLines = minLines,
-                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp),
+                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = FishPiType.Size.heading),
                 decorationBox = { innerTextField ->
                     Box {
                         if (value.text.isBlank() && placeholder != null) {
                             Text(
                                 text = placeholder,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.56f),
-                                fontSize = 15.sp,
+                                fontSize = FishPiType.Size.heading,
                             )
                         }
                         innerTextField()
@@ -348,7 +350,7 @@ internal fun TextField(
             Text(
                 text = errorText,
                 color = MaterialTheme.colorScheme.error,
-                fontSize = 12.sp,
+                fontSize = FishPiType.Size.caption,
                 fontWeight = FontWeight.Medium,
             )
         }
@@ -393,9 +395,7 @@ internal fun FishPiBrandLoadingLogo() {
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = RoundedCornerShape(FishPiTheme.radiusBox),
-                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
-                borderColor = FishPiTheme.outline.copy(alpha = 0.10f + FishPiTheme.depth * 0.08f),
-                borderWidth = FishPiTheme.borderWidth,
+                tone = FishPiSurfaceTone.Elevated,
             ),
         contentAlignment = Alignment.Center,
     ) {

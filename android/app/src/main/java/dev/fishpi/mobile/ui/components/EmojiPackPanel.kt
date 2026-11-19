@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.ui.components
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import dev.fishpi.mobile.*
 import androidx.compose.animation.core.animateDpAsState
 import dev.fishpi.mobile.ui.motion.FishPiMotion
@@ -45,6 +46,9 @@ import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.utils.launchIoCatching
 import kotlinx.coroutines.CoroutineScope
+import dev.fishpi.mobile.ui.components.FishPiSurfaceKind
+import dev.fishpi.mobile.ui.components.fishPiSurface
+import dev.fishpi.mobile.ui.glass.FishPiSurfaceTone
 
 internal class EmojiPanelState {
     var open by mutableStateOf(false)
@@ -171,9 +175,7 @@ internal fun EmojiPackPanel(
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = RoundedCornerShape(FishPiTheme.radiusBox),
-                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
-                borderColor = FishPiTheme.outline.copy(alpha = 0.14f),
-                borderWidth = FishPiTheme.borderWidth,
+                tone = FishPiSurfaceTone.Floating,
                 role = FishPiGlassRole.Floating,
             )
             .padding(
@@ -225,7 +227,7 @@ internal fun EmojiPackPanel(
                             vertical = FishPiTheme.spacingItem * 0.38f,
                         ),
                 ) {
-                    Text(text = "管理", color = FishPiTheme.accent, fontSize = 12.sp)
+                    Text(text = "管理", color = FishPiTheme.accent, fontSize = FishPiType.Size.caption)
                 }
             }
         }
@@ -250,8 +252,7 @@ internal fun EmojiPackPanel(
                                     modifier = Modifier
                                         .weight(1f)
                                         .aspectRatio(1f)
-                                        .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-                                        .background(FishPiTheme.surfaceContainer.copy(alpha = 0.42f))
+                                        .fishPiSurface(FishPiSurfaceKind.Subtle)
                                         .clickable { onPickEmoji(item) },
                                     contentAlignment = Alignment.Center,
                                 ) {
@@ -301,7 +302,7 @@ private fun EmojiGroupChip(
         Text(
             text = group.name.ifBlank { "表情" },
             color = if (selected) FishPiTheme.accent else FishPiTheme.weakText,
-            fontSize = 12.sp,
+            fontSize = FishPiType.Size.caption,
             maxLines = 1,
         )
     }

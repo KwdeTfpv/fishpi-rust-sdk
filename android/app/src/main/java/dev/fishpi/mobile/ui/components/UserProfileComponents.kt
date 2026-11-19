@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.ui.components
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import dev.fishpi.mobile.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -46,6 +47,7 @@ import dev.fishpi.mobile.data.MedalView
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.utils.toFishPiGeneratedBadgeOrNull
+import dev.fishpi.mobile.ui.glass.FishPiSurfaceTone
 
 internal enum class FishPiAvatarFallback {
     Text,
@@ -126,8 +128,7 @@ internal fun FishPiUserSummaryCard(
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = RoundedCornerShape(FishPiTheme.radiusBox),
-                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
-                borderColor = FishPiTheme.outline.copy(alpha = 0.14f),
+                tone = FishPiSurfaceTone.Elevated,
                 borderWidth = FishPiTheme.borderWidth,
             )
             .padding(FishPiTheme.spacingSection),
@@ -207,7 +208,7 @@ private fun FishPiMedalWallContent(
         Text(
             text = emptyText,
             color = FishPiTheme.onSurface.copy(alpha = 0.58f),
-            fontSize = 12.sp,
+            fontSize = FishPiType.Size.caption,
         )
     } else {
         FishPiMedalRow(
@@ -278,7 +279,7 @@ internal fun FishPiMedalBadge(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = TextStyle(
-                    fontSize = 10.sp,
+                    fontSize = FishPiType.Size.micro,
                     lineHeight = 10.sp,
                     fontWeight = FontWeight.Bold,
                     platformStyle = PlatformTextStyle(includeFontPadding = false),
@@ -319,7 +320,7 @@ private fun MedalIcon(
             Text(
                 text = label.take(1),
                 color = textColor,
-                fontSize = 10.sp,
+                fontSize = FishPiType.Size.micro,
                 fontWeight = FontWeight.Bold,
             )
         }
@@ -342,7 +343,7 @@ internal fun FishPiRoleBadge(role: String) {
         Text(
             text = role,
             color = Color.White,
-            fontSize = 10.sp,
+            fontSize = FishPiType.Size.micro,
             fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.35f))
@@ -360,8 +361,7 @@ internal fun FishPiProfileStatChip(label: String, value: String) {
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = RoundedCornerShape(FishPiTheme.radiusBox),
-                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
-                borderColor = FishPiTheme.outline.copy(alpha = 0.10f),
+                tone = FishPiSurfaceTone.Base,
                 borderWidth = FishPiTheme.borderWidth,
             )
             .padding(

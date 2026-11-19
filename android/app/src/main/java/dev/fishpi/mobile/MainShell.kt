@@ -1,5 +1,6 @@
 package dev.fishpi.mobile
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -161,6 +162,7 @@ import kotlin.math.sign
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.fishpi.mobile.ui.glass.FishPiSurfaceTone
 
 private const val UpdateCheckIntervalMs = 24L * 60L * 60L * 1000L
 
@@ -1026,8 +1028,7 @@ private fun ChatRoomEntryCard(
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = RoundedCornerShape(16.dp),
-                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
-                borderColor = FishPiTheme.outline.copy(alpha = 0.12f),
+                tone = FishPiSurfaceTone.Base,
                 borderWidth = 1.dp,
                 role = FishPiGlassRole.Content,
             )
@@ -1065,7 +1066,7 @@ private fun ChatRoomEntryCard(
                             .clip(CircleShape)
                             .background(statusSuccessColor()),
                     )
-                    Text(text = "$onlineCount 在线", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text(text = "$onlineCount 在线", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = FishPiType.Size.caption)
                 }
             }
             Text(
@@ -1363,7 +1364,7 @@ private fun LiquidNavItem(
         Text(
             text = title,
             color = contentColor,
-            fontSize = 9.sp,
+            fontSize = FishPiType.Size.nano,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
         )
         Box(

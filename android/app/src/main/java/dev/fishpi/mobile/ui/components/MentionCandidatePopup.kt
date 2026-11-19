@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.ui.components
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +23,7 @@ import dev.fishpi.mobile.feature.chat.model.ChatMentionCandidateUiModel
 import dev.fishpi.mobile.ui.glass.FishPiGlassRole
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
+import dev.fishpi.mobile.ui.glass.FishPiSurfaceTone
 
 /**
  * @ 提及候选人弹窗：竖向列表，每行圆头像 + 用户名。
@@ -43,8 +45,7 @@ internal fun MentionCandidatePopup(
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = shape,
-                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
-                borderColor = FishPiTheme.outline.copy(alpha = 0.18f),
+                tone = FishPiSurfaceTone.Floating,
                 borderWidth = FishPiTheme.borderWidth,
                 role = FishPiGlassRole.Floating,
             ),
@@ -68,7 +69,7 @@ internal fun MentionCandidatePopup(
                     Text(
                         text = "@${candidate.displayName}",
                         color = FishPiTheme.onSurface,
-                        fontSize = 14.sp,
+                        fontSize = FishPiType.Size.body,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f),
                     )

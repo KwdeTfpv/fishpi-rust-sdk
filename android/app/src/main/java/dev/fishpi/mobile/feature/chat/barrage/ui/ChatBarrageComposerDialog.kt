@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.chat.barrage.ui
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +35,7 @@ import dev.fishpi.mobile.ui.components.FishPiPillButton
 import dev.fishpi.mobile.ui.glass.FishPiGlassRole
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
+import dev.fishpi.mobile.ui.glass.FishPiSurfaceTone
 
 @Composable
 internal fun ChatBarrageComposerDialog(
@@ -50,9 +52,7 @@ internal fun ChatBarrageComposerDialog(
                 .fishPiGlassSurface(
                     backdrop = LocalFishPiGlassBackdrop.current,
                     shape = RoundedCornerShape(FishPiTheme.radiusBox),
-                    containerColor = FishPiTheme.surface.copy(alpha = 0.82f),
-                    borderColor = FishPiTheme.outline.copy(alpha = 0.18f),
-                    borderWidth = FishPiTheme.borderWidth,
+                    tone = FishPiSurfaceTone.Sheet,
                     role = FishPiGlassRole.Floating,
                 ),
         ) {
@@ -99,7 +99,7 @@ internal fun ChatBarrageComposerDialog(
                             ),
                         textStyle = TextStyle(
                             color = FishPiTheme.onSurface,
-                            fontSize = 15.sp,
+                            fontSize = FishPiType.Size.heading,
                             lineHeight = 20.sp,
                         ),
                         maxLines = 3,

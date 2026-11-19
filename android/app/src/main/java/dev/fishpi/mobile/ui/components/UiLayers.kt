@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.ui.components
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,6 +39,7 @@ import dev.fishpi.mobile.ui.glass.FishPiGlassRole
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.ui.motion.fishClickable
+import dev.fishpi.mobile.ui.glass.FishPiSurfaceTone
 
 internal object UiLayerTokens {
     const val ZPage = 0f
@@ -117,7 +119,6 @@ internal fun ContentCardSurface(
     contentPadding: PaddingValues = PaddingValues(FishPiTheme.spacingSection),
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val palette = LocalFishPiPalette.current
     val shape = RoundedCornerShape(FishPiTheme.radiusBox)
     val clickableModifier = onClick?.let { Modifier.fishClickable(onClick = it) } ?: Modifier
     Box(
@@ -125,11 +126,7 @@ internal fun ContentCardSurface(
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = shape,
-                containerColor = palette.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
-                borderColor = palette.outline.copy(
-                    alpha = 0.12f + FishPiTheme.depth * 0.10f,
-                ),
-                borderWidth = FishPiTheme.borderWidth,
+                tone = FishPiSurfaceTone.Elevated,
                 role = FishPiGlassRole.Content,
             )
             .then(clickableModifier),
@@ -184,7 +181,7 @@ internal fun ActionChipButton(
                     .background(if (selected) fg.copy(alpha = 0.82f) else palette.accent.copy(alpha = 0.68f)),
             )
         }
-        Text(text = text, color = fg, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Text(text = text, color = fg, fontSize = FishPiType.Size.label, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -259,7 +256,7 @@ internal fun FloatingNoticePill(
                 vertical = FishPiTheme.spacingControl * 0.64f,
             ),
             color = if (enabled) palette.accent else palette.weakText,
-            fontSize = 13.sp,
+            fontSize = FishPiType.Size.secondary,
             fontWeight = FontWeight.SemiBold,
         )
     }

@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.chat.ui
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -36,6 +37,7 @@ import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import kotlin.math.roundToInt
+import dev.fishpi.mobile.ui.glass.FishPiSurfaceTone
 
 private enum class LivenessDockSide {
     None,
@@ -89,8 +91,7 @@ internal fun ChatLivenessFloatingOrb(
                 .fishPiGlassSurface(
                     backdrop = LocalFishPiGlassBackdrop.current,
                     shape = CircleShape,
-                    containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
-                    borderColor = FishPiTheme.outline.copy(alpha = 0.16f),
+                    tone = FishPiSurfaceTone.Elevated,
                     borderWidth = 1.dp,
                 )
                 .clickable(enabled = hidden) {
@@ -142,7 +143,7 @@ internal fun ChatLivenessFloatingOrb(
                 text = percent?.let(::formatLivenessOrbText) ?: "--",
                 color = FishPiTheme.onSurface,
                 fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
+                fontSize = FishPiType.Size.secondary,
                 lineHeight = 14.sp,
                 textAlign = TextAlign.Center,
             )

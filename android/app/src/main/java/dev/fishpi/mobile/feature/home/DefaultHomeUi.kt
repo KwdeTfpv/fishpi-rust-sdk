@@ -66,6 +66,7 @@ import dev.fishpi.mobile.data.HomeWorkSettings
 import dev.fishpi.mobile.feature.home.model.HomeArticleUiModel
 import java.util.Calendar
 import java.util.Locale
+import dev.fishpi.mobile.ui.glass.FishPiSurfaceTone
 
 @Composable
 internal fun DefaultHomeUi(
@@ -303,9 +304,7 @@ private fun HomeSoftStatusPill(
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = RoundedCornerShape(FishPiTheme.radiusField),
-                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
-                borderColor = FishPiTheme.outline.copy(alpha = 0.10f),
-                borderWidth = FishPiTheme.borderWidth,
+                tone = FishPiSurfaceTone.Base,
                 role = FishPiGlassRole.Control,
             )
             .padding(horizontal = 9.dp, vertical = 8.dp),
@@ -383,8 +382,7 @@ private fun HomePrimaryEntry(
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = RoundedCornerShape(topStart = 12.dp, topEnd = 22.dp, bottomEnd = 12.dp, bottomStart = 22.dp),
-                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
-                borderColor = FishPiTheme.outline.copy(alpha = 0.13f),
+                tone = FishPiSurfaceTone.Elevated,
                 borderWidth = 1.dp,
                 role = FishPiGlassRole.Content,
             )
@@ -435,9 +433,7 @@ private fun HomeSoftMiniAction(
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = shape,
-                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
-                borderColor = FishPiTheme.outline.copy(alpha = 0.18f),
-                borderWidth = FishPiTheme.borderWidth,
+                tone = FishPiSurfaceTone.Base,
                 role = FishPiGlassRole.Control,
             )
             .clickable(onClick = onClick)
@@ -470,8 +466,7 @@ private fun HomeSoftCommunityRail(
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = RoundedCornerShape(FishPiTheme.radiusBox),
-                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
-                borderColor = FishPiTheme.outline.copy(alpha = 0.12f),
+                tone = FishPiSurfaceTone.Elevated,
                 borderWidth = FishPiTheme.borderWidth,
                 role = FishPiGlassRole.Content,
             )
@@ -619,8 +614,7 @@ private fun HomeDatePill(onClick: () -> Unit, modifier: Modifier = Modifier) {
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = RoundedCornerShape(FishPiTheme.radiusBox),
-                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.surfaceAlpha),
-                borderColor = FishPiTheme.outline.copy(alpha = 0.12f),
+                tone = FishPiSurfaceTone.Base,
                 borderWidth = FishPiTheme.borderWidth,
                 role = FishPiGlassRole.Control,
             )

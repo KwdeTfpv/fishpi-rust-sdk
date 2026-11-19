@@ -58,6 +58,8 @@ import dev.fishpi.mobile.ui.components.FishPiScreenHeader
 import dev.fishpi.mobile.ui.components.IconActionButton
 import dev.fishpi.mobile.ui.components.UiLayerScaffold
 import dev.fishpi.mobile.ui.theme.FishPiType
+import dev.fishpi.mobile.ui.components.FishPiSurfaceKind
+import dev.fishpi.mobile.ui.components.fishPiSurface
 
 @Composable
 internal fun EmojiManagerScreen(
@@ -299,8 +301,7 @@ private fun EmojiCell(
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-            .background(FishPiTheme.surfaceContainer.copy(alpha = 0.42f))
+            .fishPiSurface(FishPiSurfaceKind.Subtle)
             .clickable(enabled = enabled) { actionsOpen = !actionsOpen },
     ) {
         SubcomposeAsyncImage(
@@ -451,8 +452,7 @@ private fun TextInputDialog(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(FishPiTheme.radiusField))
-                .background(FishPiTheme.surfaceContainer.copy(alpha = 0.42f))
+                .fishPiSurface(FishPiSurfaceKind.Subtle, shape = RoundedCornerShape(FishPiTheme.radiusField))
                 .padding(
                     horizontal = FishPiTheme.spacingControl,
                     vertical = FishPiTheme.spacingControl * 0.75f,

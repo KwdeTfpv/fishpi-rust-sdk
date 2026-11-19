@@ -34,6 +34,7 @@ import dev.fishpi.mobile.ui.blur.FishPiBlurOverlay
 import dev.fishpi.mobile.ui.glass.FishPiGlassRole
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
+import dev.fishpi.mobile.ui.glass.FishPiSurfaceTone
 
 @Composable
 internal fun AppBottomSheet(
@@ -72,8 +73,7 @@ internal fun AppBottomSheet(
                         .fishPiGlassSurface(
                             backdrop = backdrop,
                             shape = sheetShape,
-                            containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
-                            borderColor = FishPiTheme.outline.copy(alpha = 0.18f + FishPiTheme.depth * 0.10f),
+                            tone = FishPiSurfaceTone.Floating,
                             borderWidth = FishPiTheme.borderWidth,
                             depthEffect = true,
                             role = FishPiGlassRole.Floating,
