@@ -1355,7 +1355,7 @@ internal class ChatController(
                         apiKey = apiKey,
                         messageId = packetId,
                         gesture = gesture,
-                        viewOnly = gesture == null && !packet.openable,
+                        viewOnly = gesture == null && (packet.needGesture || !packet.openable),
                     )
                 }
             }.onSuccess { result ->
