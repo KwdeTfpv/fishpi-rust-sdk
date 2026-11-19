@@ -117,6 +117,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import dev.fishpi.mobile.ui.components.FishPiAvatar
+import dev.fishpi.mobile.ui.state.FishPiListShell
+import dev.fishpi.mobile.ui.state.ListLoadState
 
 internal enum class StoreFilter(val title: String, val type: String?) {
     All("全部", null),
@@ -299,10 +301,7 @@ internal fun DefaultExtensionStoreUi(
         )
         StoreDraftsPage(
             drafts = state.drafts,
-            isLoading = state.isLoadingDrafts,
-            isLoadingMore = state.isLoadingMoreDrafts,
-            hasMore = state.draftsHasMore,
-            error = state.draftsError,
+            listState = state.draftsList,
             openingId = state.openingDraftId,
             deletingId = state.deletingDraftId,
             onBack = { draftsOpen = false },
@@ -402,7 +401,7 @@ internal fun DefaultExtensionStoreUi(
             onQueryChange = { dispatch(ExtensionStoreAction.ChangeQuery(it)) },
             selectedFilter = state.selectedFilter,
             onFilterChange = { dispatch(ExtensionStoreAction.ChangeFilter(it)) },
-            canRefresh = !state.isLoading && !state.isAuthenticating,
+            canRefresh = !state.list.isLoading && !state.isAuthenticating,
             onRefresh = { dispatch(ExtensionStoreAction.Refresh) },
         )
         when {
@@ -412,39 +411,51 @@ internal fun DefaultExtensionStoreUi(
                 actionLabel = "重新鉴权",
                 onAction = { dispatch(ExtensionStoreAction.RetryAuth) },
             )
-            state.isLoading -> StoreStateRow("正在加载鱼排扩展集市", busy = true)
-            state.loadError != null && state.items.isEmpty() -> StoreStateRow(
-                text = state.loadError,
-                actionLabel = "重试",
-                onAction = { dispatch(ExtensionStoreAction.Refresh) },
-            )
-            state.items.isEmpty() -> StoreStateRow(state.selectedFilter.emptyMessage(state.total))
-            else -> LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(bottom = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(state.items, key = { "${it.type}-${it.id}" }) { item ->
-                    val actionState = actionStateFor(item)
-                    val owned = actionState != StoreItemAction.Purchase
-                    StoreItemRow(
-                        item = item,
-                        running = installingId == item.id,
-                        purchasing = state.purchasingId == item.id,
-                        enabled = installingId == null && state.purchasingId == null,
-                        actionState = actionState,
-                        owned = owned,
-                        onOpenDetail = { detailItem = item },
-                        onInstall = { installItem(item) },
-                        onPurchase = { purchaseConfirmItem = item },
+            else -> FishPiListShell(
+                state = state.list,
+                onRetry = { dispatch(ExtensionStoreAction.Refresh) },
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                loading = { StoreStateRow("正在加载鱼排扩展集市", busy = true) },
+                error = { message ->
+                    StoreStateRow(
+                        text = message,
+                        actionLabel = "重试",
+                        onAction = { dispatch(ExtensionStoreAction.Refresh) },
                     )
-                }
-                if (state.hasMore) {
-                    item(key = "load-more") {
-                        StoreLoadMoreRow(
-                            loading = state.isLoadingMore,
-                            onClick = { dispatch(ExtensionStoreAction.LoadMore) },
+                },
+                empty = { StoreStateRow(state.selectedFilter.emptyMessage(state.total)) },
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentPadding = PaddingValues(bottom = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(state.items, key = { "${it.type}-${it.id}" }) { item ->
+                        val actionState = actionStateFor(item)
+                        val owned = actionState != StoreItemAction.Purchase
+                        StoreItemRow(
+                            item = item,
+                            running = installingId == item.id,
+                            purchasing = state.purchasingId == item.id,
+                            enabled = installingId == null && state.purchasingId == null,
+                            actionState = actionState,
+                            owned = owned,
+                            onOpenDetail = { detailItem = item },
+                            onInstall = { installItem(item) },
+                            onPurchase = { purchaseConfirmItem = item },
                         )
+                    }
+                    if (state.list.canLoadMore) {
+                        item(key = "load-more") {
+                            StoreLoadMoreRow(
+                                loading = state.list.isLoadingMore,
+                                onClick = { dispatch(ExtensionStoreAction.LoadMore) },
+                            )
+                        }
                     }
                 }
             }
@@ -513,7 +524,7 @@ private fun StoreTopBar(
             ) {
                 Icon(Icons.Rounded.Tune, contentDescription = "管理已安装插件", modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(3.dp))
-                Text("管理", fontSize = 12.sp)
+                Text("管理", fontSize = FishPiType.Size.caption)
             }
             TextButton(
                 onClick = onOpenDrafts,
@@ -522,7 +533,7 @@ private fun StoreTopBar(
             ) {
                 Icon(Icons.Rounded.Drafts, contentDescription = "我的草稿", modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(3.dp))
-                Text("草稿", fontSize = 12.sp)
+                Text("草稿", fontSize = FishPiType.Size.caption)
             }
             TextButton(
                 onClick = onUpload,
@@ -531,7 +542,7 @@ private fun StoreTopBar(
             ) {
                 Icon(Icons.Rounded.UploadFile, contentDescription = "发布扩展或主题", modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(3.dp))
-                Text("发布", fontSize = 12.sp)
+                Text("发布", fontSize = FishPiType.Size.caption)
             }
         },
     )
@@ -565,7 +576,7 @@ private fun StoreControls(
                 FilterChip(
                     selected = selectedFilter == filter,
                     onClick = { onFilterChange(filter) },
-                    label = { Text(filter.title, fontSize = 12.sp) },
+                    label = { Text(filter.title, fontSize = FishPiType.Size.caption) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
                         selectedLabelColor = MaterialTheme.colorScheme.primary,
@@ -589,7 +600,7 @@ private fun StoreControls(
             ) {
                 Icon(Icons.Rounded.Refresh, contentDescription = "刷新扩展集市", modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(3.dp))
-                Text("刷新", fontSize = 12.sp)
+                Text("刷新", fontSize = FishPiType.Size.caption)
             }
         }
     }
@@ -615,7 +626,7 @@ private fun StoreStateRow(
         Text(text = text, color = FishPiTheme.weakText, modifier = Modifier.weight(1f))
         if (actionLabel != null && onAction != null) {
             TextButton(onClick = onAction) {
-                Text(actionLabel, fontSize = 12.sp)
+                Text(actionLabel, fontSize = FishPiType.Size.caption)
             }
         }
     }
@@ -637,7 +648,7 @@ private fun StoreLoadMoreRow(
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         } else {
             TextButton(onClick = onClick) {
-                Text("加载更多", fontSize = 12.sp)
+                Text("加载更多", fontSize = FishPiType.Size.caption)
             }
         }
     }
@@ -855,12 +866,12 @@ private fun StoreUploadPage(
                     if (type == ExtensionStoreClient.TypeAppTheme) "主题 JSON" else "插件 JS",
                     color = FishPiTheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp,
+                    fontSize = FishPiType.Size.secondary,
                 )
                 Text(
                     if (type == ExtensionStoreClient.TypeAppTheme) "合法 JSON 配置" else "需要 FishPiPlugin 头部",
                     color = FishPiTheme.weakText,
-                    fontSize = 11.sp,
+                    fontSize = FishPiType.Size.label,
                 )
             }
             CompactCodeField(
@@ -873,7 +884,7 @@ private fun StoreUploadPage(
         }
 
         error?.let {
-            Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(it, color = MaterialTheme.colorScheme.error, fontSize = FishPiType.Size.caption, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
 
         Row(
@@ -920,10 +931,7 @@ private fun StoreUploadPage(
 @Composable
 private fun StoreDraftsPage(
     drafts: List<ExtensionStoreItem>,
-    isLoading: Boolean,
-    isLoadingMore: Boolean,
-    hasMore: Boolean,
-    error: String?,
+    listState: ListLoadState,
     openingId: Long?,
     deletingId: Long?,
     onBack: () -> Unit,
@@ -952,25 +960,31 @@ private fun StoreDraftsPage(
             actions = {
                 TextButton(
                     onClick = onRefresh,
-                    enabled = !isLoading,
+                    enabled = !listState.isLoading,
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                 ) {
                     Icon(Icons.Rounded.Refresh, contentDescription = "刷新草稿", modifier = Modifier.size(15.dp))
                     Spacer(modifier = Modifier.width(3.dp))
-                    Text("刷新", fontSize = 12.sp)
+                    Text("刷新", fontSize = FishPiType.Size.caption)
                 }
             },
         )
-        when {
-            isLoading -> StoreStateRow("正在加载我的草稿", busy = true)
-            error != null && drafts.isEmpty() -> StoreStateRow(
-                text = error,
-                actionLabel = "重试",
-                onAction = onRefresh,
-            )
-            drafts.isEmpty() -> StoreStateRow("草稿箱里还没有作品，去「发布」页存一个草稿吧")
-            else -> LazyColumn(
-                modifier = Modifier.weight(1f),
+        FishPiListShell(
+            state = listState,
+            onRetry = onRefresh,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            loading = { StoreStateRow("正在加载我的草稿", busy = true) },
+            error = { message ->
+                StoreStateRow(text = message, actionLabel = "重试", onAction = onRefresh)
+            },
+            empty = { StoreStateRow("草稿箱里还没有作品，去「发布」页存一个草稿吧") },
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
                 contentPadding = PaddingValues(bottom = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -984,9 +998,9 @@ private fun StoreDraftsPage(
                         onDelete = { deleteConfirm = draft },
                     )
                 }
-                if (hasMore) {
+                if (listState.canLoadMore) {
                     item(key = "drafts-load-more") {
-                        StoreLoadMoreRow(loading = isLoadingMore, onClick = onLoadMore)
+                        StoreLoadMoreRow(loading = listState.isLoadingMore, onClick = onLoadMore)
                     }
                 }
             }
@@ -1049,7 +1063,7 @@ private fun StoreDraftRow(
                     Text(
                         text = item.metaLine(),
                         color = FishPiTheme.weakText,
-                        fontSize = 12.sp,
+                        fontSize = FishPiType.Size.caption,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -1086,7 +1100,7 @@ private fun StoreDraftRow(
                     } else {
                         Icon(Icons.Rounded.DeleteOutline, contentDescription = null, modifier = Modifier.size(15.dp))
                         Spacer(modifier = Modifier.width(3.dp))
-                        Text("删除", fontSize = 12.sp)
+                        Text("删除", fontSize = FishPiType.Size.caption)
                     }
                 }
             }
@@ -1104,7 +1118,7 @@ private fun StoreDeleteDraftDialog(
         onDismissRequest = onDismiss,
     ) {
         FishPiDialogTitle("删除草稿")
-        Text("确定删除「$draftName」吗？删除后无法恢复。", fontSize = 13.sp)
+        Text("确定删除「$draftName」吗？删除后无法恢复。", fontSize = FishPiType.Size.secondary)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
@@ -1130,7 +1144,7 @@ private fun CompactUploadField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, color = FishPiTheme.weakText, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = FishPiTheme.weakText, fontSize = FishPiType.Size.label, fontWeight = FontWeight.Medium)
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
@@ -1139,7 +1153,7 @@ private fun CompactUploadField(
             keyboardOptions = keyboardOptions,
             textStyle = TextStyle(
                 color = FishPiTheme.onSurface,
-                fontSize = 13.sp,
+                fontSize = FishPiType.Size.secondary,
                 lineHeight = 18.sp,
             ),
             modifier = Modifier
@@ -1155,7 +1169,7 @@ private fun CompactUploadField(
             decorationBox = { inner ->
                 Box {
                     if (value.isBlank() && placeholder.isNotBlank()) {
-                        Text(placeholder, color = FishPiTheme.weakText.copy(alpha = 0.62f), fontSize = 13.sp)
+                        Text(placeholder, color = FishPiTheme.weakText.copy(alpha = 0.62f), fontSize = FishPiType.Size.secondary)
                     }
                     inner()
                 }
@@ -1178,7 +1192,7 @@ private fun CompactCodeField(
         textStyle = TextStyle(
             color = FishPiTheme.onSurface,
             fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
+            fontSize = FishPiType.Size.caption,
             lineHeight = 17.sp,
         ),
         modifier = modifier
@@ -1204,7 +1218,7 @@ private fun StoreUploadTypeChip(
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(title, fontSize = 12.sp) },
+        label = { Text(title, fontSize = FishPiType.Size.caption) },
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
             selectedLabelColor = MaterialTheme.colorScheme.primary,
@@ -1275,7 +1289,7 @@ private fun StoreItemRow(
                 Text(
                     text = item.description.ifBlank { item.identifier.ifBlank { "暂无说明" } },
                     color = FishPiTheme.weakText,
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1313,7 +1327,7 @@ private fun StoreItemRow(
                             actionState == StoreItemAction.Install -> if (item.type == ExtensionStoreClient.TypeAppTheme) "加入" else "安装"
                             else -> "购买"
                         },
-                        fontSize = 13.sp,
+                        fontSize = FishPiType.Size.secondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -1326,14 +1340,14 @@ private fun StoreItemRow(
 @Composable
 private fun StoreOwnedChip() {
     Surface(
-        shape = RoundedCornerShape(999.dp),
+        shape = RoundedCornerShape(FishPiTheme.radiusSelector),
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
         contentColor = MaterialTheme.colorScheme.primary,
     ) {
         Text(
             text = "已拥有",
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-            fontSize = 10.sp,
+            fontSize = FishPiType.Size.micro,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
         )
@@ -1352,7 +1366,7 @@ private fun StoreItemSubline(item: ExtensionStoreItem) {
         Text(
             text = "@$author",
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
-            fontSize = 11.sp,
+            fontSize = FishPiType.Size.label,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
@@ -1360,13 +1374,13 @@ private fun StoreItemSubline(item: ExtensionStoreItem) {
         Text(
             text = "v$version",
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
-            fontSize = 11.sp,
+            fontSize = FishPiType.Size.label,
             maxLines = 1,
         )
         Text(
             text = item.priceLabel(),
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-            fontSize = 11.sp,
+            fontSize = FishPiType.Size.label,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -1643,7 +1657,7 @@ private fun StoreDetailTabs(
                         onClickLabel = "切换到$title",
                         role = Role.Button,
                     ) { onSelect(index) },
-                shape = RoundedCornerShape(999.dp),
+                shape = RoundedCornerShape(FishPiTheme.radiusSelector),
                 color = if (selected == index) {
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                 } else {
@@ -1654,7 +1668,7 @@ private fun StoreDetailTabs(
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = title,
-                        fontSize = 13.sp,
+                        fontSize = FishPiType.Size.secondary,
                         fontWeight = if (selected == index) FontWeight.SemiBold else FontWeight.Medium,
                     )
                 }
@@ -1677,7 +1691,7 @@ private fun StoreDetailHeader(item: ExtensionStoreItem) {
         Text(
             text = item.description.ifBlank { "暂无说明" },
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 13.sp,
+            fontSize = FishPiType.Size.secondary,
             lineHeight = 18.sp,
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
@@ -1705,12 +1719,12 @@ private fun StoreDetailMetaStrip(item: ExtensionStoreItem) {
             Text(
                 text = value,
                 color = if (index == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 11.sp,
+                fontSize = FishPiType.Size.label,
                 fontWeight = if (index == 0) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
             )
             if (index != values.lastIndex) {
-                Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.54f), fontSize = 11.sp)
+                Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.54f), fontSize = FishPiType.Size.label)
             }
         }
     }
@@ -1771,7 +1785,7 @@ private fun StoreVersionChip(
                 onClick = onClick,
             )
         },
-        shape = RoundedCornerShape(999.dp),
+        shape = RoundedCornerShape(FishPiTheme.radiusSelector),
         color = when {
             comparing -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f)
             selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
@@ -1790,7 +1804,7 @@ private fun StoreVersionChip(
                 else -> text
             },
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            fontSize = 11.sp,
+            fontSize = FishPiType.Size.label,
             fontWeight = if (selected || comparing) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -1840,13 +1854,13 @@ private fun StoreVersionDiffPreview(
                 Text(
                     message,
                     color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                 )
             } else if (diffLines.isEmpty()) {
                 Text(
                     "两个版本内容一致",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                 )
             } else {
                 Column(
@@ -1862,7 +1876,7 @@ private fun StoreVersionDiffPreview(
                                 StoreDiffKind.Same -> MaterialTheme.colorScheme.onSurfaceVariant
                             },
                             fontFamily = FontFamily.Monospace,
-                            fontSize = 10.sp,
+                            fontSize = FishPiType.Size.micro,
                             lineHeight = 14.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -1916,7 +1930,7 @@ private fun StoreCommentsSection(
             !loading -> Text(
                 text = "暂无评论",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
+                fontSize = FishPiType.Size.caption,
             )
         }
         Row(
@@ -1942,7 +1956,7 @@ private fun StoreCommentsSection(
                     contentColor = MaterialTheme.colorScheme.inverseOnSurface,
                 ),
             ) {
-                Text(if (posting) "发送中" else "发送", fontSize = 13.sp)
+                Text(if (posting) "发送中" else "发送", fontSize = FishPiType.Size.secondary)
             }
         }
     }
@@ -1975,7 +1989,7 @@ private fun StoreCommentRow(comment: ExtensionStoreComment) {
                 Text(
                     text = comment.displayName(),
                     color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -1985,7 +1999,7 @@ private fun StoreCommentRow(comment: ExtensionStoreComment) {
                     Text(
                         text = "管理员",
                         color = MaterialTheme.colorScheme.primary,
-                        fontSize = 10.sp,
+                        fontSize = FishPiType.Size.micro,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
                     )
@@ -1998,7 +2012,7 @@ private fun StoreCommentRow(comment: ExtensionStoreComment) {
                 Text(
                     text = comment.username.takeIf { it.isNotBlank() }?.let { "@$it" } ?: comment.authorId,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 10.sp,
+                    fontSize = FishPiType.Size.micro,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -2006,7 +2020,7 @@ private fun StoreCommentRow(comment: ExtensionStoreComment) {
                     Text(
                         text = "· ${comment.createdAt.toStoreDateLabel()}",
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                        fontSize = 10.sp,
+                        fontSize = FishPiType.Size.micro,
                         maxLines = 1,
                     )
                 }
@@ -2014,7 +2028,7 @@ private fun StoreCommentRow(comment: ExtensionStoreComment) {
             Text(
                 text = comment.content.ifBlank { "无内容" },
                 color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 12.sp,
+                fontSize = FishPiType.Size.caption,
                 lineHeight = 16.sp,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
@@ -2115,12 +2129,12 @@ private fun StoreCodePreview(
                     text = title,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp,
+                    fontSize = FishPiType.Size.secondary,
                 )
                 Text(
                     text = if (isJson) "加入后可在主题列表中选择" else "安装后可在插件管理中启用",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 11.sp,
+                    fontSize = FishPiType.Size.label,
                 )
             }
             TextButton(
@@ -2137,7 +2151,7 @@ private fun StoreCodePreview(
             ) {
                 Icon(Icons.Rounded.ContentCopy, contentDescription = "复制预览代码", modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(3.dp))
-                Text("复制", fontSize = 12.sp)
+                Text("复制", fontSize = FishPiType.Size.caption)
             }
         }
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
@@ -2147,26 +2161,26 @@ private fun StoreCodePreview(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Text("正在加载预览", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text("正在加载预览", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = FishPiType.Size.caption)
                 }
                 error != null -> Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(error, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    Text(error, color = MaterialTheme.colorScheme.error, fontSize = FishPiType.Size.caption, modifier = Modifier.weight(1f))
                     if (onRetry != null) {
                         TextButton(onClick = onRetry) {
-                            Text("重试", fontSize = 12.sp)
+                            Text("重试", fontSize = FishPiType.Size.caption)
                         }
                     }
                 }
-                display.isBlank() -> Text("暂无可预览内容", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                display.isBlank() -> Text("暂无可预览内容", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = FishPiType.Size.caption)
                 else -> SelectionContainer {
                     Text(
                         text = highlighted,
                         color = MaterialTheme.colorScheme.onSurface,
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
+                        fontSize = FishPiType.Size.label,
                         lineHeight = 15.sp,
                         modifier = Modifier
                             .fillMaxSize()
@@ -2214,7 +2228,7 @@ private fun StoreThemeSwatch(name: String, color: Color) {
         Text(
             text = name,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 9.sp,
+            fontSize = FishPiType.Size.nano,
             lineHeight = 10.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,

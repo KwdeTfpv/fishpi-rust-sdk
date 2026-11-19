@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import dev.fishpi.mobile.ui.state.ListLoadState
 
 internal class ExtensionStoreController(
     private val apiKey: String,
@@ -84,7 +85,7 @@ internal class ExtensionStoreController(
                     items = emptyList(),
                     total = 0,
                     page = 0,
-                    hasMore = false,
+                    list = ListLoadState(hasMore = false, isEmpty = true),
                 )
             }
             return
@@ -105,7 +106,7 @@ internal class ExtensionStoreController(
                         items = emptyList(),
                         total = 0,
                         page = 0,
-                        hasMore = false,
+                        list = ListLoadState(hasMore = false, isEmpty = true),
                     )
                 }
             }
@@ -116,16 +117,14 @@ internal class ExtensionStoreController(
         activeSession: ExtensionStoreSession? = _state.value.session,
         reset: Boolean = true,
     ) {
-        if (!reset && (_state.value.isLoading || _state.value.isLoadingMore || !_state.value.hasMore)) return
+        if (!reset && !_state.value.list.canLoadMore) return
         val requestId = ++loadRequestId
         val snapshot = _state.value
         val nextPage = if (reset) 1 else snapshot.page + 1
         scope.launch {
             _state.update {
                 it.copy(
-                    isLoading = reset,
-                    isLoadingMore = !reset,
-                    loadError = null,
+                    list = if (reset) it.list.startingLoad() else it.list.loadingMore(),
                 )
             }
             runCatching {
@@ -157,10 +156,11 @@ internal class ExtensionStoreController(
                             items = merged,
                             total = page.total,
                             page = nextPage,
-                            hasMore = page.items.isNotEmpty() && merged.size < page.total,
+                            list = it.list.loadedMore(
+                                isEmpty = merged.isEmpty(),
+                                hasMore = page.items.isNotEmpty() && merged.size < page.total,
+                            ),
                             purchasedItems = purchases,
-                            isLoading = false,
-                            isLoadingMore = false,
                         )
                     }
                 }
@@ -179,9 +179,11 @@ internal class ExtensionStoreController(
                     }
                     _state.update {
                         it.copy(
-                            loadError = if (reset) throwable.message ?: "鱼排扩展集市加载失败" else it.loadError,
-                            isLoading = false,
-                            isLoadingMore = false,
+                            list = if (reset) {
+                                it.list.failed(throwable.message ?: "鱼排扩展集市加载失败")
+                            } else {
+                                it.list.copy(isLoadingMore = false)
+                            },
                         )
                     }
                 }
@@ -259,7 +261,7 @@ internal class ExtensionStoreController(
                 emitEffect(ExtensionStoreEffect.UploadFinished)
                 emitEffect(ExtensionStoreEffect.ShowMessage(uploadSuccessMessage(request)))
                 loadStore()
-                if (_state.value.drafts.isNotEmpty() || _state.value.isLoadingDrafts) {
+                if (_state.value.drafts.isNotEmpty() || _state.value.draftsList.isLoading) {
                     loadDrafts(reset = true)
                 }
             }.onFailure { throwable ->
@@ -292,9 +294,11 @@ internal class ExtensionStoreController(
                 withContext(Dispatchers.IO) { client.deleteItem(token, item.id) }
             }.onSuccess {
                 _state.update {
+                    val remaining = it.drafts.filterNot { draft -> draft.id == item.id }
                     it.copy(
                         deletingDraftId = null,
-                        drafts = it.drafts.filterNot { draft -> draft.id == item.id },
+                        drafts = remaining,
+                        draftsList = it.draftsList.copy(isEmpty = remaining.isEmpty()),
                     )
                 }
                 emitEffect(ExtensionStoreEffect.ShowMessage("${item.displayName()} 已删除"))
@@ -307,10 +311,10 @@ internal class ExtensionStoreController(
 
 
     private fun loadDrafts(reset: Boolean) {
-        if (!reset && (_state.value.isLoadingDrafts || _state.value.isLoadingMoreDrafts || !_state.value.draftsHasMore)) return
+        if (!reset && !_state.value.draftsList.canLoadMore) return
         val token = _state.value.session?.accessToken
         if (token.isNullOrBlank()) {
-            _state.update { it.copy(draftsError = "请先完成集市鉴权", drafts = emptyList()) }
+            _state.update { it.copy(draftsList = it.draftsList.failed("请先完成集市鉴权"), drafts = emptyList()) }
             return
         }
         val requestId = ++draftsRequestId
@@ -319,9 +323,7 @@ internal class ExtensionStoreController(
         scope.launch {
             _state.update {
                 it.copy(
-                    isLoadingDrafts = reset,
-                    isLoadingMoreDrafts = !reset,
-                    draftsError = null,
+                    draftsList = if (reset) it.draftsList.startingLoad() else it.draftsList.loadingMore(),
                 )
             }
             runCatching {
@@ -339,9 +341,10 @@ internal class ExtensionStoreController(
                         it.copy(
                             drafts = merged,
                             draftsPage = nextPage,
-                            draftsHasMore = drafts.size >= 12,
-                            isLoadingDrafts = false,
-                            isLoadingMoreDrafts = false,
+                            draftsList = it.draftsList.loadedMore(
+                                isEmpty = merged.isEmpty(),
+                                hasMore = drafts.size >= 12,
+                            ),
                         )
                     }
                 }
@@ -360,9 +363,11 @@ internal class ExtensionStoreController(
                     }
                     _state.update {
                         it.copy(
-                            draftsError = if (reset) throwable.message ?: "草稿加载失败" else it.draftsError,
-                            isLoadingDrafts = false,
-                            isLoadingMoreDrafts = false,
+                            draftsList = if (reset) {
+                                it.draftsList.failed(throwable.message ?: "草稿加载失败")
+                            } else {
+                                it.draftsList.copy(isLoadingMore = false)
+                            },
                         )
                     }
                 }
