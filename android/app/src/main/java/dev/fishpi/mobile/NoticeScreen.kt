@@ -70,6 +70,8 @@ import dev.fishpi.mobile.ui.components.UiLayerScaffold
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import dev.fishpi.mobile.ui.state.FishPiListShell
+import dev.fishpi.mobile.ui.state.ListLoadState
 
 private enum class NoticeCategory(
     val label: String,
@@ -105,17 +107,12 @@ internal fun NoticeScreen(
     val scope = rememberCoroutineScope()
     var notices by remember { mutableStateOf<List<NoticeItemView>>(emptyList()) }
     var count by remember { mutableStateOf<NoticeUnreadCount?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var load by remember { mutableStateOf(ListLoadState(isLoading = true)) }
     var status by remember { mutableStateOf("通知中心") }
     var selectedCategory by remember { mutableStateOf(NoticeCategory.All) }
 
     fun refresh() {
-        val hasLoaded = notices.isNotEmpty()
-        if (!hasLoaded) {
-            isLoading = true
-        }
-        error = null
+        load = if (notices.isEmpty()) load.startingLoad() else load.refreshing()
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -132,9 +129,11 @@ internal fun NoticeScreen(
                 onUnreadChange(nextCount.total)
                 status = "已同步 ${nextNotices.size} 条通知"
             }.onFailure {
-                error = it.message ?: "加载通知失败"
+                load = load.failed(it.message ?: "加载通知失败")
             }
-            isLoading = false
+            if (load.isLoading || load.isRefreshing) {
+                load = load.loaded(notices.isEmpty())
+            }
         }
     }
 
@@ -215,7 +214,7 @@ internal fun NoticeScreen(
                                 notices = notices.map { it.copy(read = true) }
                                 status = "已全部标记为已读"
                             }.onFailure {
-                                error = it.message ?: "全部已读失败"
+                                load = load.failed(it.message ?: "全部已读失败")
                             }
                         }
                 },
@@ -229,32 +228,36 @@ internal fun NoticeScreen(
             onSelect = { selectedCategory = it },
         )
 
-        when {
-            isLoading && notices.isEmpty() -> LoadingScreen("加载通知...")
-            error != null && notices.isEmpty() -> NoticeStateMessage(error ?: "加载通知失败", "请稍后刷新重试", isError = true)
-            notices.isEmpty() -> NoticeStateMessage("暂无通知", "新的回复、积分和系统消息会显示在这里")
-            filteredNotices.isEmpty() -> NoticeStateMessage("该分类暂无通知", "切换到全部可以查看其它通知")
-            else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    error?.let { message ->
-                        item(key = "notice-inline-error") {
-                            NoticeInlineError(message)
-                        }
-                    }
-                    itemsIndexed(
-                        uiNotices,
-                        key = { _, it -> it.raw.id.ifBlank { it.raw.time + it.raw.title } },
-                    ) { _, item ->
-                        NoticeCard(
-                            item = item,
-                            onJumpToChatRoom = onJumpToChatRoom,
-                            onJumpToArticle = onJumpToArticle,
-                        )
-                    }
+        FishPiListShell(
+            state = load,
+            onRetry = { refresh() },
+            modifier = Modifier.fillMaxSize(),
+            loading = { LoadingScreen("加载通知...") },
+            error = { message -> NoticeStateMessage(message, "请稍后刷新重试", isError = true) },
+            empty = {
+                NoticeStateMessage("暂无通知", "新的回复、积分和系统消息会显示在这里")
+            },
+        ) {
+            if (filteredNotices.isEmpty()) {
+                NoticeStateMessage("该分类暂无通知", "切换到全部可以查看其它通知")
+                return@FishPiListShell
+            }
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                itemsIndexed(
+                    uiNotices,
+                    key = { _, it -> it.raw.id.ifBlank { it.raw.time + it.raw.title } },
+                ) { _, item ->
+                    NoticeCard(
+                        item = item,
+                        onJumpToChatRoom = onJumpToChatRoom,
+                        onJumpToArticle = onJumpToArticle,
+                    )
                 }
             }
         }
@@ -367,21 +370,6 @@ private fun NoticeStateMessage(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun NoticeInlineError(message: String) {
-    ContentCardSurface(
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-    ) {
-        Text(
-            text = message,
-            color = MaterialTheme.colorScheme.error,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
     }
 }
 
