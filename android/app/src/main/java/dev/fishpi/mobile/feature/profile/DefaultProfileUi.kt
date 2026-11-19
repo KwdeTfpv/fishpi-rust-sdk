@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.profile
 
+import androidx.activity.compose.BackHandler
 import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.components.*
 import dev.fishpi.mobile.ui.bottomBarContentPadding
@@ -37,7 +38,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -188,6 +188,7 @@ internal fun DefaultProfileUi(
 
     if (!isOverlayOpen) {
         if (state.contentOpen) {
+            BackHandler(enabled = active, onBack = { dispatch(ProfileAction.DismissContent) })
             LazyColumn(
                 state = profileListState,
                 modifier = Modifier
@@ -343,31 +344,32 @@ internal fun DefaultProfileUi(
     }
 
     state.webLoginTargetId?.let {
-        AlertDialog(
+        FishPiDialog(
             onDismissRequest = {
                 if (!state.isWebLoginAuthorizing) dispatch(ProfileAction.DismissWebLoginConfirm)
             },
-            containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
-            tonalElevation = 0.dp,
-            title = { Text("网页登录确认") },
-            text = { Text("确认使用当前账号登录网页版摸鱼派？") },
-            confirmButton = {
-                Button(
-                    onClick = { dispatch(ProfileAction.ConfirmWebLogin) },
-                    enabled = !state.isWebLoginAuthorizing,
-                ) {
-                    Text(if (state.isWebLoginAuthorizing) "授权中..." else "确认登录")
-                }
-            },
-            dismissButton = {
+        ) {
+            FishPiDialogTitle("网页登录确认")
+            Text("确认使用当前账号登录网页版摸鱼派？")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 TextButton(
                     onClick = { dispatch(ProfileAction.DismissWebLoginConfirm) },
                     enabled = !state.isWebLoginAuthorizing,
                 ) {
                     Text("取消")
                 }
-            },
-        )
+                Button(
+                    onClick = { dispatch(ProfileAction.ConfirmWebLogin) },
+                    enabled = !state.isWebLoginAuthorizing,
+                ) {
+                    Text(if (state.isWebLoginAuthorizing) "授权中..." else "确认登录")
+                }
+            }
+        }
     }
 
     if (showWebLoginScanner) {
@@ -450,6 +452,7 @@ private fun ProfileSettingsOverlay(
     onLogout: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    BackHandler(onBack = onDismiss)
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -677,6 +680,7 @@ private fun ThemeEditorOverlay(
     onSave: (String) -> Result<String>,
     onDismiss: () -> Unit,
 ) {
+    BackHandler(onBack = onDismiss)
     val context = LocalContext.current
     var name by remember(option.key) { mutableStateOf(option.label) }
     var editableTokens by remember(option.key) { mutableStateOf(EditableThemeTokens.from(option.tokens)) }

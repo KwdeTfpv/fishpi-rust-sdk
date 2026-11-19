@@ -46,7 +46,6 @@ import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -139,6 +138,8 @@ import dev.fishpi.mobile.ui.animal.AnimalChatGlyph
 import dev.fishpi.mobile.ui.FloatingBottomBarClearance
 import dev.fishpi.mobile.ui.LocalBottomBarClearance
 import dev.fishpi.mobile.ui.animal.AnimalIslandBackground
+import dev.fishpi.mobile.ui.components.FishPiDialog
+import dev.fishpi.mobile.ui.components.FishPiDialogTitle
 import dev.fishpi.mobile.ui.components.VisitorVerifyDialog
 import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.motion.FishPiMotion
@@ -637,7 +638,7 @@ internal fun MainShell(
 
                         FishTab.Me -> {
                             val tabActive by remember {
-                                derivedStateOf { pagerState.settledPage == FishTab.Me.ordinal }
+                                derivedStateOf { pagerState.currentPage == FishTab.Me.ordinal }
                             }
                             Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
                                 ProfileRoute(
@@ -847,58 +848,65 @@ internal fun MainShell(
 
     val pendingUpdate = updateInfo
     if (pendingUpdate != null && !updateDismissed) {
-        AlertDialog(
+        FishPiDialog(
             onDismissRequest = {
                 if (!isDownloadingUpdate) updateDismissed = true
             },
-            containerColor = FishPiTheme.surface,
-            tonalElevation = 0.dp,
-            title = {
-                Text(text = "发现新版本 ${pendingUpdate.tagName}")
-            },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 360.dp)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    if (isDownloadingUpdate) {
-                        Text(
-                            text = "正在下载 ${formatBytes(updateDownloadedBytes)}" +
-                                if (updateTotalBytes > 0) " / ${formatBytes(updateTotalBytes)}" else "",
-                        )
-                        if (updateTotalBytes > 0) {
-                            LinearProgressIndicator(
-                                progress = {
-                                    (updateDownloadedBytes.toFloat() / updateTotalBytes.toFloat()).coerceIn(0f, 1f)
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp),
-                            )
-                        } else {
-                            LinearProgressIndicator(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp),
-                            )
-                        }
-                    }
-                    updateDownloadError?.let {
-                        Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                    }
+        ) {
+            FishPiDialogTitle("发现新版本 ${pendingUpdate.tagName}")
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                if (isDownloadingUpdate) {
                     Text(
-                        text = pendingUpdate.changelog.ifBlank { "此版本暂无更新日志。" },
-                        modifier = Modifier.padding(top = if (isDownloadingUpdate || updateDownloadError != null) 8.dp else 0.dp),
+                        text = "正在下载 ${formatBytes(updateDownloadedBytes)}" +
+                            if (updateTotalBytes > 0) " / ${formatBytes(updateTotalBytes)}" else "",
+                    )
+                    if (updateTotalBytes > 0) {
+                        LinearProgressIndicator(
+                            progress = {
+                                (updateDownloadedBytes.toFloat() / updateTotalBytes.toFloat()).coerceIn(0f, 1f)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                        )
+                    } else {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                        )
+                    }
+                }
+                updateDownloadError?.let {
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 8.dp),
                     )
                 }
-            },
-            confirmButton = {
+                Text(
+                    text = pendingUpdate.changelog.ifBlank { "此版本暂无更新日志。" },
+                    modifier = Modifier.padding(top = if (isDownloadingUpdate || updateDownloadError != null) 8.dp else 0.dp),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(
+                    enabled = !isDownloadingUpdate,
+                    onClick = {
+                        updateDismissed = true
+                    },
+                ) {
+                    Text(if (isDownloadingUpdate) "下载中" else "稍后")
+                }
                 TextButton(
                     enabled = !isDownloadingUpdate,
                     onClick = {
@@ -967,18 +975,8 @@ internal fun MainShell(
                         },
                     )
                 }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !isDownloadingUpdate,
-                    onClick = {
-                        updateDismissed = true
-                    },
-                ) {
-                    Text(if (isDownloadingUpdate) "下载中" else "稍后")
-                }
-            },
-        )
+            }
+        }
     }
 }
 

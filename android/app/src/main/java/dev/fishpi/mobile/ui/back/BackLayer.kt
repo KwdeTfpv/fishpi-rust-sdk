@@ -19,8 +19,7 @@ internal class BackLayerController {
         get() = layers.any { it.enabled }
 
     internal fun register(entry: BackLayerEntry) {
-        layers.removeAll { it.key == entry.key }
-        layers.add(entry)
+        if (entry !in layers) layers.add(entry)
     }
 
     internal fun unregister(entry: BackLayerEntry) {

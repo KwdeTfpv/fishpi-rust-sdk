@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.ui.components
 
+import androidx.activity.compose.BackHandler
 import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.components.silentTap
 
@@ -171,42 +172,6 @@ private fun FishPiToolActionCell(action: ChatToolAction) {
 }
 
 @Composable
-internal fun AppTaskPanel(
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.34f))
-            .silentTap(onDismiss)
-            .padding(horizontal = FishPiTheme.spacingPage)
-            .statusBarsPadding()
-            .navigationBarsPadding(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = 520.dp)
-                .height(maxHeight * 0.86f)
-                .clip(RoundedCornerShape(FishPiTheme.radiusBox + 8.dp))
-                .fishPiGlassSurface(
-                    backdrop = LocalFishPiGlassBackdrop.current,
-                    shape = RoundedCornerShape(FishPiTheme.radiusBox + 8.dp),
-                    containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
-                    borderColor = FishPiTheme.outline.copy(alpha = 0.14f),
-                    borderWidth = FishPiTheme.borderWidth,
-                    role = FishPiGlassRole.Floating,
-                )
-                .consumeTaps(),
-            content = content,
-        )
-    }
-}
-
-@Composable
 internal fun AppFullScreenWorkspace(
     title: String,
     subtitle: String,
@@ -214,6 +179,7 @@ internal fun AppFullScreenWorkspace(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    BackHandler(onBack = onDismiss)
     Column(
         modifier = modifier
             .fillMaxSize()
