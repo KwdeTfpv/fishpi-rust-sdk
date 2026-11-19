@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.shared.message.ui
 
+import dev.fishpi.mobile.ui.components.FishPiFullScreenDialog
 import dev.fishpi.mobile.*
 import dev.fishpi.mobile.shared.message.*
 import dev.fishpi.mobile.ui.components.consumeTaps
@@ -134,12 +135,9 @@ internal fun MessageActionBubbleMenu(
         above.roundToInt()
     }
 
-    Dialog(
+    FishPiFullScreenDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
-        ),
+        edgeToEdge = true,
     ) {
         Box(
             modifier = Modifier

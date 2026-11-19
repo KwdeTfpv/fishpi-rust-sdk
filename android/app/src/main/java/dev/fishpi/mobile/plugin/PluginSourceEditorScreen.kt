@@ -23,7 +23,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Save
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -57,6 +56,8 @@ import dev.fishpi.mobile.chatui.ChatMarkdownRenderCache
 import dev.fishpi.mobile.chatui.MarkwonContentRenderer
 import dev.fishpi.mobile.chatui.MarkwonContentStyle
 import dev.fishpi.mobile.ui.back.BackLayer
+import dev.fishpi.mobile.ui.components.FishPiDialog
+import dev.fishpi.mobile.ui.components.FishPiDialogTitle
 import dev.fishpi.mobile.ui.components.FishPiIconButton
 import kotlinx.coroutines.Job
 import org.json.JSONObject
@@ -115,22 +116,25 @@ internal fun PluginSourceEditorScreen(
     )
 
     if (closeConfirmOpen) {
-        AlertDialog(
+        FishPiDialog(
             onDismissRequest = { closeConfirmOpen = false },
-            title = { Text("放弃修改？") },
-            text = { Text("当前插件源码还没有保存，关闭后会丢失本次修改。") },
-            confirmButton = {
+        ) {
+            FishPiDialogTitle("放弃修改？")
+            Text("当前插件源码还没有保存，关闭后会丢失本次修改。")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { closeConfirmOpen = false }) { Text("继续编辑") }
                 TextButton(onClick = {
                     closeConfirmOpen = false
                     onDismiss()
                 }) {
                     Text("放弃", color = MaterialTheme.colorScheme.error)
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { closeConfirmOpen = false }) { Text("继续编辑") }
-            },
-        )
+            }
+        }
     }
 
     Box(

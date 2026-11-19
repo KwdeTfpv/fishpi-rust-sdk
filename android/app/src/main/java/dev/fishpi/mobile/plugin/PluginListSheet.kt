@@ -30,6 +30,9 @@ import androidx.compose.ui.unit.sp
 import dev.fishpi.mobile.FishPiNotifier
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.ui.back.BackLayer
+import dev.fishpi.mobile.ui.components.FishPiDialog
+import dev.fishpi.mobile.ui.components.FishPiDialogActions
+import dev.fishpi.mobile.ui.components.FishPiDialogTitle
 import dev.fishpi.mobile.ui.components.FishPiIconButton
 import dev.fishpi.mobile.ui.components.consumeTaps
 import dev.fishpi.mobile.ui.components.silentTap
@@ -78,86 +81,90 @@ fun PluginListSheet(onDismiss: () -> Unit, active: Boolean = true) {
 
     // Delete confirmation
     deleteConfirm?.let { plugin ->
-        AlertDialog(
+        FishPiDialog(
             onDismissRequest = { deleteConfirm = null },
-            title = { Text("卸载插件") },
-            text = { Text("确定要卸载「${plugin.name}」？") },
-            confirmButton = {
+        ) {
+            FishPiDialogTitle("卸载插件")
+            Text("确定要卸载「${plugin.name}」？")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { deleteConfirm = null }) { Text("取消") }
                 TextButton(onClick = {
                     pm.uninstallPlugin(plugin.fileName)
                     plugins = pm.pluginInfos()
                     deleteConfirm = null
                     FishPiNotifier.success("「${plugin.name}」已卸载")
                 }) { Text("卸载", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteConfirm = null }) { Text("取消") }
-            },
-        )
+            }
+        }
     }
 
     safetyConfirmPlugin?.let { plugin ->
-        AlertDialog(
+        FishPiDialog(
             onDismissRequest = { safetyConfirmPlugin = null },
-            title = { Text("加载本地插件？") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("「${plugin.name}」不是从扩展集市安装，或文件内容已变化。")
-                    Text(
-                        "插件可以读取当前登录 API Key，并调用 App 暴露的能力。请确认来源可信后再启用。",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 13.sp,
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
+        ) {
+            FishPiDialogTitle("加载本地插件？")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("「${plugin.name}」不是从扩展集市安装，或文件内容已变化。")
+                Text(
+                    "插件可以读取当前登录 API Key，并调用 App 暴露的能力。请确认来源可信后再启用。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp,
+                )
+            }
+            FishPiDialogActions(
+                confirmText = "确认启用",
+                onConfirm = {
                     pm.approvePluginForCurrentContent(plugin.fileName)
                     pm.togglePlugin(plugin.fileName, enable = true)
                     plugins = pm.pluginInfos()
                     safetyConfirmPlugin = null
                     FishPiNotifier.success("「${plugin.name}」已启用")
-                }) { Text("确认启用") }
-            },
-            dismissButton = {
-                TextButton(onClick = { safetyConfirmPlugin = null }) { Text("取消") }
-            },
-        )
+                },
+                dismissText = "取消",
+                onDismiss = { safetyConfirmPlugin = null },
+            )
+        }
     }
 
     // Detail dialog
     detailPlugin?.let { plugin ->
-        AlertDialog(
+        FishPiDialog(
             onDismissRequest = { detailPlugin = null },
-            title = { Text(plugin.name) },
-            text = {
-                val state = pm.getState(plugin.fileName)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("v${plugin.version} · ${plugin.author.ifBlank { "未知" }} · ${plugin.source.label()}", fontSize = 12.sp)
-                    Text("状态: ${state.status}", fontSize = 12.sp,
-                        color = if (state.status == PluginStatus.Error) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (state.errors.isNotEmpty()) {
-                        Text("错误日志:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                        state.errors.takeLast(5).forEach { err ->
-                            Text(err, fontSize = 12.sp, color = MaterialTheme.colorScheme.error,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                    if (state.recentCalls.isNotEmpty()) {
-                        Text("最近调用:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                        state.recentCalls.takeLast(5).forEach { call ->
-                            val symbol = if (call.ok) "✓" else "✗"
-                            Text("$symbol ${call.method} ${call.durationMs}ms",
-                                fontSize = 12.sp,
-                                color = if (call.ok) MaterialTheme.colorScheme.onSurfaceVariant
-                                        else MaterialTheme.colorScheme.error)
-                        }
+        ) {
+            FishPiDialogTitle(plugin.name)
+            val state = pm.getState(plugin.fileName)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("v${plugin.version} · ${plugin.author.ifBlank { "未知" }} · ${plugin.source.label()}", fontSize = 12.sp)
+                Text("状态: ${state.status}", fontSize = 12.sp,
+                    color = if (state.status == PluginStatus.Error) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant)
+                if (state.errors.isNotEmpty()) {
+                    Text("错误日志:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    state.errors.takeLast(5).forEach { err ->
+                        Text(err, fontSize = 12.sp, color = MaterialTheme.colorScheme.error,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-            },
-            confirmButton = { TextButton(onClick = { detailPlugin = null }) { Text("关闭") } },
-        )
+                if (state.recentCalls.isNotEmpty()) {
+                    Text("最近调用:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    state.recentCalls.takeLast(5).forEach { call ->
+                        val symbol = if (call.ok) "✓" else "✗"
+                        Text("$symbol ${call.method} ${call.durationMs}ms",
+                            fontSize = 12.sp,
+                            color = if (call.ok) MaterialTheme.colorScheme.onSurfaceVariant
+                                    else MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+            FishPiDialogActions(
+                confirmText = "关闭",
+                onConfirm = { detailPlugin = null },
+            )
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -405,11 +412,17 @@ private fun PluginSettingsPanel(
     )
 
     deleteKeyConfirm?.let { key ->
-        AlertDialog(
+        FishPiDialog(
             onDismissRequest = { deleteKeyConfirm = null },
-            title = { Text("删除设置项") },
-            text = { Text("确定删除「$key」？") },
-            confirmButton = {
+        ) {
+            FishPiDialogTitle("删除设置项")
+            Text("确定删除「$key」？")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { deleteKeyConfirm = null }) { Text("取消") }
                 TextButton(
                     onClick = {
                         manager.removePluginStorage(plugin.fileName, key)
@@ -420,11 +433,8 @@ private fun PluginSettingsPanel(
                 ) {
                     Text("删除", color = MaterialTheme.colorScheme.error)
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteKeyConfirm = null }) { Text("取消") }
-            },
-        )
+            }
+        }
     }
 
     BoxWithConstraints(

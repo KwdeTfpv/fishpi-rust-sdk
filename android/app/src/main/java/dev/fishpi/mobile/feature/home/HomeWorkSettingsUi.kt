@@ -1,5 +1,8 @@
 package dev.fishpi.mobile.feature.home
 
+import dev.fishpi.mobile.ui.components.FishPiDialog
+import dev.fishpi.mobile.ui.components.FishPiDialogActions
+import dev.fishpi.mobile.ui.components.FishPiDialogTitle
 import dev.fishpi.mobile.ui.components.FishPiPillButton
 import dev.fishpi.mobile.FishPiTheme
 
@@ -37,7 +40,6 @@ import androidx.compose.material.icons.rounded.NightsStay
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -96,87 +98,86 @@ internal fun HomeWorkSettingsDialog(
     var pickingTime by remember { mutableStateOf<HomeTimeTarget?>(null) }
     val colors = MaterialTheme.colorScheme
 
-    AlertDialog(
+    FishPiDialog(
         onDismissRequest = onDismiss,
-        containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
-        tonalElevation = 0.dp,
-        title = { Text("首页时间设置") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    HomeTimePickerItem(
-                        value = draft.startTime,
-                        label = "上班时间",
-                        onClick = { pickingTime = HomeTimeTarget.Start },
-                        modifier = Modifier.weight(1f),
-                    )
-                    HomeTimePickerItem(
-                        value = draft.endTime,
-                        label = "下班时间",
-                        onClick = { pickingTime = HomeTimeTarget.End },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (!draft.isValid) {
-                    Text(
-                        text = "下班时间需要晚于上班时间。",
-                        color = colors.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                Text(
-                    text = "周末设置",
-                    color = colors.onSurface,
-                    fontWeight = FontWeight.SemiBold,
+    ) {
+        FishPiDialogTitle("首页时间设置")
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                HomeTimePickerItem(
+                    value = draft.startTime,
+                    label = "上班时间",
+                    onClick = { pickingTime = HomeTimeTarget.Start },
+                    modifier = Modifier.weight(1f),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HomeSettingChoice(
-                        text = "双休",
-                        selected = draft.weekendMode == HomeWorkSettings.WEEKEND_DOUBLE,
-                        onClick = { onWeekendModeChange(HomeWorkSettings.WEEKEND_DOUBLE) },
-                    )
-                    HomeSettingChoice(
-                        text = "单休",
-                        selected = draft.weekendMode == HomeWorkSettings.WEEKEND_SINGLE,
-                        onClick = { onWeekendModeChange(HomeWorkSettings.WEEKEND_SINGLE) },
-                    )
-                    HomeSettingChoice(
-                        text = "自定义",
-                        selected = draft.weekendMode == HomeWorkSettings.WEEKEND_CUSTOM,
-                        onClick = { onWeekendModeChange(HomeWorkSettings.WEEKEND_CUSTOM) },
-                    )
-                }
-                if (draft.weekendMode == HomeWorkSettings.WEEKEND_CUSTOM) {
-                    Text(
-                        text = "选择休息日",
-                        color = colors.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        homeWeekdayLabels.forEachIndexed { index, label ->
-                            val day = index + 1
-                            HomeSettingChoice(
-                                text = label,
-                                selected = day in draft.customRestDays,
-                                onClick = { onToggleCustomRestDay(day) },
-                                compact = true,
-                            )
-                        }
+                HomeTimePickerItem(
+                    value = draft.endTime,
+                    label = "下班时间",
+                    onClick = { pickingTime = HomeTimeTarget.End },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (!draft.isValid) {
+                Text(
+                    text = "下班时间需要晚于上班时间。",
+                    color = colors.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Text(
+                text = "周末设置",
+                color = colors.onSurface,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HomeSettingChoice(
+                    text = "双休",
+                    selected = draft.weekendMode == HomeWorkSettings.WEEKEND_DOUBLE,
+                    onClick = { onWeekendModeChange(HomeWorkSettings.WEEKEND_DOUBLE) },
+                )
+                HomeSettingChoice(
+                    text = "单休",
+                    selected = draft.weekendMode == HomeWorkSettings.WEEKEND_SINGLE,
+                    onClick = { onWeekendModeChange(HomeWorkSettings.WEEKEND_SINGLE) },
+                )
+                HomeSettingChoice(
+                    text = "自定义",
+                    selected = draft.weekendMode == HomeWorkSettings.WEEKEND_CUSTOM,
+                    onClick = { onWeekendModeChange(HomeWorkSettings.WEEKEND_CUSTOM) },
+                )
+            }
+            if (draft.weekendMode == HomeWorkSettings.WEEKEND_CUSTOM) {
+                Text(
+                    text = "选择休息日",
+                    color = colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    homeWeekdayLabels.forEachIndexed { index, label ->
+                        val day = index + 1
+                        HomeSettingChoice(
+                            text = label,
+                            selected = day in draft.customRestDays,
+                            onClick = { onToggleCustomRestDay(day) },
+                            compact = true,
+                        )
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onSave, enabled = draft.isValid) {
-                Text("保存")
-            }
-        },
-        dismissButton = {
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             TextButton(onClick = onDismiss) {
                 Text("取消")
             }
-        },
-    )
+            TextButton(onClick = onSave, enabled = draft.isValid) {
+                Text("保存")
+            }
+        }
+    }
 
     pickingTime?.let { target ->
         val current = if (target == HomeTimeTarget.Start) draft.startTime else draft.endTime
@@ -186,37 +187,28 @@ internal fun HomeWorkSettingsDialog(
             initialMinute = minute,
             is24Hour = true,
         )
-        AlertDialog(
+        FishPiDialog(
             onDismissRequest = { pickingTime = null },
-            containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
-            tonalElevation = 0.dp,
-            title = { Text(if (target == HomeTimeTarget.Start) "选择上班时间" else "选择下班时间") },
-            text = {
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    TimePicker(state = pickerState)
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val next = "%02d:%02d".format(pickerState.hour, pickerState.minute)
-                        if (target == HomeTimeTarget.Start) {
-                            onStartTimeChange(next)
-                        } else {
-                            onEndTimeChange(next)
-                        }
-                        pickingTime = null
-                    },
-                ) {
-                    Text("确定")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pickingTime = null }) {
-                    Text("取消")
-                }
-            },
-        )
+        ) {
+            FishPiDialogTitle(if (target == HomeTimeTarget.Start) "选择上班时间" else "选择下班时间")
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                TimePicker(state = pickerState)
+            }
+            FishPiDialogActions(
+                confirmText = "确定",
+                onConfirm = {
+                    val next = "%02d:%02d".format(pickerState.hour, pickerState.minute)
+                    if (target == HomeTimeTarget.Start) {
+                        onStartTimeChange(next)
+                    } else {
+                        onEndTimeChange(next)
+                    }
+                    pickingTime = null
+                },
+                dismissText = "取消",
+                onDismiss = { pickingTime = null },
+            )
+        }
     }
 }
 

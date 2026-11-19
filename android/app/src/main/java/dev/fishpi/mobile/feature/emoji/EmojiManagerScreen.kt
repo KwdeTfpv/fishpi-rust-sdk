@@ -27,7 +27,6 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.automirrored.rounded.DriveFileMove
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -52,6 +51,9 @@ import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.data.FishPiApiClient
 import dev.fishpi.mobile.rememberFishPiImageLoader
+import dev.fishpi.mobile.ui.components.FishPiDialog
+import dev.fishpi.mobile.ui.components.FishPiDialogActions
+import dev.fishpi.mobile.ui.components.FishPiDialogTitle
 import dev.fishpi.mobile.ui.components.FishPiScreenHeader
 import dev.fishpi.mobile.ui.components.IconActionButton
 import dev.fishpi.mobile.ui.components.UiLayerScaffold
@@ -216,57 +218,57 @@ internal fun EmojiManagerScreen(
 
     movingItem?.let { item ->
         val targets = state.groups.filter { it.id != item.groupId }
-        AlertDialog(
+        FishPiDialog(
             onDismissRequest = { movingItem = null },
-            containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
-            tonalElevation = 0.dp,
-            title = { Text("移动到分组", style = FishPiType.heading) },
-            text = {
-                if (targets.isEmpty()) {
-                    Text("没有其他分组", style = FishPiType.secondary, color = FishPiTheme.weakText)
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem * 0.5f)) {
-                        targets.forEach { group ->
-                            Text(
-                                text = group.name.ifBlank { "表情" },
-                                style = FishPiType.body,
-                                color = FishPiTheme.onSurface,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(FishPiTheme.radiusField))
-                                    .clickable {
-                                        state.moveEmoji(scope, item, group.id)
-                                        movingItem = null
-                                    }
-                                    .padding(
-                                        horizontal = FishPiTheme.spacingControl,
-                                        vertical = FishPiTheme.spacingControl * 0.75f,
-                                    ),
-                            )
-                        }
+        ) {
+            FishPiDialogTitle("移动到分组")
+            if (targets.isEmpty()) {
+                Text("没有其他分组", style = FishPiType.secondary, color = FishPiTheme.weakText)
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem * 0.5f)) {
+                    targets.forEach { group ->
+                        Text(
+                            text = group.name.ifBlank { "表情" },
+                            style = FishPiType.body,
+                            color = FishPiTheme.onSurface,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(FishPiTheme.radiusField))
+                                .clickable {
+                                    state.moveEmoji(scope, item, group.id)
+                                    movingItem = null
+                                }
+                                .padding(
+                                    horizontal = FishPiTheme.spacingControl,
+                                    vertical = FishPiTheme.spacingControl * 0.75f,
+                                ),
+                        )
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { movingItem = null }) { Text("取消") }
-            },
-        )
+            }
+            FishPiDialogActions(
+                confirmText = "取消",
+                onConfirm = { movingItem = null },
+            )
+        }
     }
 
     if (pendingDeleteGroup) {
-        AlertDialog(
+        FishPiDialog(
             onDismissRequest = { pendingDeleteGroup = false },
-            containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
-            tonalElevation = 0.dp,
-            title = { Text("删除分组", style = FishPiType.heading) },
-            text = {
-                Text(
-                    "删除「${state.selectedGroup?.name.orEmpty()}」后，组内表情将不再归入该分组。",
-                    style = FishPiType.secondary,
-                    color = FishPiTheme.weakText,
-                )
-            },
-            confirmButton = {
+        ) {
+            FishPiDialogTitle("删除分组")
+            Text(
+                "删除「${state.selectedGroup?.name.orEmpty()}」后，组内表情将不再归入该分组。",
+                style = FishPiType.secondary,
+                color = FishPiTheme.weakText,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { pendingDeleteGroup = false }) { Text("取消") }
                 TextButton(
                     onClick = {
                         state.deleteGroup(scope, state.selectedGroupId)
@@ -275,11 +277,8 @@ internal fun EmojiManagerScreen(
                 ) {
                     Text("删除", color = FishPiErrorRed)
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDeleteGroup = false }) { Text("取消") }
-            },
-        )
+            }
+        }
     }
 }
 
@@ -445,46 +444,45 @@ private fun TextInputDialog(
     onConfirm: (String) -> Unit,
 ) {
     var value by remember { mutableStateOf(initial) }
-    AlertDialog(
+    FishPiDialog(
         onDismissRequest = onDismiss,
-        containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
-        tonalElevation = 0.dp,
-        title = { Text(title, style = FishPiType.heading) },
-        text = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(FishPiTheme.radiusField))
-                    .background(FishPiTheme.surfaceContainer.copy(alpha = 0.42f))
-                    .padding(
-                        horizontal = FishPiTheme.spacingControl,
-                        vertical = FishPiTheme.spacingControl * 0.75f,
-                    ),
-            ) {
-                BasicTextField(
-                    value = value,
-                    onValueChange = { value = it },
-                    textStyle = TextStyle(color = FishPiTheme.onSurface),
-                    modifier = Modifier.fillMaxWidth(),
-                    decorationBox = { inner ->
-                        if (value.isEmpty()) {
-                            Text(placeholder, style = FishPiType.body, color = FishPiTheme.weakText)
-                        }
-                        inner()
-                    },
-                )
-            }
-        },
-        confirmButton = {
+    ) {
+        FishPiDialogTitle(title)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(FishPiTheme.radiusField))
+                .background(FishPiTheme.surfaceContainer.copy(alpha = 0.42f))
+                .padding(
+                    horizontal = FishPiTheme.spacingControl,
+                    vertical = FishPiTheme.spacingControl * 0.75f,
+                ),
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = { value = it },
+                textStyle = TextStyle(color = FishPiTheme.onSurface),
+                modifier = Modifier.fillMaxWidth(),
+                decorationBox = { inner ->
+                    if (value.isEmpty()) {
+                        Text(placeholder, style = FishPiType.body, color = FishPiTheme.weakText)
+                    }
+                    inner()
+                },
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onDismiss) { Text("取消") }
             TextButton(
                 enabled = value.isNotBlank(),
                 onClick = { onConfirm(value) },
             ) {
                 Text(confirmLabel)
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        },
-    )
+        }
+    }
 }

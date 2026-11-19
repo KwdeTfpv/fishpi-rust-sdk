@@ -49,7 +49,6 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Storefront
 import androidx.compose.material.icons.rounded.UploadFile
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -103,6 +102,9 @@ import dev.fishpi.mobile.data.ExtensionStoreUploadRequest
 import dev.fishpi.mobile.plugin.PluginListSheet
 import dev.fishpi.mobile.plugin.PluginManager
 import dev.fishpi.mobile.plugin.PluginSource
+import dev.fishpi.mobile.ui.components.FishPiDialog
+import dev.fishpi.mobile.ui.components.FishPiDialogActions
+import dev.fishpi.mobile.ui.components.FishPiDialogTitle
 import dev.fishpi.mobile.ui.components.PlainBackButton
 import dev.fishpi.mobile.ui.components.FishPiScreenHeader
 import dev.fishpi.mobile.ui.theme.FishPiType
@@ -114,6 +116,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import dev.fishpi.mobile.ui.components.FishPiAvatar
 
 internal enum class StoreFilter(val title: String, val type: String?) {
     All("全部", null),
@@ -647,16 +650,22 @@ private fun PurchaseConfirmDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    AlertDialog(
+    FishPiDialog(
         onDismissRequest = onDismiss,
-        title = { Text("确认购买") },
-        text = {
-            Text(
-                text = "确定要购买「${item.displayName()}」吗？本次购买需要 ${item.priceLabel()}，购买后可在集市中安装或加入到 APP。",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-        confirmButton = {
+    ) {
+        FishPiDialogTitle("确认购买")
+        Text(
+            text = "确定要购买「${item.displayName()}」吗？本次购买需要 ${item.priceLabel()}，购买后可在集市中安装或加入到 APP。",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onDismiss, enabled = !purchasing) {
+                Text("取消")
+            }
             Button(
                 onClick = onConfirm,
                 enabled = !purchasing,
@@ -667,13 +676,8 @@ private fun PurchaseConfirmDialog(
             ) {
                 Text(if (purchasing) "购买中" else "确认购买")
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !purchasing) {
-                Text("取消")
-            }
-        },
-    )
+        }
+    }
 }
 
 @Composable
@@ -895,26 +899,21 @@ private fun StoreUploadPage(
     }
 
     if (discardConfirm) {
-        AlertDialog(
+        FishPiDialog(
             onDismissRequest = { discardConfirm = false },
-            title = { Text("放弃编辑？") },
-            text = { Text("当前内容还没有保存，返回后会丢失。") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        discardConfirm = false
-                        onBack()
-                    },
-                ) {
-                    Text("放弃")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { discardConfirm = false }) {
-                    Text("继续编辑")
-                }
-            },
-        )
+        ) {
+            FishPiDialogTitle("放弃编辑？")
+            Text("当前内容还没有保存，返回后会丢失。")
+            FishPiDialogActions(
+                confirmText = "放弃",
+                onConfirm = {
+                    discardConfirm = false
+                    onBack()
+                },
+                dismissText = "继续编辑",
+                onDismiss = { discardConfirm = false },
+            )
+        }
     }
 }
 
@@ -1101,19 +1100,22 @@ private fun StoreDeleteDraftDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    AlertDialog(
+    FishPiDialog(
         onDismissRequest = onDismiss,
-        title = { Text("删除草稿", fontWeight = FontWeight.SemiBold) },
-        text = { Text("确定删除「$draftName」吗？删除后无法恢复。", fontSize = 13.sp) },
-        confirmButton = {
+    ) {
+        FishPiDialogTitle("删除草稿")
+        Text("确定删除「$draftName」吗？删除后无法恢复。", fontSize = 13.sp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onDismiss) { Text("取消") }
             TextButton(onClick = onConfirm) {
                 Text("删除", color = MaterialTheme.colorScheme.error)
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        },
-    )
+        }
+    }
 }
 
 @Composable
@@ -1956,31 +1958,14 @@ private fun StoreCommentRow(comment: ExtensionStoreComment) {
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(9.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (comment.avatar.isNotBlank()) {
-                SubcomposeAsyncImage(
-                    model = comment.avatar,
-                    imageLoader = imageLoader,
-                    contentDescription = comment.displayName(),
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                    loading = {
-                        StoreCommentAvatarFallback(comment)
-                    },
-                    error = {
-                        StoreCommentAvatarFallback(comment)
-                    },
-                )
-            } else {
-                StoreCommentAvatarFallback(comment)
-            }
-        }
+        FishPiAvatar(
+            avatarUrl = comment.avatar,
+            displayName = comment.displayName(),
+            contentDescription = comment.displayName(),
+            size = 30.dp,
+            fallbackBackground = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            fallbackContentColor = MaterialTheme.colorScheme.primary,
+        )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -2036,16 +2021,6 @@ private fun StoreCommentRow(comment: ExtensionStoreComment) {
             )
         }
     }
-}
-
-@Composable
-private fun StoreCommentAvatarFallback(comment: ExtensionStoreComment) {
-    Text(
-        text = comment.displayName().firstOrNull()?.toString() ?: "?",
-        color = MaterialTheme.colorScheme.primary,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Bold,
-    )
 }
 
 @Composable

@@ -68,9 +68,8 @@ internal fun VisitorVerifyDialog(
         onVerified()
     }
 
-    Dialog(
+    FishPiFullScreenDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         FishPiBlurOverlay(
             modifier = Modifier.fillMaxSize(),

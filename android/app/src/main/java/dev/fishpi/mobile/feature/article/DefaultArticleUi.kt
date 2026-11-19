@@ -51,7 +51,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -172,28 +171,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-
-private data class ArticleFilter(val key: String, val label: String)
-
-private val ArticlePinnedClearance = 38.dp
-
-private val BaseArticleFilters = listOf(
-    ArticleFilter("recent", "最新"),
-    ArticleFilter("hot", "热门"),
-    ArticleFilter("good", "点赞"),
-    ArticleFilter("reply", "回复"),
-)
-
-private val RecentArticleFilters = BaseArticleFilters + listOf(
-    ArticleFilter("long", "长篇"),
-)
-
-private val TaggedArticleFilters = BaseArticleFilters + listOf(
-    ArticleFilter("perfect", "优选"),
-)
-
-private fun articleFiltersForTag(tag: String): List<ArticleFilter> =
-    if (tag.isBlank()) RecentArticleFilters else TaggedArticleFilters
+import dev.fishpi.mobile.feature.article.model.articleFiltersForTag
 
 private enum class ArticleScreenState { List, JumpLoading, Detail }
 
@@ -260,14 +238,14 @@ internal fun DefaultArticleUi(
     } else if (screen == ArticleScreenState.List) {
         ArticleListPage(
             articles = state.rawArticles,
-            filter = ArticleFilter(state.filter.key, state.filter.label),
+            filter = state.filter,
             tagInput = state.tagInput,
             appliedTag = state.appliedTag,
             isLoading = state.isLoading,
             isLoadingMore = state.isLoadingMore,
             error = state.error,
             listState = listState,
-            onFilterChange = { dispatch(ArticleAction.ChangeFilter(ArticleFilterUiModel(it.key, it.label))) },
+            onFilterChange = { dispatch(ArticleAction.ChangeFilter(it)) },
             onTagChange = { dispatch(ArticleAction.ChangeTagInput(it)) },
             onApplyTag = { dispatch(ArticleAction.ApplyTag) },
             onClearTag = { dispatch(ArticleAction.ClearTag) },
@@ -350,14 +328,14 @@ internal fun DefaultArticleUi(
 @Composable
 private fun ArticleListPage(
     articles: List<ArticleSummary>,
-    filter: ArticleFilter,
+    filter: ArticleFilterUiModel,
     tagInput: String,
     appliedTag: String,
     isLoading: Boolean,
     isLoadingMore: Boolean,
     error: String?,
     listState: androidx.compose.foundation.lazy.LazyListState,
-    onFilterChange: (ArticleFilter) -> Unit,
+    onFilterChange: (ArticleFilterUiModel) -> Unit,
     onTagChange: (String) -> Unit,
     onApplyTag: () -> Unit,
     onClearTag: () -> Unit,
@@ -759,34 +737,35 @@ internal fun DefaultArticlePublishUi(
         val renderCache = remember { ChatMarkdownRenderCache() }
         val renderScope = rememberCoroutineScope()
         val previewSource = if (state.previewTarget == ArticlePublishEditorTarget.Reward) state.rewardContent else state.content
-        AlertDialog(
+        FishPiDialog(
             onDismissRequest = { dispatch(ArticlePublishAction.DismissPreview) },
-            containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
-            tonalElevation = 0.dp,
-            title = { Text(if (state.previewTarget == ArticlePublishEditorTarget.Reward) "打赏区预览" else "正文预览") },
-            text = {
-                LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
-                    item {
-                        ArticleMarkdownContent(
-                            source = previewSource.ifBlank { "暂无内容" },
-                            contentKey = "article-publish-preview|${state.previewTarget.name}",
-                            renderCache = renderCache,
-                            renderScope = renderScope,
-                            textSizeSp = 15f,
-                            lineSpacingMultiplier = 1.25f,
-                            imageUrls = emptyList(),
-                            linkUrls = emptyList(),
-                            onImageClick = { _, _ -> },
-                            onLinkClick = {},
-                            onVideoClick = {},
-                        )
-                    }
+        ) {
+            FishPiDialogTitle(if (state.previewTarget == ArticlePublishEditorTarget.Reward) "打赏区预览" else "正文预览")
+            LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
+                item {
+                    ArticleMarkdownContent(
+                        source = previewSource.ifBlank { "暂无内容" },
+                        contentKey = "article-publish-preview|${state.previewTarget.name}",
+                        renderCache = renderCache,
+                        renderScope = renderScope,
+                        textSizeSp = 15f,
+                        lineSpacingMultiplier = 1.25f,
+                        imageUrls = emptyList(),
+                        linkUrls = emptyList(),
+                        onImageClick = { _, _ -> },
+                        onLinkClick = {},
+                        onVideoClick = {},
+                    )
                 }
-            },
-            confirmButton = {
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 FishPiPillButton(text = "关闭", onClick = { dispatch(ArticlePublishAction.DismissPreview) }, compact = true)
-            },
-        )
+            }
+        }
     }
 }
 
@@ -798,55 +777,50 @@ private fun GoodArticleConfirmDialog(
 ) {
     val textColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
-    AlertDialog(
+    FishPiDialog(
         onDismissRequest = onDismiss,
-        containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
-        tonalElevation = 0.dp,
-        title = { Text("是否申请好帖奖励？") },
-        text = {
-            LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
-                item {
-                    AndroidView(
-                        modifier = Modifier.fillMaxWidth(),
-                        factory = { context ->
-                            TextView(context).apply {
-                                setTextColor(textColor)
-                                setLinkTextColor(linkColor)
-                                textSize = 14f
-                                setLineSpacing(0f, 1.12f)
-                                movementMethod = LinkMovementMethod.getInstance()
-                            }
-                        },
-                        update = { textView ->
-                            textView.setTextColor(textColor)
-                            textView.setLinkTextColor(linkColor)
-                            textView.setText(Html.fromHtml(GoodArticleConfirmHtml, Html.FROM_HTML_MODE_LEGACY))
-                        },
-                    )
-                }
+    ) {
+        FishPiDialogTitle("是否申请好帖奖励？")
+        LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+            item {
+                AndroidView(
+                    modifier = Modifier.fillMaxWidth(),
+                    factory = { context ->
+                        TextView(context).apply {
+                            setTextColor(textColor)
+                            setLinkTextColor(linkColor)
+                            textSize = 14f
+                            setLineSpacing(0f, 1.12f)
+                            movementMethod = LinkMovementMethod.getInstance()
+                        }
+                    },
+                    update = { textView ->
+                        textView.setTextColor(textColor)
+                        textView.setLinkTextColor(linkColor)
+                        textView.setText(Html.fromHtml(GoodArticleConfirmHtml, Html.FROM_HTML_MODE_LEGACY))
+                    },
+                )
             }
-        },
-        confirmButton = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+        }
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Button(
+                onClick = onGoodArticle,
+                modifier = Modifier.widthIn(max = 280.dp),
             ) {
-                Button(
-                    onClick = onGoodArticle,
-                    modifier = Modifier.widthIn(max = 280.dp),
-                ) {
-                    Text("这是好帖，给我奖励！")
-                }
-                TextButton(
-                    onClick = onNormalArticle,
-                    modifier = Modifier.widthIn(max = 280.dp),
-                ) {
-                    Text("我就随便写写，不需要奖励")
-                }
+                Text("这是好帖，给我奖励！")
             }
-        },
-    )
+            TextButton(
+                onClick = onNormalArticle,
+                modifier = Modifier.widthIn(max = 280.dp),
+            ) {
+                Text("我就随便写写，不需要奖励")
+            }
+        }
+    }
 }
 
 private const val GoodArticleConfirmHtml =
@@ -936,6 +910,8 @@ private fun ArticleSettingRow(label: String, checked: Boolean, onChange: (Boolea
     }
 }
 
+private val ArticlePinnedClearance = 38.dp
+
 private val draftTimestampFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
 private fun formatDraftTimestamp(millis: Long): String? {
@@ -952,66 +928,67 @@ private fun ArticleDraftDialog(
     onOpen: (ArticleDraftView) -> Unit,
     onDelete: (ArticleDraftView) -> Unit,
 ) {
-    AlertDialog(
+    FishPiDialog(
         onDismissRequest = onDismiss,
-        containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
-        tonalElevation = 0.dp,
-        title = { Text("草稿") },
-        text = {
-            if (drafts.isEmpty()) {
-                Text("暂无草稿", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else {
-                LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
-                    items(drafts, key = { it.id }) { draft ->
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { onOpen(draft) }
-                                .padding(vertical = 10.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = draft.title.ifBlank { "未命名草稿" },
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                FishPiPillButton(
-                                    text = "删除",
-                                    onClick = { onDelete(draft) },
-                                    danger = true,
-                                    compact = true,
-                                )
-                            }
+    ) {
+        FishPiDialogTitle("草稿")
+        if (drafts.isEmpty()) {
+            Text("暂无草稿", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+                items(drafts, key = { it.id }) { draft ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onOpen(draft) }
+                            .padding(vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = draft.summary.ifBlank { draft.tags.ifBlank { "没有摘要" } },
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 2,
+                                text = draft.title.ifBlank { "未命名草稿" },
+                                color = MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
                             )
-                            formatDraftTimestamp(draft.createdTime)?.let { created ->
-                                Text(
-                                    text = "创建于 $created",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
-                            }
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+                            FishPiPillButton(
+                                text = "删除",
+                                onClick = { onDelete(draft) },
+                                danger = true,
+                                compact = true,
+                            )
                         }
+                        Text(
+                            text = draft.summary.ifBlank { draft.tags.ifBlank { "没有摘要" } },
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        formatDraftTimestamp(draft.createdTime)?.let { created ->
+                            Text(
+                                text = "创建于 $created",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
                     }
                 }
             }
-        },
-        confirmButton = {
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             FishPiPillButton(text = "关闭", onClick = onDismiss, compact = true)
-        },
-    )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1104,32 +1081,23 @@ private fun ArticleAvatar(
     perfect: Boolean,
     onClick: (() -> Unit)? = null,
 ) {
-    val shape = RoundedCornerShape(999.dp)
-    Box(
-        modifier = Modifier
-            .size(42.dp)
-            .clip(shape)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .background(if (perfect) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = author.firstOrNull()?.toString() ?: "帖",
-            color = if (perfect) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Bold,
-        )
-        if (avatar.isNotBlank()) {
-            SubcomposeAsyncImage(
-                model = avatar,
-                imageLoader = rememberFishPiImageLoader(),
-                contentDescription = "${author.ifBlank { "作者" }}头像",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(shape),
-            )
-        }
-    }
+    FishPiAvatar(
+        avatarUrl = avatar,
+        displayName = author.ifBlank { "帖" },
+        contentDescription = "${author.ifBlank { "作者" }}头像",
+        size = 42.dp,
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
+        fallbackBackground = if (perfect) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+        fallbackContentColor = if (perfect) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+    )
 }
 
 @Composable
@@ -1848,31 +1816,30 @@ private fun ArticleRewardCard(
         }
     }
     if (rewardConfirmOpen) {
-        AlertDialog(
+        FishPiDialog(
             onDismissRequest = onDismissRewardConfirm,
-            containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
-            tonalElevation = 0.dp,
-            title = { Text("确认打赏？") },
-            text = {
-                Text(
-                    text = "确认打赏 ${detail.rewardPoint} 积分查看打赏区内容吗？",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-            confirmButton = {
+        ) {
+            FishPiDialogTitle("确认打赏？")
+            Text(
+                text = "确认打赏 ${detail.rewardPoint} 积分查看打赏区内容吗？",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onDismissRewardConfirm) {
+                    Text("取消")
+                }
                 Button(
                     onClick = onConfirmReward,
                     enabled = !isRewarding && !isActionRunning,
                 ) {
                     Text("确认打赏")
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = onDismissRewardConfirm) {
-                    Text("取消")
-                }
-            },
-        )
+            }
+        }
     }
 }
 

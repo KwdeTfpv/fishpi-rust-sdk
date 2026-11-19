@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.pluginui
 
+import dev.fishpi.mobile.ui.components.FishPiFullScreenDialog
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
 import androidx.activity.compose.BackHandler
@@ -32,7 +33,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Article
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -76,16 +76,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import coil3.compose.SubcomposeAsyncImage
 import dev.fishpi.mobile.FishPiOverlayWindow
 import dev.fishpi.mobile.FishPiTheme
 import dev.fishpi.mobile.chatui.ChatMarkdownRenderCache
 import dev.fishpi.mobile.chatui.MarkwonContentRenderer
 import dev.fishpi.mobile.chatui.MarkwonContentStyle
-import dev.fishpi.mobile.rememberFishPiImageLoader
 import dev.fishpi.mobile.ui.components.ActionChipButton
 import dev.fishpi.mobile.ui.components.ContentCardSurface
 import dev.fishpi.mobile.ui.components.ControlSurface
+import dev.fishpi.mobile.ui.components.FishPiAsyncImage
 import dev.fishpi.mobile.ui.components.IconActionButton
 import dev.fishpi.mobile.ui.components.PlainBackButton
 import dev.fishpi.mobile.ui.components.UiLayerScaffold
@@ -102,18 +101,17 @@ internal fun DefaultPluginUi(
     val document = state.current?.takeIf { it.open } ?: return
     when (document.container) {
         PluginUiContainerType.Dialog,
-        PluginUiContainerType.Sheet -> Dialog(
+        PluginUiContainerType.Sheet -> FishPiFullScreenDialog(
             onDismissRequest = { dispatch(PluginUiAction.Close(document.pluginId)) },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
             FishPiOverlayWindow {
                 PluginUiSurface(document = document, state = state, dispatch = dispatch)
             }
         }
         PluginUiContainerType.Page -> {
-            Dialog(
+            FishPiFullScreenDialog(
                 onDismissRequest = { dispatch(PluginUiAction.Close(document.pluginId)) },
-                properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+                edgeToEdge = true,
             ) {
                 FishPiOverlayWindow {
                     PluginUiSurface(document = document, state = state, dispatch = dispatch)
@@ -396,16 +394,14 @@ private fun StreamingPluginMarkdown(text: String) {
 @Composable
 private fun PluginImage(node: PluginUiNode.Image) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        SubcomposeAsyncImage(
+        FishPiAsyncImage(
             model = node.url,
-            imageLoader = rememberFishPiImageLoader(),
             contentDescription = node.caption.ifBlank { "插件图片" },
             contentScale = ContentScale.Crop,
+            shape = RoundedCornerShape(FishPiTheme.radiusBox),
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 160.dp, max = 320.dp)
-                .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-                .background(MaterialTheme.colorScheme.surfaceContainer),
+                .heightIn(min = 160.dp, max = 320.dp),
         )
         if (node.caption.isNotBlank()) {
             Text(node.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
@@ -620,7 +616,7 @@ private fun PluginImage(node: PluginUiNode.Image) {
     ) {
         Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
             if (node.avatar.isNotBlank()) {
-                SubcomposeAsyncImage(model = node.avatar, imageLoader = rememberFishPiImageLoader(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                FishPiAsyncImage(model = node.avatar, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             } else Icon(Icons.Rounded.Person, contentDescription = null)
         }
         Column {

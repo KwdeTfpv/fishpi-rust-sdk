@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.ui.overlay
 
+import dev.fishpi.mobile.ui.components.FishPiFullScreenDialog
 import dev.fishpi.mobile.*
 import dev.fishpi.mobile.ui.components.FishPiIconButton
 import android.net.Uri
@@ -39,12 +40,9 @@ internal fun LinkPreviewOverlay(
 ) {
     val previewUrl = remember(url, apiKey) { authenticatedFishPiUrl(url, apiKey) }
     val requestHeaders = remember(url, apiKey) { fishPiAuthHeaders(url, apiKey) }
-    Dialog(
+    FishPiFullScreenDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
-        ),
+        edgeToEdge = true,
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.fillMaxWidth()) {
