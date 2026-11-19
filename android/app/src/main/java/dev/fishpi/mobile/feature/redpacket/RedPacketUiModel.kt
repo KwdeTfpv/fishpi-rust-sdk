@@ -48,8 +48,3 @@ val RedPacketGestureOptions = listOf(
     RedPacketGestureUiModel(RedPacketGesturePaper, "布", "✋"),
 )
 
-fun redPacketGestureLabel(value: Int): String =
-    RedPacketGestureOptions.firstOrNull { it.value == value }?.label ?: "未知"
-
-fun redPacketGestureEmoji(value: Int): String =
-    RedPacketGestureOptions.firstOrNull { it.value == value }?.emoji ?: "🧧"

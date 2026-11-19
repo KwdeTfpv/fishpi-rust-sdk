@@ -63,8 +63,6 @@ private fun pageBrushOf(palette: FishPiPalette): Brush {
     )
 }
 
-@Composable
-internal fun uiPageBrush(): Brush = pageBrushOf(LocalFishPiPalette.current)
 
 @Composable
 internal fun rememberUiPageBrush(): Brush {
@@ -271,6 +269,3 @@ internal fun FloatingNoticePill(
 internal fun statusSuccessColor(): Color =
     FishPiTheme.success
 
-@Composable
-internal fun statusWarningColor(): Color =
-    FishPiTheme.warning

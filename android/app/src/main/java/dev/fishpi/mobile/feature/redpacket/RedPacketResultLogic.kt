@@ -67,14 +67,3 @@ private fun senderSummaryText(
     }
 }
 
-fun redPacketNormalResultText(
-    who: List<RedPacketGotUiModel>,
-    selfUsername: String,
-): String {
-    val selfRecord = who.firstOrNull { it.userName.equals(selfUsername, ignoreCase = true) }
-    return when {
-        selfRecord != null -> "你抢到 ${selfRecord.userMoney} 积分"
-        who.isEmpty() -> "暂时还没有领取记录"
-        else -> "已领取 ${who.size} 条记录"
-    }
-}

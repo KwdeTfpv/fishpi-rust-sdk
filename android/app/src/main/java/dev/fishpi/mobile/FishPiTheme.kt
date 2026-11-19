@@ -651,28 +651,6 @@ internal val FishPiDarkColorScheme = darkColorScheme(
 // Supports: Light / Dark / Dynamic Color (Android 12+ Material You)
 // ─────────────────────────────────────────────────────────────
 
-@Composable
-internal fun FishPiM3Theme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit,
-) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context)
-            else dynamicLightColorScheme(context)
-        }
-        darkTheme -> FishPiDarkColorScheme
-        else -> FishPiLightColorScheme
-    }
-
-    MaterialTheme(
-        colorScheme = colorScheme,
-        content = content,
-    )
-}
-
 // ─────────────────────────────────────────────────────────────
 // Bridge: FishPiPalette → M3 ColorScheme
 // ─────────────────────────────────────────────────────────────

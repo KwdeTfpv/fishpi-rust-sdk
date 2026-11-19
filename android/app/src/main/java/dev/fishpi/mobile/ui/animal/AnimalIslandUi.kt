@@ -51,60 +51,10 @@ private fun themedRadius(base: androidx.compose.ui.unit.Dp): androidx.compose.ui
     base
 
 @Composable
-private fun themedSurfaceColor(base: Color): Color =
-    base.copy(alpha = 0.70f)
-
-@Composable
 private fun themedBorderColor(baseAlpha: Float = 0.16f): Color =
     MaterialTheme.colorScheme.outline.copy(
         alpha = baseAlpha.coerceAtMost(0.16f),
     )
-
-@Composable
-private fun themedContentBorder(baseAlpha: Float = 0.16f): BorderStroke? =
-    BorderStroke(1.dp, themedBorderColor(baseAlpha))
-
-@Composable
-internal fun AnimalCard(
-    modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
-    contentColor: Color = MaterialTheme.colorScheme.onSurface,
-    onClick: (() -> Unit)? = null,
-    content: @Composable () -> Unit,
-) {
-    val shape = RoundedCornerShape(themedRadius(AnimalIslandTokens.CardRadius))
-    val color = themedSurfaceColor(containerColor)
-    if (onClick == null) {
-        Surface(
-            modifier = modifier,
-            shape = shape,
-            color = color,
-            contentColor = contentColor,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            border = themedContentBorder(0.18f),
-        ) {
-            Box(Modifier.padding(AnimalIslandTokens.CardPadding)) {
-                content()
-            }
-        }
-    } else {
-        Surface(
-            modifier = modifier,
-            shape = shape,
-            color = color,
-            contentColor = contentColor,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            border = themedContentBorder(0.18f),
-            onClick = onClick,
-        ) {
-            Box(Modifier.padding(AnimalIslandTokens.CardPadding)) {
-                content()
-            }
-        }
-    }
-}
 
 @Composable
 internal fun AnimalIslandBackground(
@@ -131,68 +81,6 @@ internal fun AnimalIslandBackground(
             ),
     ) {
         content()
-    }
-}
-
-@Composable
-internal fun AnimalPanel(
-    modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.surface.copy(alpha = 0.46f),
-    content: @Composable () -> Unit,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(themedRadius(AnimalIslandTokens.CardRadius)),
-        color = themedSurfaceColor(containerColor),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        border = themedContentBorder(0.08f),
-    ) {
-        Box(Modifier.padding(AnimalIslandTokens.CardPadding)) {
-            content()
-        }
-    }
-}
-
-@Composable
-internal fun AnimalSectionHeader(
-    title: String,
-    modifier: Modifier = Modifier,
-    action: String? = null,
-    onAction: (() -> Unit)? = null,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(width = 4.dp, height = 16.dp)
-                .clip(RoundedCornerShape(99.dp))
-                .background(FishPiTheme.accent),
-        )
-        Text(
-            text = title,
-            color = FishPiTheme.onSurface,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (action != null && onAction != null) {
-            Text(
-                text = action,
-                color = FishPiTheme.accent,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .clickable(onClick = onAction)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            )
-        }
     }
 }
 
@@ -309,108 +197,6 @@ internal fun AnimalStatusPill(
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
-internal fun AnimalAppTile(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    accent: Color = MaterialTheme.colorScheme.primary,
-) {
-    Column(
-        modifier = modifier
-            .height(86.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.68f))
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f), RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(accent.copy(alpha = 0.11f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = title, tint = accent, modifier = Modifier.size(19.dp))
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(
-                text = title,
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = subtitle,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 10.sp,
-                lineHeight = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-@Composable
-internal fun AnimalDock(
-    modifier: Modifier = Modifier,
-    content: @Composable RowScope.() -> Unit,
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(themedRadius(14.dp)),
-        color = themedSurfaceColor(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)),
-        shadowElevation = 8.dp,
-        border = BorderStroke(1.dp, themedBorderColor(0.14f)),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            content = content,
-        )
-    }
-}
-
-@Composable
-internal fun AnimalDockItem(
-    title: String,
-    icon: ImageVector,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val background = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f) else Color.Transparent
-    val contentColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(themedRadius(10.dp)))
-            .background(background)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 5.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Icon(icon, contentDescription = title, tint = contentColor, modifier = Modifier.size(18.dp))
-        Text(
-            text = title,
-            color = contentColor,
-            fontSize = 10.sp,
-            lineHeight = 11.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
         )
     }
 }

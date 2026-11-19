@@ -37,7 +37,6 @@ import androidx.compose.material.icons.rounded.NightsStay
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -80,16 +79,6 @@ import java.util.Locale
 
 
 @Composable
-internal fun homeIslandSurfaceColor(): Color {
-    val colors = MaterialTheme.colorScheme
-    return if (colors.background.luminance() < 0.5f) {
-        colors.surfaceContainerHigh.copy(alpha = 0.92f)
-    } else {
-        colors.surface.copy(alpha = 0.92f)
-    }
-}
-
-@Composable
 internal fun homeArticleCardColor(): Color {
     val colors = MaterialTheme.colorScheme
     return if (colors.background.luminance() < 0.5f) {
@@ -106,22 +95,6 @@ internal fun homeIslandBorderColor(): Color {
         Color.White.copy(alpha = 0.10f)
     } else {
         colors.outline.copy(alpha = 0.42f)
-    }
-}
-
-@Composable
-internal fun homeRewardGradient(): Brush {
-    val colors = MaterialTheme.colorScheme
-    return if (colors.background.luminance() < 0.5f) {
-        Brush.linearGradient(listOf(colors.primary.copy(alpha = 0.92f), FishPiTheme.accent.copy(alpha = 0.72f)))
-    } else {
-        Brush.linearGradient(
-            listOf(
-                FishPiTheme.accent.copy(alpha = 0.10f),
-                colors.primary.copy(alpha = 0.08f),
-                colors.surface.copy(alpha = 0.96f),
-            ),
-        )
     }
 }
 
@@ -159,24 +132,5 @@ internal fun homeHoursUntilOffWork(settings: HomeWorkSettings): Float? {
     offWork.set(Calendar.MILLISECOND, 0)
     val diffMs = offWork.timeInMillis - now.timeInMillis
     return diffMs / 3_600_000f
-}
-
-internal fun homeDaysUntilDragonBoat(): Long {
-    val today = Calendar.getInstance()
-    today.set(Calendar.HOUR_OF_DAY, 0)
-    today.set(Calendar.MINUTE, 0)
-    today.set(Calendar.SECOND, 0)
-    today.set(Calendar.MILLISECOND, 0)
-    val festival = Calendar.getInstance().apply {
-        set(Calendar.YEAR, 2026)
-        set(Calendar.MONTH, Calendar.JUNE)
-        set(Calendar.DAY_OF_MONTH, 19)
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }
-    val diffMs = festival.timeInMillis - today.timeInMillis
-    return (diffMs / 86_400_000L).coerceAtLeast(0L)
 }
 

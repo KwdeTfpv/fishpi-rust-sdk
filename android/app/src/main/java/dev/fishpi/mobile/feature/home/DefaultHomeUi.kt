@@ -116,10 +116,6 @@ private fun HomeSoftDefaultUi(
 }
 
 @Composable
-private fun homeSoftContainerColor(alpha: Float = 0.94f): Color =
-    MaterialTheme.colorScheme.surface.copy(alpha = alpha)
-
-@Composable
 private fun HomeSoftHeroScene(
     state: HomeState,
     dispatch: (HomeAction) -> Unit,
