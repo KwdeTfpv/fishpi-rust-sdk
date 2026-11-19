@@ -28,11 +28,17 @@ internal data class NativeMessageTheme(
     val quoteLine: Int = Color.rgb(132, 120, 106),
     val serviceBackground: Int = Color.argb(130, 237, 143, 38),
     val quoteBackground: Int = Color.rgb(250, 244, 236),
+    val bodyTextSizeSp: Float = 15f,
+    val authorNameTextSizeSp: Float = 11f,
+    val metaTimeTextSizeSp: Float = 10f,
+    val serviceTextSizeSp: Float = 11f,
     val radiusSelectorDp: Float = 999f,
     val radiusFieldDp: Float = 18f,
     val radiusBoxDp: Float = 12f,
     val spacingItemDp: Float = 8f,
     val spacingControlDp: Float = 10f,
+    val spacingMicroDp: Float = 4f,
+    val spacingTightDp: Float = 2f,
     val borderWidthDp: Float = 1f,
     val depth: Float = 0.1f,
     val avatarSizeDp: Float = 38f,
@@ -42,6 +48,10 @@ internal data class NativeMessageTheme(
     val bubblePaddingHorizontalExtraDp: Float = 1f,
     val bubblePaddingTopExtraDp: Float = -2f,
     val bubblePaddingBottomExtraDp: Float = -1f,
+    val bubbleMinWidthDp: Float = 42f,
+    val authorLineWidthDp: Float = 284f,
+    val authorLineTopMarginDp: Float = 5f,
+    val metaTopMarginDp: Float = 3f,
 ) {
     companion object {
         fun fromPalette(palette: FishPiPalette): NativeMessageTheme =

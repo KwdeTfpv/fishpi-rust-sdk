@@ -56,7 +56,7 @@ internal class MarkwonChatRenderer(
             fallback = fallback,
         ) { view ->
             view.setTextColor(theme.bubbleText)
-            view.textSize = 15f
+            view.textSize = theme.bodyTextSizeSp
             view.includeFontPadding = false
             view.maxLines = Int.MAX_VALUE
             view.ellipsize = null
