@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.redpacket
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -168,7 +169,7 @@ internal fun RedPacketSendDialog(
                 Text(
                     text = "发红包",
                     color = colors.text,
-                    fontSize = 19.sp,
+                    fontSize = FishPiType.Size.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.weight(1f),
@@ -286,7 +287,7 @@ internal fun RedPacketSendDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "总积分：", color = colors.text.copy(alpha = 0.72f), fontSize = 15.sp)
+                    Text(text = "总积分：", color = colors.text.copy(alpha = 0.72f), fontSize = FishPiType.Size.heading)
                     Text(
                         text = String.format(java.util.Locale.US, "%.2f", total.toDouble()),
                         color = RedPacketTop,
@@ -297,7 +298,7 @@ internal fun RedPacketSendDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(999.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                         .background(if (isSending) RedPacketTop.copy(alpha = 0.56f) else Color(0xFFFF4650))
                         .clickable(enabled = !isSending, onClick = onSend)
                         .padding(vertical = 13.dp),
@@ -306,18 +307,18 @@ internal fun RedPacketSendDialog(
                     Text(
                         text = if (isSending) "发送中..." else "发送红包",
                         color = Color.White,
-                        fontSize = 17.sp,
+                        fontSize = FishPiType.Size.subtitleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
                 balance?.let {
-                    Text(text = "当前余额：$it 积分", color = colors.secondaryText, fontSize = 13.sp)
+                    Text(text = "当前余额：$it 积分", color = colors.secondaryText, fontSize = FishPiType.Size.secondary)
                 }
                 if (tax > 0) {
                     Text(
                         text = "总计：${String.format(java.util.Locale.US, "%.2f", total.toDouble())}（猜拳红包会收取5%税费，由系统在后端自动扣除）",
                         color = colors.secondaryText,
-                        fontSize = 12.sp,
+                        fontSize = FishPiType.Size.caption,
                         textAlign = TextAlign.Center,
                     )
                 }
@@ -398,14 +399,14 @@ private fun RedPacketReceiverChips(
         receivers.forEach { name ->
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
+                    .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                     .background(colors.accentSoft)
                     .clickable(enabled = enabled) { onRemove(name) }
                     .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text(text = name, color = RedPacketTop, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(text = name, color = RedPacketTop, fontSize = FishPiType.Size.body, fontWeight = FontWeight.Medium)
                 Icon(
                     imageVector = Icons.Rounded.Close,
                     contentDescription = "移除$name",
@@ -467,7 +468,7 @@ private fun RedPacketFormField(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(text = label, color = colors.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text(text = label, color = colors.text, fontSize = FishPiType.Size.subtitleLarge, fontWeight = FontWeight.SemiBold)
         BasicTextField(
             value = fieldValue,
             onValueChange = { next ->
@@ -490,7 +491,7 @@ private fun RedPacketFormField(
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             textStyle = TextStyle(
                 color = colors.text,
-                fontSize = 16.sp,
+                fontSize = FishPiType.Size.subtitle,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.End,
             ),
@@ -513,7 +514,7 @@ private fun RedPacketFormField(
                         Text(
                             text = placeholder,
                             color = colors.secondaryText,
-                            fontSize = 15.sp,
+                            fontSize = FishPiType.Size.heading,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -522,7 +523,7 @@ private fun RedPacketFormField(
                 }
             },
         )
-        suffix?.let { Text(text = it, color = colors.text, fontSize = 16.sp) }
+        suffix?.let { Text(text = it, color = colors.text, fontSize = FishPiType.Size.subtitle) }
         trailing?.invoke()
     }
 }
@@ -566,9 +567,9 @@ private fun RedPacketPickerRow(
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = label, color = colors.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text(text = label, color = colors.text, fontSize = FishPiType.Size.subtitleLarge, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.weight(1f))
-        Text(text = value, color = colors.text.copy(alpha = 0.68f), fontSize = 16.sp)
+        Text(text = value, color = colors.text.copy(alpha = 0.68f), fontSize = FishPiType.Size.subtitle)
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = colors.secondaryText)
     }
 }
@@ -587,9 +588,9 @@ private fun RedPacketReadonlyRow(
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = label, color = colors.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text(text = label, color = colors.text, fontSize = FishPiType.Size.subtitleLarge, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.weight(1f))
-        Text(text = value, color = colors.text.copy(alpha = 0.68f), fontSize = 16.sp)
+        Text(text = value, color = colors.text.copy(alpha = 0.68f), fontSize = FishPiType.Size.subtitle)
     }
 }
 
@@ -652,7 +653,7 @@ private fun RedPacketGestureSheet(
                     ) {
                         Text(text = legacyRedPacketGestureEmoji(item.value), fontSize = 30.sp)
                     }
-                    Text(text = item.label, color = colors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Text(text = item.label, color = colors.text, fontSize = FishPiType.Size.title, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -691,12 +692,12 @@ private fun RedPacketReceiverSheet(
                 value = query,
                 onValueChange = { query = it },
                 singleLine = true,
-                textStyle = TextStyle(color = colors.text, fontSize = 15.sp),
+                textStyle = TextStyle(color = colors.text, fontSize = FishPiType.Size.heading),
                 modifier = Modifier.weight(1f),
                 decorationBox = { inner ->
                     Box(contentAlignment = Alignment.CenterStart) {
                         if (query.isBlank()) {
-                            Text(text = "搜索在线用户", color = colors.secondaryText, fontSize = 15.sp)
+                            Text(text = "搜索在线用户", color = colors.secondaryText, fontSize = FishPiType.Size.heading)
                         }
                         inner()
                     }
@@ -714,7 +715,7 @@ private fun RedPacketReceiverSheet(
                 Text(
                     text = if (onlineUsers.isEmpty()) "暂无在线用户" else "没有匹配的用户",
                     color = colors.secondaryText,
-                    fontSize = 14.sp,
+                    fontSize = FishPiType.Size.body,
                 )
             }
         } else {
@@ -756,7 +757,7 @@ private fun RedPacketReceiverPickRow(
         Text(
             text = user.userName,
             color = colors.text,
-            fontSize = 16.sp,
+            fontSize = FishPiType.Size.subtitle,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -805,7 +806,7 @@ private fun RedPacketBottomSheet(
                 .padding(horizontal = 18.dp, vertical = 18.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = title, color = colors.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(text = title, color = colors.text, fontSize = FishPiType.Size.display, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 FishPiIconButton(
                     icon = Icons.Rounded.Close,
                     contentDescription = "关闭$title",
@@ -854,8 +855,8 @@ private fun RedPacketSheetOption(
             Icon(icon, contentDescription = null, tint = RedPacketTop, modifier = Modifier.size(30.dp))
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(text = title, color = colors.text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text(text = subtitle, color = colors.secondaryText, fontSize = 15.sp)
+            Text(text = title, color = colors.text, fontSize = FishPiType.Size.title, fontWeight = FontWeight.Bold)
+            Text(text = subtitle, color = colors.secondaryText, fontSize = FishPiType.Size.heading)
         }
         if (selected) {
             Icon(Icons.Rounded.Check, contentDescription = null, tint = RedPacketTop, modifier = Modifier.size(26.dp))
@@ -949,7 +950,7 @@ private fun RedPacketResultTopBar(onDismiss: () -> Unit) {
         Text(
             text = "红包详情",
             color = Color.White,
-            fontSize = 19.sp,
+            fontSize = FishPiType.Size.titleLarge,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.align(Alignment.Center),
         )
@@ -981,7 +982,7 @@ private fun RedPacketResultHeroCard(
         Text(
             text = senderName,
             color = colors.text,
-            fontSize = 20.sp,
+            fontSize = FishPiType.Size.display,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -989,7 +990,7 @@ private fun RedPacketResultHeroCard(
         Text(
             text = message,
             color = colors.secondaryText,
-            fontSize = 16.sp,
+            fontSize = FishPiType.Size.subtitle,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(10.dp))
@@ -1010,7 +1011,7 @@ private fun RedPacketResultHeroCard(
         Text(
             text = stateText,
             color = colors.secondaryText,
-            fontSize = 16.sp,
+            fontSize = FishPiType.Size.subtitle,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
         )
@@ -1036,7 +1037,7 @@ private fun RedPacketResultMark(gesture: Int?) {
         Text(
             text = "出拳：${legacyRedPacketGestureLabel(gesture)}",
             color = FishPiTheme.weakText,
-            fontSize = 13.sp,
+            fontSize = FishPiType.Size.secondary,
             fontWeight = FontWeight.Medium,
         )
     }
@@ -1058,7 +1059,7 @@ private fun RedPacketResultMessage(
         Text(
             text = text,
             color = RedPacketTop,
-            fontSize = 18.sp,
+            fontSize = FishPiType.Size.title,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
             lineHeight = 25.sp,
@@ -1075,7 +1076,7 @@ private fun RedPacketResultMessage(
     Text(
         text = result,
         color = RedPacketTop,
-        fontSize = 18.sp,
+        fontSize = FishPiType.Size.title,
         fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center,
         lineHeight = 25.sp,
@@ -1106,14 +1107,14 @@ private fun RedPacketReceiverRecordCard(
             Text(
                 text = "领取记录",
                 color = colors.text,
-                fontSize = 18.sp,
+                fontSize = FishPiType.Size.title,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
             )
             Text(
                 text = "$got/$count",
                 color = colors.text.copy(alpha = 0.78f),
-                fontSize = 16.sp,
+                fontSize = FishPiType.Size.subtitle,
                 fontWeight = FontWeight.Medium,
             )
         }
@@ -1130,7 +1131,7 @@ private fun RedPacketReceiverRecordCard(
                     .height(96.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(text = "暂时还没有领取记录", color = colors.secondaryText, fontSize = 14.sp)
+                Text(text = "暂时还没有领取记录", color = colors.secondaryText, fontSize = FishPiType.Size.body)
             }
         } else {
             who.forEach { item ->
@@ -1162,7 +1163,7 @@ private fun RedPacketReceiverRecordRow(item: RedPacketGot) {
             Text(
                 text = item.userName.ifBlank { "匿名用户" },
                 color = colors.text,
-                fontSize = 16.sp,
+                fontSize = FishPiType.Size.subtitle,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1170,7 +1171,7 @@ private fun RedPacketReceiverRecordRow(item: RedPacketGot) {
             Text(
                 text = item.time.toRedPacketRecordTime(),
                 color = colors.secondaryText,
-                fontSize = 13.sp,
+                fontSize = FishPiType.Size.secondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1179,10 +1180,10 @@ private fun RedPacketReceiverRecordRow(item: RedPacketGot) {
             Text(
                 text = item.userMoney.toString(),
                 color = RedPacketTop,
-                fontSize = 20.sp,
+                fontSize = FishPiType.Size.display,
                 fontWeight = FontWeight.Bold,
             )
-            Text(text = "积分", color = colors.secondaryText, fontSize = 13.sp)
+            Text(text = "积分", color = colors.secondaryText, fontSize = FishPiType.Size.secondary)
         }
     }
 }
@@ -1192,7 +1193,7 @@ private fun RedPacketDialogFrame(
     onDismiss: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(FishPiTheme.radiusField)
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -1241,7 +1242,7 @@ private fun RedPacketCompactHeader(
             ) {
                 Text(text = title, color = FishPiTheme.onSurface, fontWeight = FontWeight.Bold)
                 titleMeta?.takeIf { it.isNotBlank() }?.let {
-                    Text(text = it, color = RedPacketTop, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(text = it, color = RedPacketTop, fontSize = FishPiType.Size.caption, fontWeight = FontWeight.SemiBold)
                 }
             }
             if (subtitle.isNotBlank()) {
@@ -1265,7 +1266,7 @@ private fun RedPacketMiniMark() {
     Box(
         modifier = Modifier
             .size(width = 5.dp, height = 24.dp)
-            .clip(RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
             .background(RedPacketTop),
     )
 }
@@ -1307,12 +1308,12 @@ private fun RedPacketGestureOption(
     Column(
         modifier = modifier
             .heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(background)
             .border(
                 width = 1.dp,
                 color = if (selected) RedPacketTop.copy(alpha = 0.34f) else Color.Transparent,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(FishPiTheme.radiusBox),
             )
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 10.dp),
@@ -1323,7 +1324,7 @@ private fun RedPacketGestureOption(
             text = gesture.label,
             color = foreground,
             fontWeight = FontWeight.SemiBold,
-            fontSize = 15.sp,
+            fontSize = FishPiType.Size.heading,
         )
     }
 }

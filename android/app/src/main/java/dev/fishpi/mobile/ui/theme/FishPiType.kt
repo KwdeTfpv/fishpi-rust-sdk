@@ -67,4 +67,32 @@ internal object FishPiType {
 
     /** 等宽（代码块、语法高亮、哈希等）。 */
     val mono: TextStyle @Composable get() = style(13, FontWeight.Normal, family = FontFamily.Monospace)
+
+    /** 字号刻度：业务代码只引用刻度名，整体调档只改这里。 */
+    internal object Size {
+        /** 极小注记。 */
+        val nano = 9.sp
+        /** 角标、微型标签。 */
+        val micro = 10.sp
+        /** 胶囊、小标签。 */
+        val label = 11.sp
+        /** 说明文字、元信息、时间戳。 */
+        val caption = 12.sp
+        /** 次级正文。 */
+        val secondary = 13.sp
+        /** 正文。 */
+        val body = 14.sp
+        /** 小节标题。 */
+        val heading = 15.sp
+        /** 副标题。 */
+        val subtitle = 16.sp
+        /** 大副标题。 */
+        val subtitleLarge = 17.sp
+        /** 区块标题。 */
+        val title = 18.sp
+        /** 大区块标题。 */
+        val titleLarge = 19.sp
+        /** 页面大标题。 */
+        val display = 20.sp
+    }
 }

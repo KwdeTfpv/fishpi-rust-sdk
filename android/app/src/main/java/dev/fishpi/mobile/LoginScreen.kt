@@ -1,5 +1,7 @@
 package dev.fishpi.mobile
 
+import dev.fishpi.mobile.FishPiTheme
+import dev.fishpi.mobile.ui.theme.FishPiType
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -170,7 +172,7 @@ internal fun LoginScreen(
             // ── Brand Header ─────────────────────────────────
             Surface(
                 modifier = Modifier.size(72.dp),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(FishPiTheme.radiusField),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 0.dp,
                 shadowElevation = 0.dp,
@@ -203,7 +205,7 @@ internal fun LoginScreen(
             // ── Login Card ───────────────────────────────────
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(FishPiTheme.radiusField),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
                 tonalElevation = 0.dp,
                 shadowElevation = 0.dp,
@@ -316,7 +318,7 @@ internal fun LoginScreen(
                         error?.let {
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(FishPiTheme.radiusBox),
                                 color = MaterialTheme.colorScheme.errorContainer,
                             ) {
                                 Column(
@@ -339,7 +341,7 @@ internal fun LoginScreen(
                                                 activeVisitorVerifyApiKey = visitorVerifyApiKey
                                                 showVisitorVerify = true
                                             },
-                                            shape = RoundedCornerShape(12.dp),
+                                            shape = RoundedCornerShape(FishPiTheme.radiusBox),
                                         ) {
                                             Text("打开访客验证")
                                         }
@@ -391,7 +393,7 @@ internal fun LoginScreen(
                             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)))
                         Text(
                             " 或 ", color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 13.sp,
+                            fontSize = FishPiType.Size.secondary,
                         )
                         Spacer(modifier = Modifier.weight(1f).height(1.dp)
                             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)))
@@ -410,7 +412,7 @@ internal fun LoginScreen(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text("扫码登录", fontSize = 14.sp)
+                        Text("扫码登录", fontSize = FishPiType.Size.body)
                     }
                 }
             }
@@ -440,7 +442,7 @@ internal fun LoginScreen(
                                     onSwitchAccount(account)
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(FishPiTheme.radiusBox),
                             ) {
                                 Text(
                                     text = account.displayName.ifBlank {

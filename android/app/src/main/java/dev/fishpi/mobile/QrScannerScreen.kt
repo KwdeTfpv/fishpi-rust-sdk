@@ -1,5 +1,6 @@
 package dev.fishpi.mobile
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import android.Manifest
 import android.content.pm.PackageManager
 import android.util.Size
@@ -189,7 +190,7 @@ fun QrScannerScreen(
         Text(
             "将二维码放入框内",
             color = Color.White.copy(alpha = 0.7f),
-            fontSize = 14.sp, fontWeight = FontWeight.Medium,
+            fontSize = FishPiType.Size.body, fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 48.dp).fillMaxWidth(),
         )

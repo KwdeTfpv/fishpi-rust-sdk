@@ -1,5 +1,6 @@
 package dev.fishpi.mobile
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import dev.fishpi.mobile.shared.message.copyToClipboard
 
 import android.content.Context
@@ -290,7 +291,7 @@ private fun AboutHeroCard(
             )
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(text = "FishPi", color = FishPiTheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text(text = "FishPi", color = FishPiTheme.onSurface, fontWeight = FontWeight.Bold, fontSize = FishPiType.Size.title)
             Text(text = "版本 $versionName ($versionCode)", color = FishPiTheme.weakText)
         }
     }
@@ -312,7 +313,7 @@ private fun AboutSection(
             text = title,
             color = FishPiTheme.weakText,
             fontWeight = FontWeight.SemiBold,
-            fontSize = 13.sp,
+            fontSize = FishPiType.Size.secondary,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
         )
         content()

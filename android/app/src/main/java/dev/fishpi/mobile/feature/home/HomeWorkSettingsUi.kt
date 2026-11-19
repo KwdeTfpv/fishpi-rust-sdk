@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.home
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import dev.fishpi.mobile.ui.components.FishPiDialog
 import dev.fishpi.mobile.ui.components.FishPiDialogActions
 import dev.fishpi.mobile.ui.components.FishPiDialogTitle
@@ -239,7 +240,7 @@ internal fun HomeTimePickerItem(
         Text(
             text = label,
             color = colors.onSurfaceVariant,
-            fontSize = 12.sp,
+            fontSize = FishPiType.Size.caption,
             fontWeight = FontWeight.SemiBold,
         )
         Row(

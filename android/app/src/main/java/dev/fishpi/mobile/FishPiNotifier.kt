@@ -1,5 +1,6 @@
 package dev.fishpi.mobile
 
+import dev.fishpi.mobile.FishPiTheme
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -209,13 +210,13 @@ private fun FishPiNotificationPill(
     Row(
         modifier = Modifier
             .padding(top = 9.dp, start = 18.dp, end = 18.dp)
-            .shadow(18.dp, RoundedCornerShape(999.dp), clip = false)
-            .clip(RoundedCornerShape(999.dp))
+            .shadow(18.dp, RoundedCornerShape(FishPiTheme.radiusSelector), clip = false)
+            .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
             .background(container)
             .border(
                 width = 1.dp,
                 color = FishPiTheme.outline.copy(alpha = if (dark) 0.42f else 0.18f),
-                shape = RoundedCornerShape(999.dp),
+                shape = RoundedCornerShape(FishPiTheme.radiusSelector),
             )
             .pointerInput(notice.id) {
                 detectTapGestures(

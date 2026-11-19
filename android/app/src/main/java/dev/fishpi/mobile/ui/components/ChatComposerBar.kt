@@ -1,4 +1,5 @@
 package dev.fishpi.mobile.ui.components
+import dev.fishpi.mobile.ui.theme.FishPiType
 import dev.fishpi.mobile.shared.message.formatTopicReferenceMarkdown
 
 import dev.fishpi.mobile.feature.chat.model.ChatMentionCandidateUiModel
@@ -60,6 +61,8 @@ import dev.fishpi.mobile.ui.glass.FishPiGlassRole
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.utils.appendDraftBlock
+import dev.fishpi.mobile.ui.components.FishPiSurfaceKind
+import dev.fishpi.mobile.ui.components.fishPiSurface
 
 @Composable
 internal fun ChatInputBar(
@@ -112,7 +115,7 @@ internal fun ChatInputBar(
     }
     val inputTextStyle = androidx.compose.ui.text.TextStyle(
         color = FishPiTheme.onSurface,
-        fontSize = 15.sp,
+        fontSize = FishPiType.Size.heading,
         lineHeight = 20.sp,
     )
     LaunchedEffect(input) {
@@ -189,14 +192,14 @@ internal fun ChatInputBar(
                     Text(
                         text = "#",
                         color = if (topicSelected) FishPiTheme.accent else FishPiTheme.weakText.copy(alpha = 0.72f),
-                        fontSize = 12.sp,
+                        fontSize = FishPiType.Size.caption,
                         lineHeight = 14.sp,
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
                         text = currentTopicLabel.removePrefix("#").removeSuffix("#"),
                         color = if (topicSelected) FishPiTheme.accent else FishPiTheme.weakText,
-                        fontSize = 12.sp,
+                        fontSize = FishPiType.Size.caption,
                         lineHeight = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
@@ -209,8 +212,7 @@ internal fun ChatInputBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-                    .background(FishPiTheme.surfaceContainer)
+                    .fishPiSurface(FishPiSurfaceKind.Card, stroked = false)
                     .padding(horizontal = FishPiTheme.spacingControl + 2.dp, vertical = FishPiTheme.spacingControl),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
@@ -218,7 +220,7 @@ internal fun ChatInputBar(
                 Text(
                     text = "${it.username}: ${it.preview}",
                     color = FishPiTheme.weakText,
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                     modifier = Modifier.weight(1f),
                     maxLines = 2,
                 )

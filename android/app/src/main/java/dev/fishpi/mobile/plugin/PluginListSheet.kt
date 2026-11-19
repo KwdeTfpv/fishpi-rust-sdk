@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.plugin
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -38,6 +39,8 @@ import dev.fishpi.mobile.ui.components.consumeTaps
 import dev.fishpi.mobile.ui.components.silentTap
 import org.json.JSONArray
 import org.json.JSONObject
+import dev.fishpi.mobile.ui.components.FishPiSurfaceKind
+import dev.fishpi.mobile.ui.components.fishPiSurface
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,7 +115,7 @@ fun PluginListSheet(onDismiss: () -> Unit, active: Boolean = true) {
                 Text(
                     "插件可以读取当前登录 API Key，并调用 App 暴露的能力。请确认来源可信后再启用。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 13.sp,
+                    fontSize = FishPiType.Size.secondary,
                 )
             }
             FishPiDialogActions(
@@ -138,23 +141,23 @@ fun PluginListSheet(onDismiss: () -> Unit, active: Boolean = true) {
             FishPiDialogTitle(plugin.name)
             val state = pm.getState(plugin.fileName)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("v${plugin.version} · ${plugin.author.ifBlank { "未知" }} · ${plugin.source.label()}", fontSize = 12.sp)
-                Text("状态: ${state.status}", fontSize = 12.sp,
+                Text("v${plugin.version} · ${plugin.author.ifBlank { "未知" }} · ${plugin.source.label()}", fontSize = FishPiType.Size.caption)
+                Text("状态: ${state.status}", fontSize = FishPiType.Size.caption,
                     color = if (state.status == PluginStatus.Error) MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.onSurfaceVariant)
                 if (state.errors.isNotEmpty()) {
-                    Text("错误日志:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    Text("错误日志:", fontWeight = FontWeight.SemiBold, fontSize = FishPiType.Size.caption)
                     state.errors.takeLast(5).forEach { err ->
-                        Text(err, fontSize = 12.sp, color = MaterialTheme.colorScheme.error,
+                        Text(err, fontSize = FishPiType.Size.caption, color = MaterialTheme.colorScheme.error,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 if (state.recentCalls.isNotEmpty()) {
-                    Text("最近调用:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    Text("最近调用:", fontWeight = FontWeight.SemiBold, fontSize = FishPiType.Size.caption)
                     state.recentCalls.takeLast(5).forEach { call ->
                         val symbol = if (call.ok) "✓" else "✗"
                         Text("$symbol ${call.method} ${call.durationMs}ms",
-                            fontSize = 12.sp,
+                            fontSize = FishPiType.Size.caption,
                             color = if (call.ok) MaterialTheme.colorScheme.onSurfaceVariant
                                     else MaterialTheme.colorScheme.error)
                     }
@@ -185,11 +188,11 @@ fun PluginListSheet(onDismiss: () -> Unit, active: Boolean = true) {
                 ) {
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         val errorCount = plugins.count { pm.getState(it.fileName).status == PluginStatus.Error }
-                        Text("插件管理", fontWeight = FontWeight.Bold, fontSize = 19.sp, color = FishPiTheme.onSurface)
+                        Text("插件管理", fontWeight = FontWeight.Bold, fontSize = FishPiType.Size.titleLarge, color = FishPiTheme.onSurface)
                         Text(
                             text = "${plugins.size} 个插件" + if (errorCount > 0) " · $errorCount 个异常" else "",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 12.sp,
+                            fontSize = FishPiType.Size.caption,
                         )
                     }
                     TextButton(
@@ -218,7 +221,7 @@ fun PluginListSheet(onDismiss: () -> Unit, active: Boolean = true) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(pm.pluginDirectoryPath(), color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp, modifier = Modifier.weight(1f))
+                        fontSize = FishPiType.Size.label, modifier = Modifier.weight(1f))
                 }
 
                 if (plugins.isEmpty()) {
@@ -227,15 +230,15 @@ fun PluginListSheet(onDismiss: () -> Unit, active: Boolean = true) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text("暂无插件", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                        Text("暂无插件", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = FishPiType.Size.body)
                         Text("将 .js 文件放入应用插件目录\n或点击下方按钮选择文件安装",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), fontSize = 12.sp)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), fontSize = FishPiType.Size.caption)
                         TextButton(
                             onClick = { installLauncher.launch(arrayOf("text/*", "application/javascript")) },
                         ) {
                             Icon(Icons.Rounded.FileOpen, "安装", modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("选择 .js 文件", fontSize = 13.sp)
+                            Text("选择 .js 文件", fontSize = FishPiType.Size.secondary)
                         }
                     }
                 } else {
@@ -266,16 +269,16 @@ fun PluginListSheet(onDismiss: () -> Unit, active: Boolean = true) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Column(modifier = Modifier.weight(1f)) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(plugin.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                                                if (!plugin.enabled) Text(" (已禁用)", fontSize = 12.sp,
+                                                Text(plugin.name, fontWeight = FontWeight.SemiBold, fontSize = FishPiType.Size.heading)
+                                                if (!plugin.enabled) Text(" (已禁用)", fontSize = FishPiType.Size.caption,
                                                     color = MaterialTheme.colorScheme.error)
-                                                else if (state.status == PluginStatus.Error) Text(" (异常)", fontSize = 12.sp,
+                                                else if (state.status == PluginStatus.Error) Text(" (异常)", fontSize = FishPiType.Size.caption,
                                                     color = MaterialTheme.colorScheme.error)
                                             }
                                             Text("v${plugin.version} · ${plugin.author.ifBlank { "未知" }} · ${plugin.source.label()}",
-                                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                fontSize = FishPiType.Size.caption, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             state.lastError?.let { err ->
-                                                Text(err, fontSize = 12.sp, color = MaterialTheme.colorScheme.error,
+                                                Text(err, fontSize = FishPiType.Size.caption, color = MaterialTheme.colorScheme.error,
                                                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             }
                                         }
@@ -364,21 +367,21 @@ private fun UnreadablePluginCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)),
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(fileName, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = FishPiTheme.onSurface,
+            Text(fileName, fontWeight = FontWeight.SemiBold, fontSize = FishPiType.Size.heading, color = FishPiTheme.onSurface,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("⚠️ 权限受限，无法读取", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+            Text("⚠️ 权限受限，无法读取", fontSize = FishPiType.Size.caption, color = MaterialTheme.colorScheme.error)
             Text("该文件由其它应用写入、权限受限，App 读不到内容。点「重新导入」重选此文件即可修复。",
-                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                fontSize = FishPiType.Size.caption, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onDelete, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)) {
-                    Text("删除", color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                    Text("删除", color = MaterialTheme.colorScheme.error, fontSize = FishPiType.Size.secondary)
                 }
                 Spacer(Modifier.width(4.dp))
                 TextButton(onClick = onReimport, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)) {
                     Icon(Icons.Rounded.FileOpen, "重新导入", modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(5.dp))
-                    Text("重新导入", fontSize = 13.sp)
+                    Text("重新导入", fontSize = FishPiType.Size.secondary)
                 }
             }
         }
@@ -452,8 +455,7 @@ private fun PluginSettingsPanel(
                 .fillMaxWidth()
                 .widthIn(max = 420.dp)
                 .heightIn(max = maxHeight * 0.82f)
-                .clip(RoundedCornerShape(18.dp))
-                .background(FishPiTheme.surface)
+                .fishPiSurface(FishPiSurfaceKind.Field, stroked = false)
                 .consumeTaps(),
         ) {
             Row(
@@ -467,14 +469,14 @@ private fun PluginSettingsPanel(
                         text = plugin.name,
                         color = FishPiTheme.onSurface,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp,
+                        fontSize = FishPiType.Size.subtitle,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = "插件设置",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
+                        fontSize = FishPiType.Size.caption,
                     )
                 }
                 FishPiIconButton(
@@ -496,7 +498,7 @@ private fun PluginSettingsPanel(
                         Text(
                             text = "暂无设置项",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 13.sp,
+                            fontSize = FishPiType.Size.secondary,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 16.dp),
@@ -550,7 +552,7 @@ private fun PluginSettingRow(
 ) {
     val parsed = remember(entryKey, storedValue) { parsePluginSettingValue(storedValue) }
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(FishPiTheme.radiusBox),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
     ) {
@@ -564,14 +566,14 @@ private fun PluginSettingRow(
                         text = entryKey,
                         color = FishPiTheme.onSurface,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp,
+                        fontSize = FishPiType.Size.secondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = pluginSettingTypeName(parsed),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp,
+                        fontSize = FishPiType.Size.label,
                     )
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
@@ -671,7 +673,7 @@ private fun PluginNumberSettingEditor(
             )
         }
         if (error) {
-            Text("请输入有效数字", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+            Text("请输入有效数字", color = MaterialTheme.colorScheme.error, fontSize = FishPiType.Size.label)
         }
     }
 }
@@ -695,7 +697,7 @@ private fun PluginArraySettingEditor(
 
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         if (items.isEmpty()) {
-            Text("空数组", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+            Text("空数组", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = FishPiType.Size.caption)
         } else {
             Row(
                 modifier = Modifier
@@ -730,7 +732,7 @@ private fun PluginArraySettingEditor(
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                 modifier = Modifier.height(36.dp),
             ) {
-                Text("添加", fontSize = 12.sp)
+                Text("添加", fontSize = FishPiType.Size.caption)
             }
         }
     }
@@ -739,7 +741,7 @@ private fun PluginArraySettingEditor(
 @Composable
 private fun PluginArrayToken(text: String, onRemove: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(999.dp),
+        shape = RoundedCornerShape(FishPiTheme.radiusSelector),
         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.72f),
     ) {
         Row(
@@ -750,7 +752,7 @@ private fun PluginArrayToken(text: String, onRemove: () -> Unit) {
             Text(
                 text = text,
                 color = FishPiTheme.onSurface,
-                fontSize = 12.sp,
+                fontSize = FishPiType.Size.caption,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 120.dp),
@@ -780,7 +782,7 @@ private fun PluginAddSettingSection(
     onAdd: () -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(FishPiTheme.radiusBox),
         color = if (expanded) MaterialTheme.colorScheme.surfaceContainerLow else Color.Transparent,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
         modifier = Modifier.fillMaxWidth(),
@@ -796,13 +798,13 @@ private fun PluginAddSettingSection(
                     text = "新增设置项",
                     color = FishPiTheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp,
+                    fontSize = FishPiType.Size.secondary,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
                     text = if (expanded) "收起" else "展开",
                     color = MaterialTheme.colorScheme.primary,
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                 )
             }
             if (expanded) {
@@ -828,7 +830,7 @@ private fun PluginAddSettingSection(
                         .height(38.dp),
                     contentPadding = PaddingValues(vertical = 0.dp),
                 ) {
-                    Text("添加", fontSize = 13.sp)
+                    Text("添加", fontSize = FishPiType.Size.secondary)
                 }
             }
         }
@@ -850,9 +852,9 @@ private fun CompactPluginTextField(
         modifier = modifier.heightIn(min = if (singleLine) 38.dp else 64.dp),
         singleLine = singleLine,
         minLines = minLines,
-        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
+        textStyle = LocalTextStyle.current.copy(fontSize = FishPiType.Size.secondary),
         placeholder = {
-            Text(placeholder, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f))
+            Text(placeholder, fontSize = FishPiType.Size.caption, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f))
         },
         shape = RoundedCornerShape(10.dp),
     )
@@ -866,7 +868,7 @@ private fun CompactSaveButton(enabled: Boolean, onClick: () -> Unit) {
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
         modifier = Modifier.height(36.dp),
     ) {
-        Text("保存", fontSize = 12.sp)
+        Text("保存", fontSize = FishPiType.Size.caption)
     }
 }
 

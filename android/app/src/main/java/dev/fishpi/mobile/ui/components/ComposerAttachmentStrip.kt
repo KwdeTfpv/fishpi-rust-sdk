@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.ui.components
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -98,7 +99,7 @@ internal fun ComposerAttachmentStrip(
                         Text(
                             text = "未使用",
                             color = FishPiTheme.weakText,
-                            fontSize = 10.sp,
+                            fontSize = FishPiType.Size.micro,
                             fontWeight = FontWeight.Medium,
                         )
                     }
@@ -174,7 +175,7 @@ private fun FailedScrim(onRetry: () -> Unit) {
         Text(
             text = "重试",
             color = Color.White,
-            fontSize = 10.sp,
+            fontSize = FishPiType.Size.micro,
             fontWeight = FontWeight.Medium,
         )
     }
@@ -191,7 +192,7 @@ private fun IndexBadge(index: Int, modifier: Modifier = Modifier) {
         Text(
             text = index.toString(),
             color = Color.White,
-            fontSize = 10.sp,
+            fontSize = FishPiType.Size.micro,
             fontWeight = FontWeight.SemiBold,
         )
     }

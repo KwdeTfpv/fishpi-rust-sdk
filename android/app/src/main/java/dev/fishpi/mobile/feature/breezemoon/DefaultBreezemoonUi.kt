@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.breezemoon
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import dev.fishpi.mobile.ui.components.silentTap
 
 import dev.fishpi.mobile.ui.components.consumeTaps
@@ -126,11 +127,11 @@ internal fun DefaultBreezemoonUi(
         }
     }
 
-    LaunchedEffect(listState, state.items.size, state.hasMore, state.isLoading) {
+    LaunchedEffect(listState, state.items.size, state.list.hasMore, state.list.isLoading) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: Int.MAX_VALUE }
             .distinctUntilChanged()
             .collect { first ->
-                if (state.items.isNotEmpty() && state.hasMore && !state.isLoading && first <= 3) {
+                if (state.items.isNotEmpty() && state.list.canLoadMore && first <= 3) {
                     dispatch(BreezemoonAction.LoadMore)
                 }
             }
@@ -195,7 +196,7 @@ internal fun DefaultBreezemoonUi(
                                 color = accent,
                             )
                             AnimalStatusPill(
-                                label = if (state.isLoading) "同步中" else "已同步",
+                                label = if (state.list.isLoading) "同步中" else "已同步",
                                 color = statusSuccessColor(),
                                 leadingDot = true,
                             )
@@ -205,7 +206,7 @@ internal fun DefaultBreezemoonUi(
                         icon = Icons.Rounded.Refresh,
                         contentDescription = "刷新",
                         onClick = { dispatch(BreezemoonAction.Refresh) },
-                        enabled = !state.isLoading,
+                        enabled = !state.list.isLoading,
                     )
                 }
             }
@@ -229,9 +230,9 @@ internal fun DefaultBreezemoonUi(
                         onOpenUser = { dispatch(BreezemoonAction.OpenUserProfile(it)) },
                     )
                 }
-                if (state.isLoading) item { StatusText("加载中...") }
-                else if (!state.hasMore && state.items.isNotEmpty()) item { StatusText("没有更多了") }
-                state.error?.let { item { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) } }
+                if (state.list.isLoading) item { StatusText("加载中...") }
+                else if (!state.list.hasMore && state.items.isNotEmpty()) item { StatusText("没有更多了") }
+                state.error?.let { item { Text(it, color = MaterialTheme.colorScheme.error, fontSize = FishPiType.Size.secondary) } }
             }
 
             Row(
@@ -285,7 +286,7 @@ internal fun DefaultBreezemoonUi(
                         }
                         val inputTextStyle = TextStyle(
                             color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 14.sp,
+                            fontSize = FishPiType.Size.body,
                             lineHeight = 20.sp,
                         )
                         BasicTextField(
@@ -398,7 +399,7 @@ private fun StatusText(text: String) {
     Text(
         text,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        fontSize = 13.sp,
+        fontSize = FishPiType.Size.secondary,
         modifier = Modifier.padding(bottom = 4.dp),
     )
 }
@@ -433,14 +434,14 @@ private fun BreezemoonCard(
                     item.authorName.ifBlank { "鱼友" },
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 14.sp,
+                    fontSize = FishPiType.Size.body,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     listOf(item.timeAgo, item.city.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · "),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

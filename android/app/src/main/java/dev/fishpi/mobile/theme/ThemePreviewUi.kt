@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.theme
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -146,7 +147,7 @@ private fun ThemePreviewTab(
         Text(
             text = label,
             color = if (selected) palette.accent else palette.weakText,
-            fontSize = 12.sp,
+            fontSize = FishPiType.Size.caption,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
         )
     }
@@ -188,7 +189,7 @@ private fun HomePreview(palette: FishPiPalette, tokens: FishPiThemeTokens) {
         }
         PreviewCard(palette, tokens) {
             Text(text = "推荐帖子", color = palette.onSurface, fontWeight = FontWeight.SemiBold)
-            Text(text = "主题会影响列表、按钮和状态提示", color = palette.weakText, fontSize = 12.sp)
+            Text(text = "主题会影响列表、按钮和状态提示", color = palette.weakText, fontSize = FishPiType.Size.caption)
         }
     }
 }
@@ -198,7 +199,7 @@ private fun ArticlePreview(palette: FishPiPalette, tokens: FishPiThemeTokens) {
     Column(verticalArrangement = Arrangement.spacedBy(tokens.spacing.item.dp)) {
         PreviewCard(palette, tokens) {
             Text(text = "帖子标题的阅读层级", color = palette.onSurface, fontWeight = FontWeight.Bold)
-            Text(text = "正文、引用、优选标记和评论区域使用同一套 token。", color = palette.weakText, fontSize = 12.sp, lineHeight = 16.sp)
+            Text(text = "正文、引用、优选标记和评论区域使用同一套 token。", color = palette.weakText, fontSize = FishPiType.Size.caption, lineHeight = 16.sp)
         }
         Box(
             modifier = Modifier
@@ -207,7 +208,7 @@ private fun ArticlePreview(palette: FishPiPalette, tokens: FishPiThemeTokens) {
                 .background(palette.quoteBackground)
                 .padding(10.dp),
         ) {
-            Text(text = "回复 @fishpi：楼中楼关系", color = palette.quoteText, fontSize = 12.sp)
+            Text(text = "回复 @fishpi：楼中楼关系", color = palette.quoteText, fontSize = FishPiType.Size.caption)
         }
     }
 }
@@ -219,7 +220,7 @@ private fun ProfilePreview(palette: FishPiPalette, tokens: FishPiThemeTokens) {
             Box(Modifier.size(42.dp).clip(CircleShape).background(palette.accent.copy(alpha = 0.22f)))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(text = "FishPi", color = palette.onSurface, fontWeight = FontWeight.Bold)
-                Text(text = "徽章墙 / 统计 / 动态", color = palette.weakText, fontSize = 12.sp)
+                Text(text = "徽章墙 / 统计 / 动态", color = palette.weakText, fontSize = FishPiType.Size.caption)
             }
             Icon(Icons.Rounded.Notifications, contentDescription = null, tint = palette.accent, modifier = Modifier.size(18.dp))
         }
@@ -251,7 +252,7 @@ private fun ComponentsPreview(palette: FishPiPalette, tokens: FishPiThemeTokens)
         }
         PreviewCard(palette, tokens) {
             Text(text = "插件 action", color = palette.onSurface, fontWeight = FontWeight.SemiBold)
-            Text(text = "按钮、边界和状态点使用真实 ActionChipButton", color = palette.weakText, fontSize = 12.sp)
+            Text(text = "按钮、边界和状态点使用真实 ActionChipButton", color = palette.weakText, fontSize = FishPiType.Size.caption)
         }
     }
 }
@@ -285,7 +286,7 @@ private fun PreviewNotificationIsland(text: String, palette: FishPiPalette, toke
         Text(
             text = text,
             color = palette.onSurface,
-            fontSize = 13.sp,
+            fontSize = FishPiType.Size.secondary,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -311,9 +312,9 @@ private fun PreviewBubble(text: String, mine: Boolean, theme: NativeMessageTheme
                 )
                 .padding(horizontal = tokens.spacing.control.dp + 2.dp, vertical = tokens.spacing.control.dp),
         ) {
-            Text(text = text, color = Color(theme.bubbleText), fontSize = 13.sp)
+            Text(text = text, color = Color(theme.bubbleText), fontSize = FishPiType.Size.secondary)
         }
-        Text(text = if (mine) "12:35 · Android" else "Android · 12:34", color = Color(theme.timeText), fontSize = 10.sp)
+        Text(text = if (mine) "12:35 · Android" else "Android · 12:34", color = Color(theme.timeText), fontSize = FishPiType.Size.micro)
     }
 }
 
@@ -336,12 +337,12 @@ private fun PreviewQuoteSample(theme: NativeMessageTheme, tokens: FishPiThemeTok
         Box(
             Modifier
                 .size(3.dp, 28.dp)
-                .clip(RoundedCornerShape(999.dp))
+                .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                 .background(Color(theme.quoteLine)),
         )
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(text = "引用 Reily", color = Color(theme.quoteText), fontSize = 11.sp, fontWeight = FontWeight.Medium)
-            Text(text = "图片和 Markdown 会走同一套消息主题", color = Color(theme.bubbleText), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text = "引用 Reily", color = Color(theme.quoteText), fontSize = FishPiType.Size.label, fontWeight = FontWeight.Medium)
+            Text(text = "图片和 Markdown 会走同一套消息主题", color = Color(theme.bubbleText), fontSize = FishPiType.Size.caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -375,9 +376,9 @@ private fun PreviewStat(
     PreviewCard(palette, tokens, modifier) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             Box(Modifier.size(7.dp).clip(CircleShape).background(palette.accent))
-            Text(text = label, color = palette.weakText, fontSize = 11.sp)
+            Text(text = label, color = palette.weakText, fontSize = FishPiType.Size.label)
         }
-        Text(text = value, color = palette.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(text = value, color = palette.onSurface, fontSize = FishPiType.Size.subtitle, fontWeight = FontWeight.Bold)
     }
 }
 

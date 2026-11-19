@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.shared.message.ui
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import dev.fishpi.mobile.ui.components.FishPiFullScreenDialog
 import dev.fishpi.mobile.*
 import dev.fishpi.mobile.shared.message.*
@@ -252,7 +253,7 @@ private fun ReactionActionRow(
         Text(
             text = "返回",
             color = contentColor,
-            fontSize = 11.sp,
+            fontSize = FishPiType.Size.label,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier
                 .clip(RoundedCornerShape(FishPiTheme.radiusField * 0.66f))
@@ -309,7 +310,7 @@ private fun MenuAction(
         verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
         Icon(imageVector = action.icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
-        Text(text = action.label, color = color, fontWeight = FontWeight.SemiBold, fontSize = 9.sp, maxLines = 1)
+        Text(text = action.label, color = color, fontWeight = FontWeight.SemiBold, fontSize = FishPiType.Size.nano, maxLines = 1)
     }
 }
 

@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.plugin
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import android.annotation.SuppressLint
 import android.view.ViewGroup
 import android.webkit.WebView
@@ -157,14 +158,14 @@ internal fun PluginSourceEditorScreen(
                         text = plugin.name,
                         color = FishPiTheme.onSurface,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 17.sp,
+                        fontSize = FishPiType.Size.subtitleLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = plugin.fileName,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
+                        fontSize = FishPiType.Size.caption,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -193,7 +194,7 @@ internal fun PluginSourceEditorScreen(
                 ) {
                     Icon(Icons.Rounded.Save, contentDescription = null, modifier = Modifier.size(17.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("保存", fontSize = 13.sp)
+                    Text("保存", fontSize = FishPiType.Size.secondary)
                 }
                 FishPiIconButton(
                     icon = Icons.Rounded.Close,
@@ -222,7 +223,7 @@ internal fun PluginSourceEditorScreen(
                     text = error,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(14.dp),
-                    fontSize = 13.sp,
+                    fontSize = FishPiType.Size.secondary,
                 )
             } ?: when (selectedTab) {
                 0 -> PluginSourceEditor(

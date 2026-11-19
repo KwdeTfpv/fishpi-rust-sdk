@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.ui.components
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import androidx.activity.compose.BackHandler
 import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.components.silentTap
@@ -55,7 +56,6 @@ import dev.fishpi.mobile.LocalFishPiPalette
 import dev.fishpi.mobile.ui.glass.FishPiGlassRole
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
-import dev.fishpi.mobile.ui.components.silentTap
 
 internal data class ChatToolAction(
     val id: String,
@@ -163,7 +163,7 @@ private fun FishPiToolActionCell(action: ChatToolAction) {
         Text(
             text = action.label,
             color = labelColor,
-            fontSize = 12.sp,
+            fontSize = FishPiType.Size.caption,
             lineHeight = 16.sp,
             maxLines = 1,
             textAlign = TextAlign.Center,
@@ -201,13 +201,13 @@ internal fun AppFullScreenWorkspace(
                     text = title,
                     color = FishPiTheme.onSurface,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
+                    fontSize = FishPiType.Size.title,
                 )
                 if (subtitle.isNotBlank()) {
                     Text(
                         text = subtitle,
                         color = FishPiTheme.weakText,
-                        fontSize = 12.sp,
+                        fontSize = FishPiType.Size.caption,
                     )
                 }
             }

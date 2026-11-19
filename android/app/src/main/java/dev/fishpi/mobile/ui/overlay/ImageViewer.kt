@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.ui.overlay
 
+import dev.fishpi.mobile.FishPiTheme
 import android.Manifest
 import android.content.ContentValues
 import android.content.Context
@@ -249,7 +250,7 @@ internal fun ImageViewer(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 28.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(999.dp))
+                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(FishPiTheme.radiusSelector))
                     .padding(horizontal = 14.dp, vertical = 6.dp),
             ) {
                 Text(text = "${currentPage + 1} / ${images.size}", color = Color.White)
@@ -261,7 +262,7 @@ internal fun ImageViewer(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 72.dp)
-                    .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(999.dp))
+                    .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(FishPiTheme.radiusSelector))
                     .padding(horizontal = 14.dp, vertical = 8.dp),
             ) {
                 Text(text = status, color = Color.White)

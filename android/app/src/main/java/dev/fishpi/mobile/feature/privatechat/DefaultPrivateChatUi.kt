@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.privatechat
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import dev.fishpi.mobile.ui.back.BackLayer
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -99,6 +100,7 @@ import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
 import dev.fishpi.mobile.shared.message.toRenderHints
 import kotlinx.coroutines.delay
+import dev.fishpi.mobile.ui.glass.FishPiSurfaceTone
 
 @Composable
 internal fun DefaultPrivateChatUi(
@@ -336,8 +338,7 @@ private fun PrivateSessionRow(
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = RoundedCornerShape(FishPiTheme.radiusBox),
-                containerColor = FishPiTheme.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
-                borderColor = FishPiTheme.outline.copy(alpha = 0.12f),
+                tone = FishPiSurfaceTone.Elevated,
                 borderWidth = FishPiTheme.borderWidth,
                 role = FishPiGlassRole.Content,
             )
@@ -365,7 +366,7 @@ private fun PrivateSessionRow(
                     text = displayName,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
+                    fontSize = FishPiType.Size.heading,
                     lineHeight = 18.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -374,7 +375,7 @@ private fun PrivateSessionRow(
                 Text(
                     text = previewText,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                     lineHeight = 16.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -386,7 +387,7 @@ private fun PrivateSessionRow(
             Text(
                 text = item.time,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 11.sp,
+                fontSize = FishPiType.Size.label,
                 lineHeight = 14.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -405,7 +406,7 @@ private fun PrivateSessionRow(
                         text = item.unread.coerceAtMost(99).toString(),
                         color = androidx.compose.ui.graphics.Color.White,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 11.sp,
+                        fontSize = FishPiType.Size.label,
                         lineHeight = 13.sp,
                     )
                 }

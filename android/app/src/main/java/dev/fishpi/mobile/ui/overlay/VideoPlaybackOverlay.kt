@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.ui.overlay
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import dev.fishpi.mobile.*
 import android.view.ViewGroup
 import androidx.compose.animation.AnimatedVisibility
@@ -165,7 +166,7 @@ internal fun VideoPlaybackOverlay(
                 Text(
                     text = "无法播放",
                     color = Color.White.copy(alpha = 0.82f),
-                    fontSize = 14.sp,
+                    fontSize = FishPiType.Size.body,
                 )
                 TextButton(
                     onClick = {
@@ -262,12 +263,12 @@ internal fun VideoPlaybackOverlay(
                         Text(
                             text = formatVideoTime(if (isScrubbing) scrubPositionMs else positionMs),
                             color = Color.White.copy(alpha = 0.82f),
-                            fontSize = 12.sp,
+                            fontSize = FishPiType.Size.caption,
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text("/", color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                        Text("/", color = Color.White.copy(alpha = 0.45f), fontSize = FishPiType.Size.caption)
                         Spacer(Modifier.width(8.dp))
-                        Text(formatVideoTime(durationMs), color = Color.White.copy(alpha = 0.82f), fontSize = 12.sp)
+                        Text(formatVideoTime(durationMs), color = Color.White.copy(alpha = 0.82f), fontSize = FishPiType.Size.caption)
                     }
                 }
             }

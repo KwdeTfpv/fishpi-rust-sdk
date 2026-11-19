@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.profile
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import androidx.activity.compose.BackHandler
 import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.components.*
@@ -117,6 +118,8 @@ import dev.fishpi.mobile.utils.themeHexFromRgb
 import dev.fishpi.mobile.utils.toThemeColor
 import dev.fishpi.mobile.utils.toThemeRgb
 import androidx.compose.material3.Text
+import dev.fishpi.mobile.ui.components.FishPiSurfaceKind
+import dev.fishpi.mobile.ui.components.fishPiSurface
 
 @Composable
 private fun profileAccentColor(): Color = FishPiTheme.accent
@@ -139,10 +142,10 @@ private fun LazyListScope.profileContentItems(
         ) { article ->
             ProfileArticleRow(article = article, onClick = { dispatch(ProfileAction.OpenArticle(article.id, article)) })
         }
-        if (articlePage.hasMore) {
+        if (articlePage.list.hasMore) {
             item(key = "${keyPrefix}articles_more", contentType = "articles_more") {
                 ProfileArticleLoadMore(
-                    isLoading = articlePage.isLoadingMore,
+                    isLoading = articlePage.list.isLoadingMore,
                     onLoadMore = { dispatch(ProfileAction.LoadMoreArticles) },
                 )
             }
@@ -155,10 +158,10 @@ private fun LazyListScope.profileContentItems(
         ) { breeze ->
             ProfileBreezemoonRow(item = breeze)
         }
-        if (breezePage.hasMore) {
+        if (breezePage.list.hasMore) {
             item(key = "${keyPrefix}breeze_more", contentType = "breeze_more") {
                 ProfileArticleLoadMore(
-                    isLoading = breezePage.isLoadingMore,
+                    isLoading = breezePage.list.isLoadingMore,
                     onLoadMore = { dispatch(ProfileAction.LoadMoreBreezemoons) },
                 )
             }
@@ -207,7 +210,7 @@ internal fun DefaultProfileUi(
                         articleCount = articlePage.items.size,
                         breezeCount = breezePage.items.size,
                         selectedTab = state.selectedContentTab,
-                        isLoading = if (state.selectedContentTab == "article") articlePage.isLoading else breezePage.isLoading,
+                        isLoading = if (state.selectedContentTab == "article") articlePage.list.isLoading else breezePage.list.isLoading,
                         onSelectTab = { dispatch(ProfileAction.SelectContentTab(it)) },
                     )
                 }
@@ -260,7 +263,7 @@ internal fun DefaultProfileUi(
                             articleCount = articlePage.items.size,
                             breezeCount = breezePage.items.size,
                             selectedTab = state.selectedContentTab,
-                            isLoading = if (state.selectedContentTab == "article") articlePage.isLoading else breezePage.isLoading,
+                            isLoading = if (state.selectedContentTab == "article") articlePage.list.isLoading else breezePage.list.isLoading,
                             onSelectTab = { dispatch(ProfileAction.SelectContentTab(it)) },
                         )
                     }
@@ -479,7 +482,7 @@ private fun ProfileSettingsOverlay(
                         text = "设置",
                         color = FishPiTheme.onSurface,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
+                        fontSize = FishPiType.Size.display,
                         modifier = Modifier.weight(1f),
                     )
                     FishPiIconButton(
@@ -744,12 +747,12 @@ private fun ThemeEditorOverlay(
                         text = "编辑主题",
                         color = FishPiTheme.onSurface,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
+                        fontSize = FishPiType.Size.display,
                     )
                     Text(
                         text = "改完看预览，满意后保存应用。",
                         color = FishPiTheme.weakText,
-                        fontSize = 12.sp,
+                        fontSize = FishPiType.Size.caption,
                     )
                 }
                 FishPiIconButton(
@@ -894,7 +897,7 @@ private fun ThemeEditorActionButton(
             text = text,
             color = color,
             fontWeight = FontWeight.SemiBold,
-            fontSize = 13.sp,
+            fontSize = FishPiType.Size.secondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -922,7 +925,7 @@ private fun PresetChip(
             .padding(horizontal = 12.dp, vertical = 7.dp),
         color = if (selected) profileAccentColor() else FishPiTheme.onSurface,
         fontWeight = FontWeight.Medium,
-        fontSize = 13.sp,
+        fontSize = FishPiType.Size.secondary,
     )
 }
 
@@ -936,8 +939,8 @@ private fun ThemeEditorPanel(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingItem),
     ) {
-        Text(text = title, color = FishPiTheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        Text(text = summary, color = FishPiTheme.weakText, fontSize = 12.sp, lineHeight = 17.sp)
+        Text(text = title, color = FishPiTheme.onSurface, fontWeight = FontWeight.Bold, fontSize = FishPiType.Size.subtitle)
+        Text(text = summary, color = FishPiTheme.weakText, fontSize = FishPiType.Size.caption, lineHeight = 17.sp)
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
@@ -957,7 +960,7 @@ private fun ThemeEditorSectionTitle(label: String) {
         text = label,
         color = FishPiTheme.weakText,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 13.sp,
+        fontSize = FishPiType.Size.secondary,
     )
 }
 
@@ -1005,12 +1008,12 @@ private fun ThemeTokenColorField(
         )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(text = label, color = FishPiTheme.onSurface, fontWeight = FontWeight.SemiBold)
-            Text(text = themeColorVariable(spec.key), color = FishPiTheme.weakText, fontSize = 11.sp)
+            Text(text = themeColorVariable(spec.key), color = FishPiTheme.weakText, fontSize = FishPiType.Size.label)
         }
         Text(
             text = value.uppercase(),
             color = if (value.isValidThemeHex()) FishPiTheme.weakText else FishPiErrorRed,
-            fontSize = 11.sp,
+            fontSize = FishPiType.Size.label,
             fontWeight = FontWeight.SemiBold,
         )
         Icon(
@@ -1066,8 +1069,7 @@ private fun ThemeTokenColorField(
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-                        .background(FishPiTheme.surfaceContainer)
+                        .fishPiSurface(FishPiSurfaceKind.Card, stroked = false)
                         .clickable { pickerOpen = false }
                         .padding(14.dp),
                     horizontalArrangement = Arrangement.Center,
@@ -1111,19 +1113,19 @@ private fun ThemeTokenMetricField(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(text = themeMetricTitle(spec.key), color = FishPiTheme.onSurface, fontWeight = FontWeight.Medium)
-                    Text(text = themeMetricVariable(spec.key), color = FishPiTheme.weakText, fontSize = 11.sp)
+                    Text(text = themeMetricVariable(spec.key), color = FishPiTheme.weakText, fontSize = FishPiType.Size.label)
                 }
                 Text(
                     text = themeMetricSubtitle(spec.key),
                     color = FishPiTheme.weakText,
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                     lineHeight = 16.sp,
                 )
             }
             Text(
                 text = if (spec.suffix.isBlank()) "%.2f".format(value) else "%.0f%s".format(value, spec.suffix),
                 color = FishPiTheme.weakText,
-                fontSize = 12.sp,
+                fontSize = FishPiType.Size.caption,
             )
         }
         Slider(
@@ -1460,7 +1462,7 @@ private fun ProfileOverviewPage(
                 Text(
                     text = "退出登录",
                     color = FishPiErrorRed,
-                    fontSize = 16.sp,
+                    fontSize = FishPiType.Size.subtitle,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1558,7 +1560,7 @@ private fun ProfileOverviewCard(
                     FishPiRoleBadge(role = user.role)
                 }
             }
-            Text(text = "@${user.userName}", color = FishPiTheme.weakText, fontSize = 15.sp)
+            Text(text = "@${user.userName}", color = FishPiTheme.weakText, fontSize = FishPiType.Size.heading)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (user.userNo.isNotBlank()) {
                     ProfileMetaChip(text = "摸鱼派第 ${user.userNo} 号成员")
@@ -1574,7 +1576,7 @@ private fun ProfileOverviewCard(
         Text(
             text = user.intro.ifBlank { "这个人很神秘，暂时还没有签名。" },
             color = FishPiTheme.onSurface.copy(alpha = 0.68f),
-            fontSize = 14.sp,
+            fontSize = FishPiType.Size.body,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1696,14 +1698,14 @@ private fun ProfileTransferDialog(
                             text = if (requireUsername) "转账" else "转账给 ${user.displayName}",
                             color = FishPiTheme.onSurface,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp,
+                            fontSize = FishPiType.Size.subtitleLarge,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
                             text = if (requireUsername) "填写对方用户名、积分数量和备注" else "@${user.userName}",
                             color = FishPiTheme.weakText,
-                            fontSize = 12.sp,
+                            fontSize = FishPiType.Size.caption,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -1794,7 +1796,7 @@ private fun ProfileActionItem(
                 Text(
                     text = if (badge > 99) "99+" else badge.toString(),
                     color = Color.White,
-                    fontSize = 9.sp,
+                    fontSize = FishPiType.Size.nano,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .sizeIn(minWidth = 14.dp, minHeight = 14.dp)
@@ -1807,7 +1809,7 @@ private fun ProfileActionItem(
         Text(
             text = label,
             color = FishPiTheme.onSurface,
-            fontSize = 13.sp,
+            fontSize = FishPiType.Size.secondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1819,7 +1821,7 @@ private fun ProfileMetaChip(text: String) {
     Text(
         text = text,
         color = FishPiTheme.weakText,
-        fontSize = 11.sp,
+        fontSize = FishPiType.Size.label,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
@@ -1862,14 +1864,14 @@ private fun ProfileStatColumn(
             text = value,
             color = FishPiTheme.onSurface,
             fontWeight = FontWeight.Bold,
-            fontSize = 15.sp,
+            fontSize = FishPiType.Size.heading,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = label,
             color = FishPiTheme.weakText,
-            fontSize = 12.sp,
+            fontSize = FishPiType.Size.caption,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1911,7 +1913,7 @@ private fun ProfileBadgeWall(
                 Text(
                     text = if (expanded) "收起" else "展开",
                     color = profileAccentColor(),
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
                         .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
@@ -2134,12 +2136,12 @@ private fun ProfileBreezemoonRow(item: BreezemoonView) {
                     text = item.authorName.ifBlank { "鱼友" },
                     color = FishPiTheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp,
+                    fontSize = FishPiType.Size.body,
                 )
                 Text(
                     text = listOf(item.timeAgo, item.city.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · "),
                     color = FishPiTheme.weakText,
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

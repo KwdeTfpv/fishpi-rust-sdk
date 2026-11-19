@@ -174,9 +174,9 @@ internal fun AnimalStatusPill(
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
             .background(color.copy(alpha = 0.10f))
-            .border(1.dp, color.copy(alpha = 0.16f), RoundedCornerShape(999.dp))
+            .border(1.dp, color.copy(alpha = 0.16f), RoundedCornerShape(FishPiTheme.radiusSelector))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 9.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,

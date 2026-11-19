@@ -1,5 +1,6 @@
 package dev.fishpi.mobile.feature.profile
 
+import dev.fishpi.mobile.ui.theme.FishPiType
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -111,7 +112,7 @@ internal fun NotificationSettingsScreen(onDismiss: () -> Unit) {
                 text = "通知",
                 color = FishPiTheme.onSurface,
                 fontWeight = FontWeight.Bold,
-                fontSize = 20.sp,
+                fontSize = FishPiType.Size.display,
                 modifier = Modifier.weight(1f),
             )
             FishPiIconButton(
