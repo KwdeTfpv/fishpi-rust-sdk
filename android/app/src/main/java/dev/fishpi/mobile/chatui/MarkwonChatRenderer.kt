@@ -1,4 +1,5 @@
 package dev.fishpi.mobile.chatui
+import dev.fishpi.mobile.ui.dp
 
 import android.content.Context
 import android.text.method.LinkMovementMethod

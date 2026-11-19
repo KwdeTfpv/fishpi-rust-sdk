@@ -1,4 +1,5 @@
 package dev.fishpi.mobile.shared.message.native
+import dev.fishpi.mobile.ui.dp
 
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -49,7 +50,7 @@ internal class NativeMessageListController {
         val remaining = view.computeVerticalScrollRange() -
             view.computeVerticalScrollOffset() -
             view.computeVerticalScrollExtent()
-        return remaining <= 96.dp(view.context)
+        return remaining <= view.context.dp(96)
     }
 
     internal fun consumeNearTopChanged(value: Boolean): Boolean {

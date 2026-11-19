@@ -111,6 +111,18 @@ internal fun String.extractImageTokens(): List<MarkdownMediaToken> {
         }
 }
 
+private val HtmlAnchorTextRegex = Regex(
+    "<a\\b[^>]*>(.*?)</a>",
+    setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+)
+private val MarkdownLinkTextRegex = Regex("!?\\[([^]]*)]\\(([^)]*)\\)")
+
+internal fun String.toMeasuredMessageText(): String =
+    replace(HtmlAnchorTextRegex) { it.groupValues.getOrNull(1).orEmpty() }
+        .replace(MarkdownLinkTextRegex) { it.groupValues.getOrNull(1).orEmpty() }
+        .toPlainMessageText()
+        .replace(WhitespaceRegex, " ")
+
 internal fun String.toPlainMessageText(): String =
     replace(MarkdownImageRegex) { match -> match.groupValues.getOrNull(1).orEmpty() }
         .replace(HtmlTagRegex, "")

@@ -1,4 +1,5 @@
 package dev.fishpi.mobile.shared.message.native
+import dev.fishpi.mobile.ui.dp
 
 import android.view.MotionEvent
 import android.view.View
@@ -97,7 +98,7 @@ internal fun NativeMessageList(
                 setItemViewCacheSize(12)
                 recycledViewPool.setMaxRecycledViews(0, 24)
                 clipToPadding = true
-                setPadding(0, contentTopPaddingDp.dp(context), 0, 0)
+                setPadding(0, context.dp(contentTopPaddingDp), 0, 0)
                 layoutManager = LinearLayoutManager(context).apply {
                     stackFromEnd = true
                 }
@@ -180,7 +181,7 @@ internal fun NativeMessageList(
                 showAvatars = showAvatars,
             )
             view.applyMessageListBackground(theme, imageLoader, drawBackground)
-            val topPaddingPx = contentTopPaddingDp.dp(view.context)
+            val topPaddingPx = view.context.dp(contentTopPaddingDp)
             val paddingChanged = view.paddingTop != topPaddingPx
             if (paddingChanged) {
                 view.setPadding(0, topPaddingPx, 0, 0)
@@ -252,8 +253,6 @@ private const val BG_TAG_TRANSPARENT = "bg:transparent"
 private const val BG_TAG_GRADIENT = "bg:gradient:"
 private const val EDGE_SETTLE_DELAY_MS = 50L
 
-private fun Int.dp(context: android.content.Context): Int =
-    (this * context.resources.displayMetrics.density).toInt()
 
 private fun dispatchEdgeState(
     recyclerView: RecyclerView,

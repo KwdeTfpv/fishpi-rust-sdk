@@ -1,4 +1,5 @@
 package dev.fishpi.mobile.ui.components
+import dev.fishpi.mobile.shared.message.formatTopicReferenceMarkdown
 
 import dev.fishpi.mobile.feature.chat.model.ChatMentionCandidateUiModel
 import androidx.compose.foundation.background
@@ -375,17 +376,6 @@ private fun String.withOptionalTopic(topic: String, selected: Boolean): String {
     if (!selected || reference.isBlank()) return body
     if (body.endsWith(reference)) return body
     return if (body.isBlank()) reference else "$body\n$reference"
-}
-
-private fun formatTopicReferenceMarkdown(topic: String): String {
-    val text = topic
-        .trim()
-        .removePrefix("*`")
-        .removeSuffix("`*")
-        .trim()
-        .trim('#')
-        .trim()
-    return if (text.isBlank()) "" else "*`# $text #`*"
 }
 
 @Composable

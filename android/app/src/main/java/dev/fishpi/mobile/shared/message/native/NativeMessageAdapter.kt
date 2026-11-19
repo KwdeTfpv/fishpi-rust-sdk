@@ -61,6 +61,7 @@ import dev.fishpi.mobile.utils.MarkdownMediaType
 import dev.fishpi.mobile.utils.toFishPiGeneratedBadgeOrNull
 import kotlinx.coroutines.Job
 import kotlin.math.roundToInt
+import dev.fishpi.mobile.utils.toMeasuredMessageText
 
 internal class NativeMessageAdapter(
     private var theme: NativeMessageTheme,
@@ -217,11 +218,6 @@ private const val ENTRANCE_RISE_DP = 16f
 private const val ENTRANCE_START_SCALE = 0.92f
 private val entranceInterpolator: android.view.animation.Interpolator =
     android.view.animation.PathInterpolator(0f, 0f, 0.2f, 1f)
-private val HtmlAnchorTextRegex = Regex(
-    "<a\\b[^>]*>(.*?)</a>",
-    setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
-)
-private val MarkdownVisibleTextRegex = Regex("!?\\[([^]]*)]\\(([^)]*)\\)")
 private val ClientNameNonAlnumRegex = Regex("[^a-z0-9]")
 
 private data class NativeMusicCard(
@@ -1689,19 +1685,8 @@ internal class NativeMessageViewHolder(
         setLineSpacing(0f, 1.03f)
     }
 
-    private fun String.visibleTextForWidth(): String {
-        val withoutAnchors = HtmlAnchorTextRegex.replace(this) { match ->
-            match.groupValues.getOrNull(1).orEmpty()
-        }
-        val withoutMarkdownLinks = MarkdownVisibleTextRegex.replace(withoutAnchors) { match ->
-            match.groupValues.getOrNull(1).orEmpty()
-        }
-        return withoutMarkdownLinks
-            .replace(HtmlTagRegex, "")
-            .decodeBasicHtmlEntities()
-            .replace(WhitespaceRegex, " ")
-            .trim()
-    }
+    private fun String.visibleTextForWidth(): String = toMeasuredMessageText()
+
 
     private fun avatarView(message: ChatRoomMessage): FrameLayout {
         return FrameLayout(view.context).apply {
@@ -1905,13 +1890,15 @@ internal class NativeMessageViewHolder(
     private fun dp(value: Float): Float = value * view.resources.displayMetrics.density
 }
 
-private fun View.dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
 
 private fun String.isAnimatedImageUrl(): Boolean {
     val normalized = substringBefore('#').lowercase()
     val path = normalized.substringBefore('?')
     return path.endsWith(".gif") || normalized.contains("image/gif")
 }
+
+private fun View.dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
 internal class SharedAvatarDrawableStore {
     private val mainHandler = Handler(Looper.getMainLooper())

@@ -1,4 +1,5 @@
 package dev.fishpi.mobile.chatui
+import dev.fishpi.mobile.ui.dp
 
 import android.content.Context
 import android.graphics.Typeface
@@ -277,5 +278,3 @@ private class QuoteTintClickableSpan(
     }
 }
 
-internal fun Context.dp(value: Int): Int =
-    (value * resources.displayMetrics.density).toInt()
