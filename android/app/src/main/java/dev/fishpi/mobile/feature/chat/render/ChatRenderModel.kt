@@ -26,6 +26,9 @@ internal class ChatRenderModelReducer {
     private val listItemCache = LinkedHashMap<String, ChatListItem>()
     private var model = ChatRenderModel()
 
+    internal fun buildBlockedItems(messages: List<ChatRoomMessage>): List<ChatListItem> =
+        if (messages.isEmpty()) emptyList() else buildVisibleItems(messages, emptySet(), emptyMap()).first
+
     fun recompute(
         messages: List<ChatRoomMessage>,
         filters: ChatFilterConfig,
@@ -349,3 +352,7 @@ private fun LinkedHashMap<String, ChatListItem>.retainRecentListItems(
     }
     entries.removeIf { (key, _) -> key !in activeKeys }
 }
+
+
+internal fun blockedChatItems(messages: List<ChatRoomMessage>): List<ChatListItem> =
+    ChatRenderModelReducer().buildBlockedItems(messages)

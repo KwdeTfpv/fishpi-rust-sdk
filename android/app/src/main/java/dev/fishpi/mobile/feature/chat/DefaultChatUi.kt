@@ -1,5 +1,9 @@
 package dev.fishpi.mobile.feature.chat
 
+import androidx.activity.compose.BackHandler
+import dev.fishpi.mobile.feature.chat.render.blockedChatItems
+import dev.fishpi.mobile.shared.message.formatTopicReferenceMarkdown
+
 import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.components.*
 import dev.fishpi.mobile.ui.bottomBarContentPadding
@@ -7,7 +11,6 @@ import dev.fishpi.mobile.feature.chat.ui.ChatLivenessFloatingOrb
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.graphics.Rect
 import dev.fishpi.mobile.ui.back.BackLayer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
@@ -45,7 +48,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
@@ -114,7 +116,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.geometry.Offset
@@ -154,9 +155,7 @@ import dev.fishpi.mobile.feature.chat.barrage.ui.ChatBarrageComposerDialog
 import dev.fishpi.mobile.feature.chat.barrage.ui.ChatBarrageOverlay
 import dev.fishpi.mobile.shared.message.native.MessageActionAnchor
 import dev.fishpi.mobile.shared.message.native.NativeMessageList
-import dev.fishpi.mobile.chatui.NativeChatRoomHeader
 import dev.fishpi.mobile.shared.message.native.rememberNativeMessageListController
-import dev.fishpi.mobile.feature.redpacket.DefaultRedPacketCard
 import dev.fishpi.mobile.feature.redpacket.DefaultRedPacketGestureUi
 import dev.fishpi.mobile.feature.redpacket.DefaultRedPacketResultUi
 import dev.fishpi.mobile.feature.redpacket.DefaultRedPacketSendUi
@@ -164,8 +163,6 @@ import dev.fishpi.mobile.feature.redpacket.RedPacketAction
 import dev.fishpi.mobile.feature.redpacket.RedPacketFormState
 import dev.fishpi.mobile.feature.redpacket.toRedPacketResultUiModel
 import dev.fishpi.mobile.ui.components.ChatToolAction
-import dev.fishpi.mobile.ui.animal.AnimalPanel
-import dev.fishpi.mobile.ui.animal.AnimalStatusPill
 import dev.fishpi.mobile.ui.glass.FishPiGlassRole
 import dev.fishpi.mobile.ui.glass.LocalFishPiGlassBackdrop
 import dev.fishpi.mobile.ui.glass.fishPiGlassSurface
@@ -180,6 +177,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import dev.fishpi.mobile.ui.components.FishPiAvatar
 
 private val ChatIconButtonSize = 36.dp
 private const val ChatPluginFloatPrefsName = "chat_plugin_float"
@@ -1014,12 +1012,9 @@ private fun DefaultChatUiContent(
             )
         }
         if (qrScannerOpen) {
-            Dialog(
+            FishPiFullScreenDialog(
                 onDismissRequest = { qrScannerOpen = false },
-                properties = DialogProperties(
-                    usePlatformDefaultWidth = false,
-                    decorFitsSystemWindows = false,
-                ),
+                edgeToEdge = true,
             ) {
                 QrScannerScreen(
                     onResult = { raw ->
@@ -1152,12 +1147,9 @@ private fun DefaultChatUiContent(
         }
 
         if (redPacketComposerOpen) {
-            Dialog(
+            FishPiFullScreenDialog(
             onDismissRequest = { dispatch(ChatAction.DismissRedPacketComposer) },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
-            ),
+            edgeToEdge = true,
         ) {
             FishPiOverlayWindow {
             DefaultRedPacketSendUi(
@@ -1215,12 +1207,9 @@ private fun DefaultChatUiContent(
         }
 
         redPacketResult?.let { result ->
-            Dialog(
+            FishPiFullScreenDialog(
             onDismissRequest = { dispatch(ChatAction.ClearRedPacketResult) },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
-            ),
+            edgeToEdge = true,
         ) {
             FishPiOverlayWindow {
                 DefaultRedPacketResultUi(
@@ -1243,12 +1232,9 @@ private fun DefaultChatUiContent(
 
         // 表情收藏选择器
         if (bridge.favoriteEmojiUrl != null) {
-            Dialog(
+            FishPiFullScreenDialog(
                 onDismissRequest = { bridge.dismissFavoriteEmoji() },
-                properties = DialogProperties(
-                    usePlatformDefaultWidth = false,
-                    decorFitsSystemWindows = false,
-                ),
+                edgeToEdge = true,
             ) {
                 FishPiOverlayWindow {
                     FavoriteEmojiSelectorSheet(
@@ -1265,16 +1251,14 @@ private fun DefaultChatUiContent(
         }
 
         if (blockedMessagesOpen) {
-            Dialog(
+            FishPiFullScreenDialog(
             onDismissRequest = { bridge.dismissBlockedMessages() },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
-            ),
+            edgeToEdge = true,
         ) {
             BlockedMessagesOverlay(
                 messages = blockedMessages,
                 selfUsername = session.user.userName,
+                showAvatars = chatFilters.showAvatars,
                 onImageClick = { images, index ->
                     bridge.dismissBlockedMessages()
                     imageViewer.open(images, index)
@@ -1460,11 +1444,6 @@ private fun List<String>.withUniqueRule(rule: String, exactCase: Boolean = false
     return if (exists) this else this + value
 }
 
-private fun formatTopicReferenceMarkdown(topic: String): String {
-    val text = topic.trim().trim('#').trim()
-    return if (text.isBlank()) "" else "*`# $text #`*"
-}
-
 private fun appendTopicReferenceDraft(current: String, topic: String): String {
     val reference = formatTopicReferenceMarkdown(topic)
     if (reference.isBlank()) {
@@ -1514,6 +1493,7 @@ internal fun ChatFilterSettingsOverlay(
     onSave: (ChatFilterConfig) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    BackHandler(onBack = onDismiss)
     var userInput by remember { mutableStateOf("") }
     var keywordInput by remember { mutableStateOf("") }
     var prefixInput by remember { mutableStateOf("") }
@@ -1872,6 +1852,7 @@ private fun FilterRuleEditor(
 private fun BlockedMessagesOverlay(
     messages: List<ChatRoomMessage>,
     selfUsername: String,
+    showAvatars: Boolean,
     onImageClick: (images: List<String>, index: Int) -> Unit,
     onLinkClick: (String) -> Unit,
     onAvatarClick: (String) -> Unit,
@@ -1881,7 +1862,7 @@ private fun BlockedMessagesOverlay(
     onLongPress: (MessageActionAnchor) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val displayMessages = remember(messages) { messages.asReversed() }
+    val items = remember(messages) { blockedChatItems(messages) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1917,7 +1898,7 @@ private fun BlockedMessagesOverlay(
             )
         }
 
-        if (displayMessages.isEmpty()) {
+        if (items.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1927,226 +1908,34 @@ private fun BlockedMessagesOverlay(
                 Text(text = "暂无被屏蔽消息", color = FishPiTheme.weakText)
             }
         } else {
-            LazyColumn(
+            NativeMessageList(
+                items = items,
+                selfUsername = selfUsername,
+                showAvatars = showAvatars,
+                scrollToBottomRequest = 0,
+                allowScrollToBottom = false,
+                redPacketJumpTargetId = null,
+                drawBackground = false,
+                onLoadMore = {},
+                onNearBottomChanged = {},
+                onImageClick = onImageClick,
+                onLinkClick = onLinkClick,
+                onLongPress = onLongPress,
+                onAvatarClick = onAvatarClick,
+                onAvatarLongPress = onAvatarLongPress,
+                onRedPacketClick = onRedPacketClick,
+                onReactionClick = onReactionClick,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                itemsIndexed(
-                    items = displayMessages,
-                    key = { _, message -> message.oId.ifBlank { "${message.userName}-${message.time}-${message.content.hashCode()}" } },
-                ) { index, message ->
-                    BlockedMessageRow(
-                        message = message,
-                        previous = displayMessages.getOrNull(index - 1),
-                        isMine = message.userName.equals(selfUsername, ignoreCase = true),
-                        onImageClick = onImageClick,
-                        onLinkClick = onLinkClick,
-                        onAvatarClick = onAvatarClick,
-                        onAvatarLongPress = onAvatarLongPress,
-                        onRedPacketClick = onRedPacketClick,
-                        onReactionClick = onReactionClick,
-                        onLongPress = onLongPress,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BlockedMessageRow(
-    message: ChatRoomMessage,
-    previous: ChatRoomMessage?,
-    isMine: Boolean,
-    onImageClick: (images: List<String>, index: Int) -> Unit,
-    onLinkClick: (String) -> Unit,
-    onAvatarClick: (String) -> Unit,
-    onAvatarLongPress: (String) -> Unit,
-    onRedPacketClick: (ChatRoomMessage) -> Unit,
-    onReactionClick: (ChatRoomMessage, String) -> Unit,
-    onLongPress: (MessageActionAnchor) -> Unit,
-) {
-    val hints = remember(message) { message.toRenderHints() }
-    val imageUrls = remember(message) { message.allRenderableImageUrls().take(4) }
-    var bubbleRect by remember { mutableStateOf(Rect()) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        messageTimeSeparator(previous, message)?.let { separator ->
-            Text(
-                text = separator,
-                color = FishPiTheme.weakText,
-                fontSize = 11.sp,
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start,
-            verticalAlignment = Alignment.Top,
-        ) {
-            if (!isMine) {
-                BlockedMessageAvatar(message, onAvatarClick, onAvatarLongPress)
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-            Column(
-                modifier = Modifier.widthIn(max = 300.dp),
-                horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
-                verticalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (isMine && hints.clientLabel.isNotBlank()) {
-                        BlockedMessageClientBadge(hints.clientLabel)
-                    }
-                    Text(
-                        text = message.authorLabel,
-                        color = FishPiTheme.weakText,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    if (!isMine && hints.clientLabel.isNotBlank()) {
-                        BlockedMessageClientBadge(hints.clientLabel)
-                    }
-                }
-                Surface(
-                    color = if (isMine) FishPiTheme.accent.copy(alpha = 0.16f) else FishPiTheme.surface,
-                    shape = RoundedCornerShape(FishPiTheme.radiusBox),
-                    modifier = Modifier
-                        .onGloballyPositioned { coordinates ->
-                            val offset = coordinates.positionInWindow()
-                            bubbleRect = Rect(
-                                offset.x.roundToInt(),
-                                offset.y.roundToInt(),
-                                (offset.x + coordinates.size.width).roundToInt(),
-                                (offset.y + coordinates.size.height).roundToInt(),
-                            )
-                        }
-                        .pointerInput(message.oId, isMine) {
-                            detectTapGestures(
-                                onLongPress = {
-                                    onLongPress(MessageActionAnchor(message, bubbleRect, isMine))
-                                },
-                            )
-                        },
-                ) {
-                    Column(
-                        modifier = Modifier.padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        message.redPacket?.let { packet ->
-                            DefaultRedPacketCard(preview = packet, onClick = { onRedPacketClick(message) })
-                        } ?: run {
-                            val text = hints.plainFallback.ifBlank { hints.markdownContent }
-                            if (text.isNotBlank()) {
-                                Text(
-                                    text = text,
-                                    color = FishPiTheme.onSurface,
-                                    fontSize = 14.sp,
-                                )
-                            }
-                        }
-                        imageUrls.forEachIndexed { index, url ->
-                            SubcomposeAsyncImage(
-                                model = url,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(150.dp)
-                                    .clip(RoundedCornerShape(FishPiTheme.radiusField))
-                                    .clickable { onImageClick(imageUrls, index) },
-                            )
-                        }
-                        hints.previewLinks.take(3).forEach { url ->
-                            Text(
-                                text = url,
-                                color = FishPiTheme.accent,
-                                fontSize = 12.sp,
-                                modifier = Modifier.clickable { onLinkClick(url) },
-                            )
-                        }
-                    }
-                }
-                if (message.reactionSummary.isNotEmpty()) {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        itemsIndexed(message.reactionSummary) { _, reaction ->
-                            Surface(
-                                color = if (reaction.selected) FishPiTheme.accent.copy(alpha = 0.14f) else FishPiTheme.surface,
-                                shape = RoundedCornerShape(FishPiTheme.radiusSelector),
-                                modifier = Modifier.clickable { onReactionClick(message, reaction.value) },
-                            ) {
-                                Text(
-                                    text = "${reaction.emoji} ${reaction.count}",
-                                    color = FishPiTheme.onSurface,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            if (isMine) {
-                Spacer(modifier = Modifier.width(8.dp))
-                BlockedMessageAvatar(message, onAvatarClick, onAvatarLongPress)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BlockedMessageAvatar(
-    message: ChatRoomMessage,
-    onAvatarClick: (String) -> Unit,
-    onAvatarLongPress: (String) -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(CircleShape)
-            .background(FishPiTheme.accent.copy(alpha = 0.18f))
-            .pointerInput(message.userName) {
-                detectTapGestures(
-                    onTap = { onAvatarClick(message.userName) },
-                    onLongPress = { onAvatarLongPress(message.userName) },
-                )
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        if (message.userAvatarURL.isNotBlank()) {
-            SubcomposeAsyncImage(
-                model = message.userAvatarURL,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            Text(
-                text = message.displayName.trim().take(1).ifBlank { "鱼" },
-                color = FishPiTheme.accent,
-                fontWeight = FontWeight.Bold,
             )
         }
     }
 }
 
-@Composable
-private fun BlockedMessageClientBadge(client: String) {
-    Text(
-        text = client,
-        color = FishPiTheme.weakText,
-        fontSize = 9.sp,
-        modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(rememberUiPageBrush())
-            .padding(horizontal = 5.dp, vertical = 1.dp),
-    )
-}
+
+
+
 
 @Composable
 internal fun ChatUserProfileOverlay(
@@ -2368,9 +2157,8 @@ private fun ChatOnlineUsersPage(
     onDismiss: () -> Unit,
     onOpenUser: (String) -> Unit,
 ) {
-    Dialog(
+    FishPiFullScreenDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Column(
             modifier = Modifier
@@ -2473,38 +2261,15 @@ private fun ChatOnlineUserRow(
 
 @Composable
 private fun ChatOnlineAvatar(user: ChatOnlineUser) {
-    val context = LocalContext.current
-    val model = remember(user.avatarUrl) {
-        ImageRequest.Builder(context)
-            .data(user.avatarUrl)
-            .size(Size(96, 96))
-            .build()
-    }
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .background(FishPiTheme.surfaceContainer),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (user.avatarUrl.isNotBlank()) {
-            SubcomposeAsyncImage(
-                model = model,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            Text(
-                text = user.userName.take(1).uppercase(),
-                color = FishPiTheme.weakText,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-    }
+    FishPiAvatar(
+        avatarUrl = user.avatarUrl,
+        displayName = user.userName,
+        contentDescription = "${user.userName}头像",
+        size = 40.dp,
+        fallbackBackground = FishPiTheme.surfaceContainer,
+        fallbackContentColor = FishPiTheme.weakText,
+    )
 }
-
 @Composable
 private fun ChatActionOverflowMenu(
     noticeUnread: Long,
@@ -3459,9 +3224,8 @@ private fun FavoriteEmojiSelectorSheet(
     var emojiName by remember { mutableStateOf("") }
     val palette = LocalFishPiPalette.current
 
-    Dialog(
+    FishPiFullScreenDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Box(
             modifier = Modifier
