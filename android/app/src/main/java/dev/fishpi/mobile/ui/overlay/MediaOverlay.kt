@@ -3,6 +3,7 @@ package dev.fishpi.mobile.ui.overlay
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -97,6 +98,8 @@ private fun MediaOverlaySurface(controller: MediaOverlayController) {
         enabled = true,
         onBack = controller::dismiss,
     )
+
+    BackHandler(onBack = controller::dismiss)
 
     DisposableEffect(request) {
         val window = view.context.findActivity()?.window
