@@ -10,6 +10,7 @@ import dev.fishpi.mobile.feature.article.model.ArticleOverlayState
 import dev.fishpi.mobile.feature.article.model.ArticleSummaryUiModel
 import dev.fishpi.mobile.feature.article.model.CommentSort
 import dev.fishpi.mobile.feature.article.model.RecentArticleFilters
+import dev.fishpi.mobile.ui.state.ListLoadState
 
 internal data class ArticleState(
     val articles: List<ArticleSummaryUiModel> = emptyList(),
@@ -18,10 +19,8 @@ internal data class ArticleState(
     val availableFilters: List<ArticleFilterUiModel> = RecentArticleFilters,
     val tagInput: String = "",
     val appliedTag: String = "",
-    val isLoading: Boolean = false,
-    val isLoadingMore: Boolean = false,
     val nextPage: Int = 1,
-    val hasMore: Boolean = true,
+    val list: ListLoadState = ListLoadState(isEmpty = true),
     val selected: ArticleSummary? = null,
     val detail: ArticleDetailView? = null,
     val isLoadingDetail: Boolean = false,

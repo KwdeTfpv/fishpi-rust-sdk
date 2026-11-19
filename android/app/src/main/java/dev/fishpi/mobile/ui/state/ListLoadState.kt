@@ -35,7 +35,7 @@ internal data class ListLoadState(
 
     val showsInlineError: Boolean get() = !isLoading && error != null && !isEmpty
 
-    val canLoadMore: Boolean get() = hasMore && !isLoadingMore && error == null && !isEmpty
+    val canLoadMore: Boolean get() = hasMore && !isLoading && !isLoadingMore && !isEmpty
 
     fun startingLoad(): ListLoadState = copy(isLoading = true, isRefreshing = false, error = null)
 
@@ -59,12 +59,21 @@ internal data class ListLoadState(
     fun loadingMore(): ListLoadState = copy(isLoadingMore = true, error = null)
 
     fun loadedMore(isEmpty: Boolean, hasMore: Boolean): ListLoadState = copy(
+        isLoading = false,
+        isRefreshing = false,
         isLoadingMore = false,
+        error = null,
         hasMore = hasMore,
         isEmpty = isEmpty,
     )
 
-    fun exhausted(): ListLoadState = copy(isLoadingMore = false, hasMore = false)
+    fun exhausted(): ListLoadState = copy(
+        isLoading = false,
+        isRefreshing = false,
+        isLoadingMore = false,
+        error = null,
+        hasMore = false,
+    )
 }
 
 @Composable

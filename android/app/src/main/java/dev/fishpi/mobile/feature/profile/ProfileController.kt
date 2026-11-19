@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import dev.fishpi.mobile.ui.state.ListLoadState
 
 internal class ProfileController(
     context: Context,
@@ -178,8 +179,8 @@ internal class ProfileController(
                 noticeUnread = action.noticeUnread,
                 closeOnBack = action.closeOnBack,
                 contentOpen = if (targetChanged) false else it.contentOpen,
-                articles = if (targetChanged) ProfilePagedState(hasMore = false) else it.articles,
-                breezemoons = if (targetChanged) ProfilePagedState(hasMore = false) else it.breezemoons,
+                articles = if (targetChanged) ProfilePagedState(list = ListLoadState(hasMore = false, isEmpty = true)) else it.articles,
+                breezemoons = if (targetChanged) ProfilePagedState(list = ListLoadState(hasMore = false, isEmpty = true)) else it.breezemoons,
             )
         }
         if (
@@ -259,11 +260,13 @@ internal class ProfileController(
 
     private fun loadUserArticles(page: Int = 1, append: Boolean = false) {
         val current = _state.value
-        if (append && (current.articles.isLoading || current.articles.isLoadingMore || !current.articles.hasMore)) return
-        if (!append && current.articles.isLoading) return
+        if (append && !current.articles.list.canLoadMore) return
+        if (!append && current.articles.list.isLoading) return
         _state.update {
             it.copy(
-                articles = it.articles.copy(isLoading = !append, isLoadingMore = append),
+                articles = it.articles.copy(
+                    list = if (append) it.articles.list.loadingMore() else it.articles.list.startingLoad(),
+                ),
                 error = null,
             )
         }
@@ -281,16 +284,19 @@ internal class ProfileController(
                         articles = it.articles.copy(
                             items = nextItems,
                             nextPage = result.nextPage,
-                            hasMore = result.hasMore,
-                            isLoading = false,
-                            isLoadingMore = false,
+                            list = it.articles.list.loadedMore(
+                                isEmpty = nextItems.isEmpty(),
+                                hasMore = result.hasMore,
+                            ),
                         ),
                     )
                 }
             }.onFailure { throwable ->
                 _state.update {
                     it.copy(
-                        articles = it.articles.copy(isLoading = false, isLoadingMore = false),
+                        articles = it.articles.copy(
+                            list = it.articles.list.copy(isLoading = false, isLoadingMore = false),
+                        ),
                         error = throwable.message ?: "加载个人帖子失败",
                     )
                 }
@@ -300,11 +306,13 @@ internal class ProfileController(
 
     private fun loadUserBreezemoons(page: Int = 1, append: Boolean = false) {
         val current = _state.value
-        if (append && (current.breezemoons.isLoading || current.breezemoons.isLoadingMore || !current.breezemoons.hasMore)) return
-        if (!append && current.breezemoons.isLoading) return
+        if (append && !current.breezemoons.list.canLoadMore) return
+        if (!append && current.breezemoons.list.isLoading) return
         _state.update {
             it.copy(
-                breezemoons = it.breezemoons.copy(isLoading = !append, isLoadingMore = append),
+                breezemoons = it.breezemoons.copy(
+                    list = if (append) it.breezemoons.list.loadingMore() else it.breezemoons.list.startingLoad(),
+                ),
                 error = null,
             )
         }
@@ -324,16 +332,19 @@ internal class ProfileController(
                         breezemoons = it.breezemoons.copy(
                             items = nextItems,
                             nextPage = next,
-                            hasMore = more,
-                            isLoading = false,
-                            isLoadingMore = false,
+                            list = it.breezemoons.list.loadedMore(
+                                isEmpty = nextItems.isEmpty(),
+                                hasMore = more,
+                            ),
                         ),
                     )
                 }
             }.onFailure { throwable ->
                 _state.update {
                     it.copy(
-                        breezemoons = it.breezemoons.copy(isLoading = false, isLoadingMore = false),
+                        breezemoons = it.breezemoons.copy(
+                            list = it.breezemoons.list.copy(isLoading = false, isLoadingMore = false),
+                        ),
                         error = throwable.message ?: "加载个人清风明月失败",
                     )
                 }

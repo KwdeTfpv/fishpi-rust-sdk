@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import dev.fishpi.mobile.ui.state.ListLoadState
 
 internal class ArticleController(
     context: Context,
@@ -212,16 +213,15 @@ internal class ArticleController(
     private fun loadArticles(page: Int, append: Boolean) {
         val snapshot = _state.value
         if (append) {
-            if (snapshot.isLoading || snapshot.isLoadingMore || !snapshot.hasMore || page in requestedPages) return
+            if (!snapshot.list.canLoadMore || page in requestedPages) return
             requestedPages += page
-            _state.update { it.copy(isLoadingMore = true, error = null) }
+            _state.update { it.copy(list = it.list.loadingMore()) }
         } else {
-            if (snapshot.isLoading) return
+            if (snapshot.list.isLoading) return
             requestedPages.clear()
             _state.update {
                 it.copy(
-                    isLoading = true,
-                    isLoadingMore = false,
+                    list = it.list.startingLoad(),
                     rawArticles = emptyList(),
                     articles = emptyList(),
                     selected = null,
@@ -248,15 +248,15 @@ internal class ArticleController(
                             rawArticles = raw,
                             articles = raw.map { it.toArticleSummaryUiModel() },
                             nextPage = result.nextPage,
-                            hasMore = result.hasMore && (!append || raw.size > state.rawArticles.size),
-                            isLoading = false,
-                            isLoadingMore = false,
+                            list = state.list.loadedMore(
+                                isEmpty = raw.isEmpty(),
+                                hasMore = result.hasMore && (!append || raw.size > state.rawArticles.size),
+                            ),
                         )
                     }
                 }
             }.onFailure {
-                setError(it.message ?: "加载帖子失败")
-                _state.update { state -> state.copy(isLoading = false, isLoadingMore = false) }
+                _state.update { state -> state.copy(list = state.list.failed(it.message ?: "加载帖子失败")) }
             }
             if (append) requestedPages -= page
         }

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
+import dev.fishpi.mobile.ui.state.ListLoadState
 
 internal class BreezemoonController(
     context: Context,
@@ -47,7 +48,7 @@ internal class BreezemoonController(
             BreezemoonAction.Refresh -> load(page = 1, append = false)
             BreezemoonAction.LoadMore -> {
                 val current = _state.value
-                if (current.items.isNotEmpty() && current.hasMore && !current.isLoading) {
+                if (current.items.isNotEmpty() && current.list.canLoadMore) {
                     load(page = current.nextPage, append = true)
                 }
             }
@@ -86,8 +87,13 @@ internal class BreezemoonController(
 
     private fun load(page: Int, append: Boolean) {
         val current = _state.value
-        if (current.isLoading) return
-        _state.update { it.copy(isLoading = true, error = if (append) it.error else null) }
+        if (current.list.isLoading) return
+        _state.update {
+            it.copy(
+                list = if (append) it.list.loadingMore() else it.list.startingLoad(),
+                error = if (append) it.error else null,
+            )
+        }
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) { api.getBreezemoons(apiKey, page, 20) }
@@ -97,12 +103,19 @@ internal class BreezemoonController(
                     it.copy(
                         items = if (append) (normalized + it.items).distinctBy { item -> item.id } else normalized,
                         nextPage = page + 1,
-                        hasMore = result.isNotEmpty(),
-                        isLoading = false,
+                        list = it.list.loadedMore(
+                            isEmpty = normalized.isEmpty(),
+                            hasMore = result.isNotEmpty(),
+                        ),
                     )
                 }
             }.onFailure { throwable ->
-                _state.update { it.copy(isLoading = false, error = throwable.message ?: "加载清风明月失败") }
+                _state.update {
+                    it.copy(
+                        list = it.list.copy(isLoading = false, isLoadingMore = false),
+                        error = throwable.message ?: "加载清风明月失败",
+                    )
+                }
             }
         }
     }

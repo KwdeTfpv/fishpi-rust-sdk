@@ -6,12 +6,12 @@ import dev.fishpi.mobile.data.EmojiGroupView
 import dev.fishpi.mobile.data.EmojiItemView
 import dev.fishpi.mobile.data.FishPiUser
 import dev.fishpi.mobile.data.MedalView
+import dev.fishpi.mobile.ui.state.ListLoadState
 
 internal data class BreezemoonState(
     val items: List<BreezemoonView> = emptyList(),
     val nextPage: Int = 2,
-    val hasMore: Boolean = true,
-    val isLoading: Boolean = false,
+    val list: ListLoadState = ListLoadState(isEmpty = true),
     val isSending: Boolean = false,
     val attachments: ComposerAttachments = ComposerAttachments(),
     val attachmentPanelOpen: Boolean = false,

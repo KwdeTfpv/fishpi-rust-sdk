@@ -1,5 +1,7 @@
 package dev.fishpi.mobile
 
+import dev.fishpi.mobile.FishPiTheme
+import dev.fishpi.mobile.ui.theme.FishPiType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -186,12 +188,12 @@ internal fun NoticeScreen(
                     text = "通知",
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
+                    fontSize = FishPiType.Size.title,
                 )
                 Text(
                     text = "未读 ${count?.total ?: unread} · $status",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -289,7 +291,7 @@ private fun NoticeCategoryTabs(
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(FishPiTheme.radiusBox))
                         .background(
                             if (isSelected) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.surface,
@@ -323,7 +325,7 @@ private fun NoticeCategoryTabs(
                         color = if (isSelected) MaterialTheme.colorScheme.onPrimary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        fontSize = 11.sp,
+                        fontSize = FishPiType.Size.label,
                     )
                 }
             }
@@ -357,14 +359,14 @@ private fun NoticeStateMessage(
                     text = title,
                     color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
+                    fontSize = FishPiType.Size.heading,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = subtitle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -404,7 +406,7 @@ private fun NoticeCard(
                     text = item.displayTitle,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp,
+                    fontSize = FishPiType.Size.body,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -423,7 +425,7 @@ private fun NoticeCard(
                 Text(
                     text = item.summary,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 13.sp,
+                    fontSize = FishPiType.Size.secondary,
                     lineHeight = 18.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -436,14 +438,14 @@ private fun NoticeCard(
                     text = item.categoryLabel,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp,
+                    fontSize = FishPiType.Size.caption,
                 )
                 if (!raw.author.isNullOrBlank()) {
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text = raw.author,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
+                        fontSize = FishPiType.Size.caption,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -472,7 +474,7 @@ private fun NoticeCard(
                 Text(
                     text = item.timeText,
                     color = MaterialTheme.colorScheme.outline,
-                    fontSize = 11.sp,
+                    fontSize = FishPiType.Size.label,
                 )
             }
         }
@@ -499,7 +501,7 @@ private fun NoticeActionChip(
         Text(
             text = text,
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-            fontSize = 11.sp,
+            fontSize = FishPiType.Size.label,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

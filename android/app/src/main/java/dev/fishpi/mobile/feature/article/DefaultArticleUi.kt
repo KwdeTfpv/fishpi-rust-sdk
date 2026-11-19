@@ -1,5 +1,7 @@
 package dev.fishpi.mobile.feature.article
 
+import dev.fishpi.mobile.FishPiTheme
+import dev.fishpi.mobile.ui.theme.FishPiType
 import dev.fishpi.mobile.ui.components.rememberUiPageBrush
 import dev.fishpi.mobile.ui.components.*
 import dev.fishpi.mobile.ui.animal.AnimalStatusPill
@@ -172,6 +174,11 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import dev.fishpi.mobile.feature.article.model.articleFiltersForTag
+import dev.fishpi.mobile.ui.components.FishPiSurfaceKind
+import dev.fishpi.mobile.ui.components.fishPiSurface
+import dev.fishpi.mobile.ui.state.FishPiListShell
+import dev.fishpi.mobile.ui.state.ListLoadState
+import dev.fishpi.mobile.ui.state.FishPiListEmptyText
 
 private enum class ArticleScreenState { List, JumpLoading, Detail }
 
@@ -191,12 +198,12 @@ internal fun DefaultArticleUi(
     val listState = rememberLazyListState()
     val imageViewer = LocalMediaOverlay.current
 
-    LaunchedEffect(listState, state.articles.size, state.hasMore, state.isLoadingMore) {
+    LaunchedEffect(listState, state.articles.size, state.list.hasMore, state.list.isLoadingMore) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
             .distinctUntilChanged()
             .debounce(120)
             .collect { last ->
-                if (state.articles.isNotEmpty() && state.hasMore && last >= state.articles.lastIndex - 3) {
+                if (state.articles.isNotEmpty() && state.list.canLoadMore && last >= state.articles.lastIndex - 3) {
                     dispatch(ArticleAction.LoadMoreList)
                 }
             }
@@ -241,8 +248,7 @@ internal fun DefaultArticleUi(
             filter = state.filter,
             tagInput = state.tagInput,
             appliedTag = state.appliedTag,
-            isLoading = state.isLoading,
-            isLoadingMore = state.isLoadingMore,
+            load = state.list,
             error = state.error,
             listState = listState,
             onFilterChange = { dispatch(ArticleAction.ChangeFilter(it)) },
@@ -331,8 +337,7 @@ private fun ArticleListPage(
     filter: ArticleFilterUiModel,
     tagInput: String,
     appliedTag: String,
-    isLoading: Boolean,
-    isLoadingMore: Boolean,
+    load: ListLoadState,
     error: String?,
     listState: androidx.compose.foundation.lazy.LazyListState,
     onFilterChange: (ArticleFilterUiModel) -> Unit,
@@ -442,14 +447,20 @@ private fun ArticleListPage(
             error?.let {
                 Text(text = it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = FishPiTheme.spacingPage))
             }
-            when {
-                isLoading && articles.isEmpty() -> LoadingScreen("加载帖子...")
-                articles.isEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(text = "暂无帖子")
-                }
-                else -> LazyColumn(
+            FishPiListShell(
+                state = load,
+                onRetry = onRefresh,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
+                loading = { LoadingScreen("加载帖子...") },
+                empty = { FishPiListEmptyText("暂无帖子") },
+            ) {
+                LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
                     contentPadding = PaddingValues(horizontal = FishPiTheme.spacingPage, vertical = FishPiTheme.spacingSection),
                     verticalArrangement = Arrangement.spacedBy(FishPiTheme.spacingSection),
                 ) {
@@ -459,14 +470,6 @@ private fun ArticleListPage(
                         contentType = { "article_row" },
                     ) { item ->
                         ArticleRow(item = item, onClick = { onOpen(item) })
-                    }
-                    item {
-                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = if (isLoadingMore) "正在加载更多..." else " ",
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.48f),
-                            )
-                        }
                     }
                 }
             }
@@ -940,7 +943,7 @@ private fun ArticleDraftDialog(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
                             .clickable { onOpen(draft) }
                             .padding(vertical = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1360,7 +1363,7 @@ private fun ArticleDetailPage(
                                         text = "评论",
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 19.sp,
+                                        fontSize = FishPiType.Size.titleLarge,
                                     )
                                     Text(
                                         text = detail.commentCount.toString(),
@@ -1576,7 +1579,7 @@ private fun ArticleReaderHeader(
 private fun ArticleHeatBadge(heat: Long?) {
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(horizontal = 9.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1715,7 +1718,7 @@ private fun ArticleTagRow(tags: String) {
                 modifier = Modifier
                     .fillMaxWidth(0.34f)
                     .height(2.dp)
-                    .clip(RoundedCornerShape(999.dp))
+                    .clip(RoundedCornerShape(FishPiTheme.radiusSelector))
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)),
             )
         }
@@ -1800,7 +1803,7 @@ private fun ArticleRewardCard(
                     Button(
                         onClick = onRequestReward,
                         enabled = !isActionRunning && !isRewarding,
-                        shape = RoundedCornerShape(999.dp),
+                        shape = RoundedCornerShape(FishPiTheme.radiusSelector),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     ) {
                         Icon(
@@ -2063,13 +2066,7 @@ private fun ArticleCommentImagePreviewStrip(urls: List<String>) {
             Box(
                 modifier = Modifier
                     .size(62.dp)
-                    .clip(RoundedCornerShape(FishPiTheme.radiusBox))
-                    .background(FishPiTheme.surfaceContainer)
-                    .border(
-                        FishPiTheme.borderWidth,
-                        FishPiTheme.outline.copy(alpha = 0.16f),
-                        RoundedCornerShape(FishPiTheme.radiusBox),
-                    ),
+                    .fishPiSurface(FishPiSurfaceKind.Card)
             ) {
                 SubcomposeAsyncImage(
                     model = url,
@@ -2079,7 +2076,7 @@ private fun ArticleCommentImagePreviewStrip(urls: List<String>) {
                     modifier = Modifier.fillMaxSize(),
                     loading = {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("...", color = FishPiTheme.weakText, fontSize = 12.sp)
+                            Text("...", color = FishPiTheme.weakText, fontSize = FishPiType.Size.caption)
                         }
                     },
                     error = {
@@ -2101,7 +2098,7 @@ private fun ArticleCommentImagePreviewStrip(urls: List<String>) {
                 Text(
                     text = "${index + 1}",
                     color = FishPiTheme.onSurface,
-                    fontSize = 10.sp,
+                    fontSize = FishPiType.Size.micro,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -2189,7 +2186,7 @@ private fun ArticleCompactCommentInput(
         ) {
             val inputTextStyle = TextStyle(
                 color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 14.sp,
+                fontSize = FishPiType.Size.body,
                 lineHeight = 20.sp,
                 platformStyle = PlatformTextStyle(includeFontPadding = false),
             )
@@ -2666,7 +2663,7 @@ private fun ArticleInlineImage(
             .fillMaxWidth()
             .aspectRatio(imageRatio)
             .heightIn(max = 520.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .clickable(onClick = onClick),
     )
@@ -2683,7 +2680,7 @@ private fun ArticleVideoCard(
             .widthIn(max = 520.dp)
             .fillMaxWidth()
             .aspectRatio(16f / 9f)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(Color.Black)
             .clickable(onClick = onClick),
     ) {
@@ -2739,7 +2736,7 @@ private fun ArticleLinkPreviewCard(
         modifier = Modifier
             .widthIn(max = 520.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(FishPiTheme.radiusBox))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .clickable(onClick = onClick)
             .padding(12.dp),
@@ -2862,7 +2859,7 @@ private fun ArticleCommentAction(
         Text(
             text = value.toString(),
             color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 12.sp,
+            fontSize = FishPiType.Size.caption,
         )
     }
 }

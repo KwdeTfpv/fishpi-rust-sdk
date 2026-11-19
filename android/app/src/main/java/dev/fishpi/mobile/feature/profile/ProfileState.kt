@@ -8,13 +8,12 @@ import dev.fishpi.mobile.data.FishPiUser
 import dev.fishpi.mobile.data.MedalView
 import dev.fishpi.mobile.data.SavedAccount
 import dev.fishpi.mobile.data.UserActivityView
+import dev.fishpi.mobile.ui.state.ListLoadState
 
 internal data class ProfilePagedState<T>(
     val items: List<T> = emptyList(),
-    val isLoading: Boolean = false,
-    val isLoadingMore: Boolean = false,
     val nextPage: Int = 1,
-    val hasMore: Boolean = false,
+    val list: ListLoadState = ListLoadState(isEmpty = true),
 )
 
 internal data class ProfileState(
@@ -28,8 +27,8 @@ internal data class ProfileState(
     val isLoading: Boolean = false,
     val isLoadingMedals: Boolean = false,
     val error: String? = null,
-    val articles: ProfilePagedState<ArticleSummary> = ProfilePagedState(hasMore = false),
-    val breezemoons: ProfilePagedState<BreezemoonView> = ProfilePagedState(hasMore = false),
+    val articles: ProfilePagedState<ArticleSummary> = ProfilePagedState(list = ListLoadState(hasMore = false, isEmpty = true)),
+    val breezemoons: ProfilePagedState<BreezemoonView> = ProfilePagedState(list = ListLoadState(hasMore = false, isEmpty = true)),
     val selectedContentTab: String = "article",
     val settingsOpen: Boolean = false,
     val filterSettingsOpen: Boolean = false,
