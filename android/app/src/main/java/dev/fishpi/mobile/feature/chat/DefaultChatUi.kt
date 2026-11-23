@@ -2126,7 +2126,7 @@ private fun ChatActionsSheet(
                 .fishPiGlassSurface(
                     backdrop = LocalFishPiGlassBackdrop.current,
                     shape = sheetShape,
-                    containerColor = palette.surface.copy(alpha = 0.42f),
+                    containerColor = palette.surface.copy(alpha = FishPiTheme.glass.floatingAlpha),
                     borderColor = palette.outline.copy(alpha = 0.30f),
                     borderWidth = FishPiTheme.borderWidth,
                     role = FishPiGlassRole.Floating,
@@ -2238,7 +2238,7 @@ private fun ChatActionSheetMiniItem(
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = shape,
-                containerColor = palette.surface.copy(alpha = 0.34f),
+                containerColor = palette.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
                 borderColor = palette.outline.copy(alpha = 0.22f),
                 borderWidth = FishPiTheme.borderWidth,
                 role = FishPiGlassRole.Floating,
@@ -2286,7 +2286,7 @@ private fun ChatActionSheetItem(
             .fishPiGlassSurface(
                 backdrop = LocalFishPiGlassBackdrop.current,
                 shape = shape,
-                containerColor = palette.surface.copy(alpha = 0.36f),
+                containerColor = palette.surface.copy(alpha = FishPiTheme.glass.elevatedAlpha),
                 borderColor = palette.outline.copy(alpha = 0.24f),
                 borderWidth = FishPiTheme.borderWidth,
                 role = FishPiGlassRole.Floating,
