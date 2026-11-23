@@ -98,6 +98,18 @@ pub struct WireChatRoomAvailableNode {
     pub online: u32,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WireChatAppearance {
+    pub bubble_id: String,
+    pub frame_id: String,
+    pub version: Value,
+    #[serde(default)]
+    pub bubble_revision: Option<Value>,
+    #[serde(default)]
+    pub bubble_style: Option<Value>,
+}
+
 /// 聊天室消息原始形状。`content` 已归一化为对象或原文字符串。
 #[derive(Clone, Debug)]
 pub struct WireChatRoomMsg {
@@ -113,6 +125,7 @@ pub struct WireChatRoomMsg {
     pub client: String,
     pub reaction_summary: Vec<WireReactionSummaryItem>,
     pub current_user_reaction: String,
+    pub appearance: Option<WireChatAppearance>,
 }
 
 fn payload_object(value: &Value) -> Option<Value> {
@@ -157,6 +170,8 @@ impl<'de> Deserialize<'de> for WireChatRoomMsg {
             reactionSummary: Option<Vec<WireReactionSummaryItem>>,
             #[serde(default)]
             currentUserReaction: Option<String>,
+            #[serde(default)]
+            appearance: Option<WireChatAppearance>,
         }
 
         let raw = Raw::deserialize(deserializer)?;
@@ -184,6 +199,7 @@ impl<'de> Deserialize<'de> for WireChatRoomMsg {
             client: raw.client.unwrap_or_default(),
             reaction_summary: raw.reactionSummary.unwrap_or_default(),
             current_user_reaction: raw.currentUserReaction.unwrap_or_default(),
+            appearance: raw.appearance,
         })
     }
 }
@@ -192,5 +208,86 @@ impl FromStr for WireChatRoomMsg {
     type Err = serde_json::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         serde_json::from_str(s)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::chatroom::ChatRoomMsg;
+    use serde_json::json;
+
+    fn message(appearance: Option<Value>) -> Value {
+        let mut value = json!({
+            "oId": "message-1",
+            "time": "2026-11-19 12:00:00",
+            "userOId": "user-1",
+            "userName": "fish",
+            "userNickname": "Fish",
+            "userAvatarURL": "avatar.png",
+            "content": "hello"
+        });
+        if let Some(appearance) = appearance {
+            value["appearance"] = appearance;
+        }
+        value
+    }
+
+    #[test]
+    fn chat_appearance_absent_or_null_keeps_legacy_message() {
+        for appearance in [None, Some(Value::Null)] {
+            let wire: WireChatRoomMsg = serde_json::from_value(message(appearance)).unwrap();
+            assert!(wire.appearance.is_none());
+            let msg = ChatRoomMsg::from(wire);
+            assert!(msg.appearance.is_none());
+            assert_eq!(msg.content, json!("hello"));
+            assert_eq!(msg.client, "Other");
+            assert!(msg.reaction_summary.is_empty());
+        }
+    }
+
+    #[test]
+    fn chat_appearance_decodes_static_snapshot() {
+        let wire: WireChatRoomMsg = serde_json::from_value(message(Some(json!({
+            "bubbleId": "classic", "frameId": "none", "version": 1
+        }))))
+        .unwrap();
+        let appearance = ChatRoomMsg::from(wire).appearance.unwrap();
+        assert_eq!(appearance.bubble_id, "classic");
+        assert_eq!(appearance.frame_id, "none");
+        assert_eq!(appearance.version, json!(1));
+        assert!(appearance.bubble_revision.is_none());
+        assert!(appearance.bubble_style.is_none());
+    }
+
+    #[test]
+    fn chat_appearance_preserves_unknown_ids_and_versions() {
+        for version in [json!(999), json!("future-v4"), json!({ "schema": 5 })] {
+            let wire: WireChatRoomMsg = serde_json::from_value(message(Some(json!({
+                "bubbleId": "future:bubble", "frameId": "future:frame", "version": version
+            }))))
+            .unwrap();
+            let appearance = ChatRoomMsg::from(wire).appearance.unwrap();
+            assert_eq!(appearance.bubble_id, "future:bubble");
+            assert_eq!(appearance.frame_id, "future:frame");
+            assert_eq!(appearance.version, version);
+        }
+    }
+
+    #[test]
+    fn chat_appearance_preserves_dynamic_snapshot() {
+        let style = json!({
+            "background": "linear-gradient(red, blue)",
+            "animation": { "name": "future-animation", "duration": 1200 },
+            "futureProperty": [true, 42, "value"]
+        });
+        let wire: WireChatRoomMsg = serde_json::from_value(message(Some(json!({
+            "bubbleId": "dynamic:custom", "frameId": "none", "version": 2,
+            "bubbleRevision": "revision-7", "bubbleStyle": style
+        }))))
+        .unwrap();
+        let appearance = ChatRoomMsg::from(wire).appearance.unwrap();
+        assert_eq!(appearance.bubble_revision, Some(json!("revision-7")));
+        assert_eq!(appearance.bubble_style, Some(style));
     }
 }

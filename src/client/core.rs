@@ -1,12 +1,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use reqwest::{Client, Method, Proxy, Response, StatusCode, redirect::Policy};
-use serde::Serialize;
+use reqwest::header::HeaderMap;
+use reqwest::{Client, Method, Proxy, RequestBuilder, Response, StatusCode, redirect::Policy};
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_json::Value;
 use tokio::time::sleep;
 
+use super::v3::{V3Client, V3Cookie, V3Error, V3Me, V3Session};
 use super::{Config, USER_AGENT};
 use crate::ids::ApiKey;
 use crate::model::misc::LoginData;
@@ -20,6 +22,7 @@ struct Inner {
     config: Config,
     api_key: ApiKey,
     page_auth: tokio::sync::OnceCell<PageAuth>,
+    v3: tokio::sync::OnceCell<V3Client>,
 }
 
 /// 摸鱼派客户端，可 `Clone`。
@@ -62,6 +65,7 @@ impl FishPi {
                 config: self.inner.config.clone(),
                 api_key: api_key.into(),
                 page_auth: tokio::sync::OnceCell::new(),
+                v3: tokio::sync::OnceCell::new(),
             }),
         }
     }
@@ -76,12 +80,12 @@ impl FishPi {
                 config,
                 api_key: self.inner.api_key.clone(),
                 page_auth: tokio::sync::OnceCell::new(),
+                v3: tokio::sync::OnceCell::new(),
             }),
         }
     }
 }
 
-/// [`FishPi`] 构造器。
 #[derive(Default)]
 pub struct FishPiBuilder {
     api_key: Option<ApiKey>,
@@ -165,6 +169,7 @@ impl FishPiBuilder {
                 config,
                 api_key: self.api_key.unwrap_or_else(|| ApiKey::new("")),
                 page_auth: tokio::sync::OnceCell::new(),
+                v3: tokio::sync::OnceCell::new(),
             }),
         })
     }
@@ -250,20 +255,42 @@ impl FishPi {
         path: &str,
         body: Option<&Value>,
     ) -> Result<Value, Error> {
-        let url = self.full_url(path);
+        self.send_raw_with_headers(method, path, body, HeaderMap::new())
+            .await
+    }
+
+    fn request(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<&Value>,
+        headers: HeaderMap,
+    ) -> RequestBuilder {
+        let mut req = self
+            .inner
+            .http
+            .request(method, self.full_url(path))
+            .header("User-Agent", USER_AGENT)
+            .header("Referer", format!("https://{}/", self.inner.config.domain))
+            .headers(headers);
+        if let Some(body) = body {
+            req = req.json(body);
+        }
+        req
+    }
+
+    async fn send_raw_with_headers(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<&Value>,
+        headers: HeaderMap,
+    ) -> Result<Value, Error> {
         let max_retries = self.inner.config.max_retries;
         let mut attempt = 0;
 
         loop {
-            let mut req = self
-                .inner
-                .http
-                .request(method.clone(), &url)
-                .header("User-Agent", USER_AGENT)
-                .header("Referer", format!("https://{}/", self.inner.config.domain));
-            if let Some(b) = body {
-                req = req.json(b);
-            }
+            let req = self.request(method.clone(), path, body, headers.clone());
 
             let resp = match req.send().await {
                 Ok(resp) => resp,
@@ -307,6 +334,41 @@ impl FishPi {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::chatroom::ChatAppearance;
+    use crate::wire::chatroom::WireChatAppearance;
+    use serde_json::json;
+
+    fn client() -> FishPi {
+        FishPi::builder().api_key("legacy-secret").build().unwrap()
+    }
+
+    #[test]
+    fn v3_chat_appearance_decodes_success_data_and_business_errors() {
+        let response = json!({
+            "code": 0,
+            "data": { "bubbleId": "future:bubble", "frameId": "default", "version": 42 }
+        });
+        let wire: WireChatAppearance = take_data(check_envelope(response).unwrap()).unwrap();
+        let appearance = ChatAppearance::from(wire);
+        assert_eq!(appearance.bubble_id, "future:bubble");
+        assert_eq!(appearance.version, json!(42));
+        assert!(matches!(
+            check_envelope(json!({ "code": 403, "msg": "settings.write required" })),
+            Err(Error::Business { code: 403, .. })
+        ));
+    }
+
+    #[test]
+    fn legacy_api_key_injection_is_unchanged() {
+        let mut body = json!({ "content": "hello" });
+        client().inject_api_key(&mut body);
+        assert_eq!(body["apiKey"], "legacy-secret");
+    }
+}
+
 fn backoff(attempt: u32) -> Duration {
     Duration::from_millis(300 * (attempt as u64 + 1))
 }
@@ -345,6 +407,41 @@ fn map_business(code: i64, msg: String) -> Error {
 }
 
 impl FishPi {
+    /// 返回复用的 V3 传输层。
+    pub async fn v3(&self) -> Result<&V3Client, V3Error> {
+        self.inner
+            .v3
+            .get_or_try_init(|| async { V3Client::new(&self.inner.config) })
+            .await
+    }
+
+    /// 第一方账号登录，返回 V3 会话材料（含刷新 Cookie）。
+    pub async fn login_v3(&self, data: &LoginData) -> Result<V3Session, V3Error> {
+        self.v3()
+            .await?
+            .login(
+                &data.username,
+                &data.password,
+                data.mfa_code.as_deref(),
+            )
+            .await
+    }
+
+    /// 使用此前保存的登录 Cookie 刷新 V3 会话。
+    pub async fn refresh_v3(&self, cookies: &[V3Cookie]) -> Result<V3Session, V3Error> {
+        self.v3().await?.refresh(cookies).await
+    }
+
+    /// 注销 V3 登录 Cookie 对应的会话。
+    pub async fn logout_v3(&self, cookies: &[V3Cookie]) -> Result<(), V3Error> {
+        self.v3().await?.logout(cookies).await
+    }
+
+    /// 读取 V3 访问令牌对应的账号身份。
+    pub async fn v3_me(&self, access_token: &str) -> Result<V3Me, V3Error> {
+        self.v3().await?.me(access_token).await
+    }
+
     /// GET 请求，反序列化 `data`。
     pub(crate) async fn get_data<T: DeserializeOwned>(&self, path: &str) -> Result<T, Error> {
         let value = self.send_raw(Method::GET, path, None).await?;

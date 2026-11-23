@@ -1,5 +1,7 @@
-//! 客户端。
+mod v3;
+mod v3_realtime;
 
+mod appearance;
 mod article;
 mod breezemoon;
 mod chat;
@@ -16,8 +18,14 @@ mod redpacket;
 mod user;
 
 pub use core::{FishPi, FishPiBuilder};
+pub use v3::{
+    V3CaptchaOptions, V3Client, V3Cookie, V3Error, V3ErrorKind, V3Me, V3RealtimeTicket,
+    V3Session,
+};
+pub use v3_realtime::{V3ChatEvent, V3ChatEventKind, V3ChatRealtime};
 
 pub use article::{ArticleApi, ArticleConnection, ArticleDraftSave, ArticleEventKind, ArticlePost};
+pub use appearance::AppearanceApi;
 pub use breezemoon::BreezemoonApi;
 pub use chat::{ChatApi, ChatConnection};
 pub use chatroom::{ChatRoomApi, ChatRoomConnection};

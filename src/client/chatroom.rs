@@ -6,16 +6,16 @@ use url::Url;
 
 use crate::client::core::FishPi;
 use crate::domain::chatroom::{
-    BarragerCost, BarragerMsg, ChatContentType, ChatReactionMsg, ChatRoomEvent, ChatRoomEventKind,
-    ChatRoomMessageMode, ChatRoomMsg, CustomMsg, MusicMsg, MuteItem, OnlineInfo,
+    BarragerCost, BarragerMsg, ChatAppearance, ChatContentType, ChatReactionMsg, ChatRoomEvent,
+    ChatRoomEventKind, ChatRoomMessageMode, ChatRoomMsg, CustomMsg, MusicMsg, MuteItem, OnlineInfo,
 };
 use crate::domain::redpacket::RedPacketStatusMsg;
 use crate::ids::MessageId;
 use crate::utils::build_http_path;
 use crate::utils::error::Error;
 use crate::wire::chatroom::{
-    WireBarragerMsg, WireChatReactionMsg, WireChatRoomMsg, WireChatRoomNode, WireMuteItem,
-    WireOnlineInfo, payload_type,
+    WireBarragerMsg, WireChatAppearance, WireChatReactionMsg, WireChatRoomMsg, WireChatRoomNode,
+    WireMuteItem, WireOnlineInfo, payload_type,
 };
 use crate::wire::redpacket::WireRedPacketStatusMsg;
 use crate::ws::{ParsedMessageHandler, RetryPolicy, WsConnection, WsLogHook, build_ws_url};
@@ -377,6 +377,43 @@ impl FishPi {
 }
 
 impl ChatRoomApi {
+    /// 获取当前聊天外观（API v3）。需要第一方 Bearer token 及 `profile.read`。
+    pub async fn get_chat_appearance(
+        &self,
+        access_token: &str,
+    ) -> Result<ChatAppearance, crate::client::V3Error> {
+        let wire: WireChatAppearance = self
+            .0
+            .v3()
+            .await?
+            .get_json("api/v3/me/chat-appearance", access_token)
+            .await?;
+        Ok(wire.into())
+    }
+
+    /// 更新聊天外观（API v3）。需要第一方 Bearer token 及 `settings.write`。
+    /// 同一次逻辑更新的重试应复用同一个 `idempotency_key`。
+    pub async fn set_chat_appearance(
+        &self,
+        access_token: &str,
+        idempotency_key: &str,
+        bubble_id: &str,
+        frame_id: &str,
+    ) -> Result<ChatAppearance, crate::client::V3Error> {
+        let wire: WireChatAppearance = self
+            .0
+            .v3()
+            .await?
+            .put_json(
+                "api/v3/me/chat-appearance",
+                access_token,
+                idempotency_key,
+                &json!({ "bubbleId": bubble_id, "frameId": frame_id }),
+            )
+            .await?;
+        Ok(wire.into())
+    }
+
     /// 解析聊天室节点，返回 (WS URL, 节点中文名)。
     async fn chatroom_ws_url(&self) -> Result<(String, Option<String>), Error> {
         let fallback = || {

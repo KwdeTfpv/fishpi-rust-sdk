@@ -1,6 +1,7 @@
 //! Domain 层：对外类型。
 
 pub mod article;
+pub mod appearance;
 pub mod breezemoon;
 pub mod chat;
 pub mod chatroom;

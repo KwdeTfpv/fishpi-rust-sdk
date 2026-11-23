@@ -3,7 +3,8 @@ use crate::domain::redpacket::RedPacketStatusMsg;
 use crate::domain::user::Metal;
 use crate::ids::UserId;
 use crate::wire::chatroom::{
-    WireBarragerMsg, WireChatReactionMsg, WireChatRoomMsg, WireOnlineInfo, payload_type,
+    WireBarragerMsg, WireChatAppearance, WireChatReactionMsg, WireChatRoomMsg, WireOnlineInfo,
+    payload_type,
 };
 use serde_json::Value;
 
@@ -119,6 +120,27 @@ pub struct BarragerCost {
     pub unit: String,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChatAppearance {
+    pub bubble_id: String,
+    pub frame_id: String,
+    pub version: Value,
+    pub bubble_revision: Option<Value>,
+    pub bubble_style: Option<Value>,
+}
+
+impl From<WireChatAppearance> for ChatAppearance {
+    fn from(w: WireChatAppearance) -> Self {
+        Self {
+            bubble_id: w.bubble_id,
+            frame_id: w.frame_id,
+            version: w.version,
+            bubble_revision: w.bubble_revision,
+            bubble_style: w.bubble_style,
+        }
+    }
+}
+
 /// 聊天室消息。
 #[derive(Clone, Debug)]
 pub struct ChatRoomMsg {
@@ -134,6 +156,7 @@ pub struct ChatRoomMsg {
     pub client: String,
     pub reaction_summary: Vec<ReactionSummaryItem>,
     pub current_user_reaction: String,
+    pub appearance: Option<ChatAppearance>,
 }
 
 impl ChatRoomMsg {
@@ -176,6 +199,7 @@ impl From<WireChatRoomMsg> for ChatRoomMsg {
             client,
             reaction_summary: w.reaction_summary.into_iter().map(Into::into).collect(),
             current_user_reaction: w.current_user_reaction,
+            appearance: w.appearance.map(Into::into),
         }
     }
 }

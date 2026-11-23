@@ -1,6 +1,7 @@
 //! Wire 层：映射服务端响应原始形状。
 
 pub mod article;
+pub mod appearance;
 pub mod breezemoon;
 pub mod chat;
 pub mod chatroom;

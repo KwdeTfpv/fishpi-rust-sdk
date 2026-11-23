@@ -36,4 +36,7 @@ pub mod utils;
 pub mod wire;
 pub mod ws;
 
-pub use client::{FishPi, FishPiBuilder};
+pub use client::{
+    FishPi, FishPiBuilder, V3CaptchaOptions, V3ChatEvent, V3ChatEventKind, V3ChatRealtime,
+    V3Client, V3Cookie, V3Error, V3ErrorKind, V3Me, V3RealtimeTicket, V3Session,
+};
