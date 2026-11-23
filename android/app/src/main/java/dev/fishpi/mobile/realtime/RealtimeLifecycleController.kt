@@ -74,6 +74,10 @@ object RealtimeLifecycleController {
             if (current != null && !RealtimeConnectionManager.hasActiveChatHandle()) {
                 RealtimeConnectionManager.start(current)
             }
+            val context = appContext
+            if (context != null && keepAliveEnabled() && (current != null || restoreSession(context) != null)) {
+                RealtimeNotifier.cancelKeepAliveRestoreNotice(context)
+            }
         } else if (!keepAliveEnabled()) {
             RealtimeConnectionManager.stop()
         } else if (current != null && !RealtimeConnectionManager.hasActiveChatHandle()) {
@@ -101,6 +105,7 @@ object RealtimeLifecycleController {
         serviceStarting = false
         serviceRunning = true
         _status.value = KeepAliveStatus.Running
+        appContext?.let { RealtimeNotifier.cancelKeepAliveRestoreNotice(it) }
         val current = session ?: restoreSession(appContext ?: return)
         if (current != null) {
             session = current
@@ -147,6 +152,7 @@ object RealtimeLifecycleController {
         if (foreground && !serviceRunning) return
         val shouldRun = keepAliveEnabled() && (session != null || restoreSession(context) != null)
         if (!shouldRun) {
+            RealtimeNotifier.cancelKeepAliveRestoreNotice(context)
             if (serviceRunning) {
                 RealtimeKeepAliveService.stop(context)
                 serviceRunning = false

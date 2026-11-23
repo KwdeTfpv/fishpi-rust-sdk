@@ -21,7 +21,7 @@ class RealtimeBootReceiver : BroadcastReceiver() {
         if (Build.VERSION.SDK_INT >= 35 && intent.action == Intent.ACTION_BOOT_COMPLETED) {
             RealtimeNotifier.notify(
                 context = context,
-                id = 7101,
+                id = RealtimeNotifier.KEEPALIVE_RESTORE_NOTIFICATION_ID,
                 title = "后台保活需要恢复",
                 body = "点击打开摸鱼派，恢复后台在线",
                 target = RealtimeNavTarget.Notice,

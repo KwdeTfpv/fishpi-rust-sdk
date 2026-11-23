@@ -19,6 +19,7 @@ object RealtimeNotifier {
     const val CHANNEL_PRIVATE = "fishpi.private"
     const val CHANNEL_SYSTEM = "fishpi.system"
     const val KEEPALIVE_NOTIFICATION_ID = 1001
+    const val KEEPALIVE_RESTORE_NOTIFICATION_ID = 7101
 
     private const val LEGACY_CHANNEL_MESSAGES = "fishpi.messages"
 
@@ -82,6 +83,12 @@ object RealtimeNotifier {
                 description = category.description
             }
             manager.createNotificationChannel(channel)
+        }
+    }
+
+    fun cancelKeepAliveRestoreNotice(context: Context) {
+        runCatching {
+            NotificationManagerCompat.from(context).cancel(KEEPALIVE_RESTORE_NOTIFICATION_ID)
         }
     }
 
