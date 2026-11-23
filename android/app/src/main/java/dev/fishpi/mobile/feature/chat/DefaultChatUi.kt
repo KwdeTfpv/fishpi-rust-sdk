@@ -61,6 +61,7 @@ import androidx.compose.material.icons.rounded.Tag
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -79,6 +80,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -125,6 +128,8 @@ import dev.fishpi.mobile.feature.chat.barrage.ChatBarrageComposerState
 import dev.fishpi.mobile.feature.chat.barrage.ChatBarrageUiModel
 import dev.fishpi.mobile.feature.chat.barrage.ui.ChatBarrageComposerDialog
 import dev.fishpi.mobile.feature.chat.barrage.ui.ChatBarrageOverlay
+import dev.fishpi.mobile.feature.chat.appearance.AppearancePanel
+import dev.fishpi.mobile.feature.chat.appearance.AppearanceShopUiState
 import dev.fishpi.mobile.shared.message.native.MessageActionAnchor
 import dev.fishpi.mobile.shared.message.native.NativeMessageList
 import dev.fishpi.mobile.shared.message.native.rememberNativeMessageListController
@@ -184,6 +189,8 @@ internal fun DefaultChatUi(
         liveness = state.liveness,
         barrages = state.barrages,
         barrageComposer = state.barrageComposer,
+        chatAppearance = state.chatAppearance,
+        appearanceShop = state.appearanceShop,
         dispatch = dispatch,
     )
 }
@@ -332,6 +339,8 @@ private fun DefaultChatUiContent(
     liveness: Double?,
     barrages: List<ChatBarrageUiModel>,
     barrageComposer: ChatBarrageComposerState,
+    chatAppearance: ChatAppearanceUiState,
+    appearanceShop: AppearanceShopUiState,
     dispatch: (ChatAction) -> Unit,
 ) {
     val session = LocalAppSession.current
@@ -362,6 +371,7 @@ private fun DefaultChatUiContent(
     val previewLinkUrl = bridge.previewLinkUrl
     var onlineUsersOpen by remember { mutableStateOf(false) }
     var chatActionsOpen by remember { mutableStateOf(false) }
+    var chatAppearanceOpen by remember { mutableStateOf(false) }
     var qrScannerOpen by remember { mutableStateOf(false) }
     var topicEditorOpen by remember { mutableStateOf(false) }
     var topicDraft by remember { mutableStateOf("") }
@@ -990,9 +1000,11 @@ private fun DefaultChatUiContent(
                     chatActionsOpen = false
                     bridge.showBlockedMessages()
                 },
-                onCycleTheme = {
+                onOpenAppearance = {
                     chatActionsOpen = false
-                    onCycleTheme()
+                    chatAppearanceOpen = true
+                    dispatch(ChatAction.LoadChatAppearance)
+                    dispatch(ChatAction.LoadAppearanceShop)
                 },
                 onTogglePluginFloat = {
                     chatActionsOpen = false
@@ -1004,6 +1016,38 @@ private fun DefaultChatUiContent(
                         .putBoolean(ChatPluginFloatHiddenKey, !pluginFloatOpen)
                         .apply()
                 },
+            )
+        }
+        if (chatAppearanceOpen) {
+            BackLayer(
+                key = "chat-appearance",
+                enabled = true,
+                onBack = { chatAppearanceOpen = false },
+            )
+            AppearancePanel(
+                appearance = chatAppearance,
+                shop = appearanceShop,
+                avatarUrl = session.user.userAvatarUrl,
+                onDismiss = { chatAppearanceOpen = false },
+                onSelectBubble = { dispatch(ChatAction.SelectChatBubble(it)) },
+                onSelectFrame = { dispatch(ChatAction.SelectChatFrame(it)) },
+                onSave = { dispatch(ChatAction.SaveChatAppearance) },
+                onRetryEquip = { dispatch(ChatAction.RetryChatAppearance) },
+                onAuthorize = { password, mfaCode ->
+                    dispatch(ChatAction.AuthorizeChatAppearance(password, mfaCode))
+                },
+                onCompleteCaptcha = { captchaJson ->
+                    dispatch(ChatAction.CompleteChatAppearanceCaptcha(captchaJson))
+                },
+                onRefresh = {
+                    dispatch(ChatAction.LoadChatAppearance)
+                    dispatch(ChatAction.LoadAppearanceShop)
+                },
+                onConfirmPurchase = { productId, days ->
+                    dispatch(ChatAction.ConfirmAppearancePurchase(productId, days))
+                },
+                onRetryPurchase = { dispatch(ChatAction.RetryAppearancePurchase) },
+                onDismissPurchase = { dispatch(ChatAction.DismissAppearancePurchase) },
             )
         }
         if (qrScannerOpen) {
@@ -2062,7 +2106,7 @@ private fun ChatActionsSheet(
     onRefresh: () -> Unit,
     onReconnect: () -> Unit,
     onOpenBlocked: () -> Unit,
-    onCycleTheme: () -> Unit,
+    onOpenAppearance: () -> Unit,
     onTogglePluginFloat: () -> Unit,
 ) {
     val palette = LocalFishPiPalette.current
@@ -2162,9 +2206,9 @@ private fun ChatActionsSheet(
                             modifier = Modifier.weight(1f),
                         )
                         ChatActionSheetMiniItem(
-                            title = "主题",
+                            title = "外观",
                             icon = Icons.Rounded.Palette,
-                            onClick = onCycleTheme,
+                            onClick = onOpenAppearance,
                             modifier = Modifier.weight(1f),
                         )
                         ChatActionSheetMiniItem(
@@ -2568,3 +2612,6 @@ private fun ChatComposerDock(
             .windowInsetsPadding(WindowInsets.imeAnimationTarget.union(WindowInsets.navigationBars)),
     )
 }
+
+
+

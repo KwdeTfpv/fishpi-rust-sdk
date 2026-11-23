@@ -1,6 +1,7 @@
 package dev.fishpi.mobile.feature.chat.render
 
 import dev.fishpi.mobile.data.ChatFilterConfig
+import dev.fishpi.mobile.data.ChatAppearanceSnapshot
 import dev.fishpi.mobile.data.ChatContentKind
 import dev.fishpi.mobile.data.ChatMediaKind
 import dev.fishpi.mobile.data.ChatRoomMessage
@@ -315,8 +316,13 @@ private fun listItemCacheKey(
 ): String {
     val message = groupMessages.first()
     val previousKey = previous?.renderHintCacheKey().orEmpty()
-    return "$previousKey->${message.renderHintCacheKey(revoked)}-$revoked-$echoKey-${groupMessages.size}"
+    return "$previousKey->${message.renderHintCacheKey(revoked)}-$revoked-$echoKey-${groupMessages.size}-${message.appearance.cacheSignature()}"
 }
+
+private fun ChatAppearanceSnapshot?.cacheSignature(): String =
+    this?.let {
+        "${it.bubbleId}:${it.frameId}:${it.version}:${it.bubbleRevision ?: -1}:${it.bubbleStyleJson.orEmpty().hashCode()}"
+    } ?: "none"
 
 private fun LinkedHashMap<String, ChatListItem>.retainRecentListItems(
     model: ChatRenderModel,

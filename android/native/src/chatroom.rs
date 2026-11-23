@@ -92,7 +92,6 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_getChatRoomHisto
 
     to_jstring(&mut env, result)
 }
-
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_setChatRoomClientType(
     mut env: JNIEnv,
@@ -219,7 +218,9 @@ pub extern "system" fn Java_dev_fishpi_mobile_data_FishPiNative_sendChatRoomBarr
                 let client = with_stored_tag(current_user(&token).await?);
                 let message = timeout(
                     Duration::from_secs(15),
-                    client.chatroom().barrager(text, Some(barrage_color.as_str())),
+                    client
+                        .chatroom()
+                        .barrager(text, Some(barrage_color.as_str())),
                 )
                 .await
                 .map_err(|_| "弹幕发送超时".to_string())?

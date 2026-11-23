@@ -1,6 +1,9 @@
 package dev.fishpi.mobile.data
 
-/** @ 提及候选人：用户名 + 头像，供输入框候选弹窗使用。 */
+data class FishPiLoginResult(
+    val apiKey: String,
+)
+
 data class AtUserCandidate(
     val userName: String,
     val avatarUrl: String = "",
@@ -98,6 +101,54 @@ data class PrivateChatMessage(
     val schema: Int = 2,
 )
 
+
+data class ChatAppearanceSnapshot(
+    val bubbleId: String = "classic",
+    val frameId: String = "none",
+    val version: Int = 1,
+    val bubbleRevision: Long? = null,
+    val bubbleStyleJson: String? = null,
+)
+
+data class AppearanceShopItem(
+    val id: String,
+    val kind: String,
+    val styleId: String,
+    val name: String,
+    val version: Long,
+    val price7: Long,
+    val price30: Long,
+    val enabled: Boolean,
+    val revision: Long,
+    val vipIncluded: Boolean,
+    val bubbleStyleJson: String?,
+)
+
+data class AppearanceEntitlement(
+    val productId: String,
+    val expiresAt: Long,
+)
+
+data class AppearanceInventory(
+    val entitlements: List<AppearanceEntitlement>,
+    val mountId: String,
+    val serverNow: Long,
+    val balance: Long,
+)
+
+data class AppearancePurchaseResult(
+    val id: String,
+    val productId: String,
+    val paidPoints: Long,
+    val expiresAt: Long,
+)
+
+data class MembershipStatus(
+    val active: Boolean,
+    val levelCode: String,
+    val expiresAt: Long,
+)
+
 data class ChatRoomMessage(
     val oId: String,
     val userName: String,
@@ -114,6 +165,7 @@ data class ChatRoomMessage(
     val currentUserReaction: String = "",
     val redPacket: RedPacketPreview? = null,
     val music: MusicPreview? = null,
+    val appearance: ChatAppearanceSnapshot? = null,
 ) {
     fun mediaUrls(kind: ChatMediaKind): List<String> =
         media.filter { it.kind == kind }.map { it.url }

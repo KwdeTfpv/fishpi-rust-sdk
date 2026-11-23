@@ -54,13 +54,149 @@ class FishPiApiClient private constructor() {
         return block()
     }
 
-    fun login(nameOrEmail: String, password: String, mfaCode: String? = null): String {
+    fun login(nameOrEmail: String, password: String, mfaCode: String? = null): FishPiLoginResult {
         return traceApi("login") {
-            dataObject(FishPiNative.login(nameOrEmail, password, mfaCode.orEmpty()))
-                .optString("apiKey")
+            val data = dataObject(FishPiNative.login(nameOrEmail, password, mfaCode.orEmpty()))
+            val apiKey = data.optString("apiKey")
                 .ifBlank { throw IllegalStateException("登录成功但没有返回 API Key") }
+            FishPiLoginResult(apiKey = apiKey)
         }
     }
+
+    fun v3Login(nameOrEmail: String, password: String, mfaCode: String? = null): V3SessionCredentials {
+        return traceApi("v3Login") {
+            FishPiNative.v3Login(nameOrEmail, password, mfaCode.orEmpty())
+                .parseV3Envelope()
+                .v3Data()
+                .toV3SessionCredentials()
+        }
+    }
+
+    fun v3Refresh(cookiesJson: String): V3SessionCredentials {
+        return traceApi("v3Refresh") {
+            FishPiNative.v3Refresh(cookiesJson).parseV3Envelope().v3Data().toV3SessionCredentials()
+        }
+    }
+
+    fun v3Logout(cookiesJson: String) {
+        if (cookiesJson.isBlank()) return
+        traceApi("v3Logout") { FishPiNative.v3Logout(cookiesJson).parseV3Envelope() }
+    }
+
+    fun v3Me(accessToken: String): V3Identity {
+        if (accessToken.isBlank()) {
+            throw V3RemoteException(V3FailureKind.Unauthorized, null, null, null, "缺少 V3 访问令牌")
+        }
+        return traceApi("v3Me") {
+            val data = FishPiNative.v3Me(accessToken).parseV3Envelope().v3Data()
+            V3Identity(
+                userId = data.optString("userId"),
+                userName = data.optString("userName"),
+                userNickname = data.optString("userNickname"),
+            )
+        }
+    }
+
+    fun v3CaptchaOptions(): V3CaptchaOptions {
+        return traceApi("v3CaptchaOptions") {
+            val data = FishPiNative.v3CaptchaOptions().parseV3Envelope().v3Data()
+            V3CaptchaOptions(
+                provider = data.optString("provider"),
+                captchaId = data.optString("captchaId"),
+            )
+        }
+    }
+
+    fun validateCaptcha(captchaJson: String) {
+        if (captchaJson.isBlank()) {
+            throw V3RemoteException(V3FailureKind.Protocol, null, null, null, "人机验证结果为空")
+        }
+        traceApi("validateCaptcha") { FishPiNative.validateCaptcha(captchaJson).parseV3Envelope() }
+    }
+
+    fun getChatAppearance(accessToken: String): ChatAppearanceSnapshot {
+        if (accessToken.isBlank()) {
+            throw V3RemoteException(V3FailureKind.Unauthorized, null, null, null, "缺少 V3 访问令牌")
+        }
+        return traceApi("getChatAppearance") {
+            FishPiNative.getChatAppearance(accessToken)
+                .parseV3Envelope()
+                .v3Data()
+                .toChatAppearanceSnapshot()
+        }
+    }
+
+    fun setChatAppearance(
+        accessToken: String,
+        idempotencyKey: String,
+        bubbleId: String,
+        frameId: String,
+    ): ChatAppearanceSnapshot {
+        if (accessToken.isBlank()) {
+            throw V3RemoteException(V3FailureKind.Unauthorized, null, null, null, "缺少 V3 访问令牌")
+        }
+        if (idempotencyKey.isBlank()) throw IllegalArgumentException("幂等键不能为空")
+        return traceApi("setChatAppearance") {
+            FishPiNative.setChatAppearance(accessToken, idempotencyKey, bubbleId, frameId)
+                .parseV3Envelope()
+                .v3Data()
+                .toChatAppearanceSnapshot()
+        }
+    }
+
+    fun getAppearanceShop(accessToken: String): List<AppearanceShopItem> {
+        return traceApi("getAppearanceShop") {
+            FishPiNative.getAppearanceShop(accessToken)
+                .parseV3Envelope()
+                .v3Data()
+                .toAppearanceShopItemList()
+        }
+    }
+
+    fun getAppearanceItems(accessToken: String): AppearanceInventory {
+        if (accessToken.isBlank()) {
+            throw V3RemoteException(V3FailureKind.Unauthorized, null, null, null, "缺少 V3 访问令牌")
+        }
+        return traceApi("getAppearanceItems") {
+            FishPiNative.getAppearanceItems(accessToken)
+                .parseV3Envelope()
+                .v3Data()
+                .toAppearanceInventory()
+        }
+    }
+
+    fun getMembership(accessToken: String): MembershipStatus {
+        if (accessToken.isBlank()) {
+            throw V3RemoteException(V3FailureKind.Unauthorized, null, null, null, "缺少 V3 访问令牌")
+        }
+        return traceApi("getMembership") {
+            FishPiNative.getMembership(accessToken)
+                .parseV3Envelope()
+                .v3Data()
+                .toMembershipStatus()
+        }
+    }
+
+    fun purchaseAppearanceItem(
+        accessToken: String,
+        idempotencyKey: String,
+        productId: String,
+        days: Int,
+        revision: Long,
+    ): AppearancePurchaseResult {
+        if (accessToken.isBlank()) {
+            throw V3RemoteException(V3FailureKind.Unauthorized, null, null, null, "缺少 V3 访问令牌")
+        }
+        if (idempotencyKey.isBlank()) throw IllegalArgumentException("幂等键不能为空")
+        if (productId.isBlank()) throw IllegalArgumentException("商品编号不能为空")
+        return traceApi("purchaseAppearanceItem") {
+            FishPiNative.purchaseAppearanceItem(accessToken, idempotencyKey, productId, days, revision)
+                .parseV3Envelope()
+                .v3Data()
+                .toAppearancePurchaseResult()
+        }
+    }
+
 
     fun fetchRegisterCaptcha(): String {
         return dataObject(FishPiNative.fetchRegisterCaptcha())

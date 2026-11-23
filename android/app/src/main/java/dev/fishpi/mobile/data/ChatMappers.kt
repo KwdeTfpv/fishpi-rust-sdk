@@ -20,8 +20,17 @@ internal fun JSONObject.toChatRoomMessage(): ChatRoomMessage {
         currentUserReaction = optString("currentUserReaction"),
         redPacket = optJSONObject("redPacket")?.toRedPacketPreview(),
         music = optJSONObject("music")?.toMusicPreview(),
+        appearance = optJSONObject("appearance")?.toChatAppearanceSnapshot(),
     )
 }
+
+internal fun JSONObject.toChatAppearanceSnapshot(): ChatAppearanceSnapshot = ChatAppearanceSnapshot(
+    bubbleId = (opt("bubbleId") as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: "classic",
+    frameId = (opt("frameId") as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: "none",
+    version = optInt("version", 0),
+    bubbleRevision = if (has("bubbleRevision") && !isNull("bubbleRevision")) optLong("bubbleRevision") else null,
+    bubbleStyleJson = optJSONObject("bubbleStyle")?.toString(),
+)
 
 internal fun JSONObject.toPrivateChatMessage(): PrivateChatMessage {
     return PrivateChatMessage(
@@ -48,6 +57,7 @@ internal fun PrivateChatMessage.toChatRoomMessage(): ChatRoomMessage {
         media = media,
         time = time,
         schema = schema,
+        appearance = null,
     )
 }
 

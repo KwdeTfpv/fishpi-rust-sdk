@@ -1,10 +1,15 @@
-use crate::media::{extract_image_urls, extract_link_urls, extract_video_urls, html_to_markdown, strip_html_tags};
+use crate::media::{
+    extract_image_urls, extract_link_urls, extract_video_urls, html_to_markdown, strip_html_tags,
+};
 use fishpi_sdk::domain::article::{
     ArticleDetail, ArticleDraftDetail, ArticleDraftSummary, ArticleListType, VoteStatus,
 };
+use fishpi_sdk::domain::appearance::{
+    AppearanceItems, AppearancePurchase, AppearanceShop, AppearanceShopItem, MembershipStatus,
+};
 use fishpi_sdk::domain::chat::{ChatData, ChatNotice};
 use fishpi_sdk::domain::chatroom::{
-    BarragerMsg, ChatRoomEvent, ChatRoomMsg, CustomMsg, MusicMsg, OnlineInfo,
+    BarragerMsg, ChatAppearance, ChatRoomEvent, ChatRoomMsg, CustomMsg, MusicMsg, OnlineInfo,
 };
 use fishpi_sdk::domain::notice::NoticeItem;
 use fishpi_sdk::domain::reaction::ReactionSummaryItem;
@@ -46,6 +51,87 @@ enum NoticeDataType {
 }
 
 /// 把表态汇总映射成 Android 侧读取的 JSON 数组。
+pub(crate) fn chat_appearance_to_json(appearance: &ChatAppearance) -> Value {
+    let mut value = json!({
+        "bubbleId": appearance.bubble_id,
+        "frameId": appearance.frame_id,
+        "version": appearance.version,
+    });
+    if let Some(revision) = &appearance.bubble_revision {
+        value["bubbleRevision"] = revision.clone();
+    }
+    if let Some(style) = &appearance.bubble_style {
+        value["bubbleStyle"] = style.clone();
+    }
+    value
+}
+
+/// 把外观商城目录映射成 Android 侧读取的 JSON（与权益响应同构，data 必须是对象）。
+pub(crate) fn appearance_shop_to_json(shop: &AppearanceShop) -> Value {
+    json!({
+        "list": shop
+            .items
+            .iter()
+            .map(appearance_shop_item_to_json)
+            .collect::<Vec<_>>(),
+    })
+}
+
+fn appearance_shop_item_to_json(item: &AppearanceShopItem) -> Value {
+    let mut value = json!({
+        "id": item.id,
+        "kind": item.kind,
+        "styleId": item.style_id,
+        "name": item.name,
+        "version": item.version,
+        "price7": item.price7,
+        "price30": item.price30,
+        "enabled": item.enabled,
+        "revision": item.revision,
+        "vipIncluded": item.vip_included,
+    });
+    if let Some(style) = &item.bubble_style {
+        value["bubbleStyle"] = style.clone();
+    }
+    value
+}
+
+/// 把本人外观权益映射成 Android 侧读取的 JSON。
+pub(crate) fn appearance_items_to_json(items: &AppearanceItems) -> Value {
+    json!({
+        "list": items
+            .entitlements
+            .iter()
+            .map(|entry| json!({
+                "productId": entry.product_id,
+                "expiresAt": entry.expires_at,
+            }))
+            .collect::<Vec<_>>(),
+        "mountId": items.mount_id,
+        "serverNow": items.server_now,
+        "balance": items.balance,
+    })
+}
+
+/// 把外观购买结果映射成 Android 侧读取的 JSON。
+pub(crate) fn appearance_purchase_to_json(purchase: &AppearancePurchase) -> Value {
+    json!({
+        "id": purchase.id,
+        "productId": purchase.product_id,
+        "paidPoints": purchase.paid_points,
+        "expiresAt": purchase.expires_at,
+    })
+}
+
+/// 把本人会员状态映射成 Android 侧读取的 JSON。
+pub(crate) fn membership_status_to_json(status: &MembershipStatus) -> Value {
+    json!({
+        "active": status.active,
+        "levelCode": status.level_code,
+        "expiresAt": status.expires_at,
+    })
+}
+
 pub(crate) fn reaction_summary_to_json(summary: &[ReactionSummaryItem]) -> Value {
     Value::Array(
         summary
@@ -136,6 +222,7 @@ fn chat_message_to_json_with_kind(msg: ChatRoomMsg, self_username: &str, kind: &
     } else {
         chat_media_to_json(&content_html, &content_md)
     };
+    let appearance = msg.appearance.clone();
     let mut payload = json!({
         "oId": msg.id,
         "userName": msg.user_name,
@@ -152,6 +239,9 @@ fn chat_message_to_json_with_kind(msg: ChatRoomMsg, self_username: &str, kind: &
     });
     if let Some(preview) = redpacket_preview {
         payload["redPacket"] = preview;
+    }
+    if let Some(appearance) = appearance.as_ref() {
+        payload["appearance"] = chat_appearance_to_json(appearance);
     }
     payload
 }
@@ -721,7 +811,12 @@ pub(crate) fn article_detail_to_json(item: ArticleDetail, page: u32) -> Value {
         .into_iter()
         .map(article_comment_to_json)
         .collect::<Vec<_>>();
-    let comment_page_count = item.pagination.as_ref().map(|p| p.count).unwrap_or(1).max(1);
+    let comment_page_count = item
+        .pagination
+        .as_ref()
+        .map(|p| p.count)
+        .unwrap_or(1)
+        .max(1);
     let markdown = if item.source.trim().is_empty() {
         item.content.clone()
     } else {
@@ -936,7 +1031,8 @@ mod tests {
 
     #[test]
     fn media_json_keeps_image_video_link_order() {
-        let html = r#"<p><img src="https://file.fishpi.cn/a.jpg"><a href="https://fishpi.cn/b">b</a></p>"#;
+        let html =
+            r#"<p><img src="https://file.fishpi.cn/a.jpg"><a href="https://fishpi.cn/b">b</a></p>"#;
         let markdown = "![c](https://file.fishpi.cn/c.jpg) [v](https://file.fishpi.cn/d.mp4) https://fishpi.cn/e";
         let media = chat_media_to_json(html, markdown);
         let items = media.as_array().expect("media array");
@@ -946,8 +1042,16 @@ mod tests {
         assert_eq!(items[1]["url"], "https://file.fishpi.cn/c.jpg");
         assert_eq!(items[2]["kind"], "video");
         assert_eq!(items[2]["url"], "https://file.fishpi.cn/d.mp4");
-        assert!(items.iter().any(|item| item["url"] == "https://fishpi.cn/b"));
-        assert!(items.iter().any(|item| item["url"] == "https://fishpi.cn/e"));
+        assert!(
+            items
+                .iter()
+                .any(|item| item["url"] == "https://fishpi.cn/b")
+        );
+        assert!(
+            items
+                .iter()
+                .any(|item| item["url"] == "https://fishpi.cn/e")
+        );
     }
 
     #[test]

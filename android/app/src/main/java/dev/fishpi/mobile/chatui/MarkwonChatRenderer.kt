@@ -47,6 +47,7 @@ internal class MarkwonChatRenderer(
         messageKey: String,
         markdown: String,
         fallback: String,
+        textColor: Int = theme.bubbleText,
     ): Job? {
         val displayMarkdown = markdown.withTopicReferenceHardBreaks()
         return core.renderInto(
@@ -55,7 +56,7 @@ internal class MarkwonChatRenderer(
             markdown = displayMarkdown,
             fallback = fallback,
         ) { view ->
-            view.setTextColor(theme.bubbleText)
+            view.setTextColor(textColor)
             view.textSize = theme.bodyTextSizeSp
             view.includeFontPadding = false
             view.maxLines = Int.MAX_VALUE

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    min-height: 100%;
+}
+#box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+}
+</style>
+</head>
+<body>
+<div id="box"></div>
+<script src="https://static.geetest.com/v4/gt4.js"></script>
+<script>
+function startGeetest(captchaId) {
+    if (typeof initGeetest4 !== 'function') {
+        AndroidCaptcha.onFailed('验证组件脚本未能加载');
+        return;
+    }
+    try {
+        initGeetest4({
+            captchaId: captchaId,
+            product: 'float',
+            language: 'zh-cn'
+        }, function (captchaObj) {
+            captchaObj.appendTo('#box');
+            captchaObj.onSuccess(function () {
+                var result = captchaObj.getValidate();
+                if (result) {
+                    AndroidCaptcha.onResult(JSON.stringify(result));
+                } else {
+                    AndroidCaptcha.onFailed('验证结果为空，请重试');
+                }
+            });
+            captchaObj.onError(function (error) {
+                AndroidCaptcha.onFailed('验证组件异常: ' + JSON.stringify(error || {}));
+            });
+        });
+    } catch (error) {
+        AndroidCaptcha.onFailed('验证组件初始化失败: ' + error);
+    }
+}
+</script>
+</body>
+</html>

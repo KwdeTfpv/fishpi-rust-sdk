@@ -122,6 +122,7 @@ import dev.fishpi.mobile.data.SessionStore
 import dev.fishpi.mobile.data.UpdateChecker
 import dev.fishpi.mobile.data.UpdateDownloader
 import dev.fishpi.mobile.data.UpdateInstaller
+import dev.fishpi.mobile.data.V3SessionManager
 import dev.fishpi.mobile.auth.VisitorVerificationEvents
 import dev.fishpi.mobile.feature.article.ArticleRoute
 import dev.fishpi.mobile.feature.breezemoon.BreezemoonRoute
@@ -197,11 +198,15 @@ internal fun MainShell(
     val lifecycleOwner = LocalLifecycleOwner.current
     val store = remember { SessionStore(context.applicationContext) }
     val scope = rememberCoroutineScope()
-    val chatController = remember(session.apiKey, session.user.userName) {
+    val v3Sessions = remember { V3SessionManager.get(context.applicationContext) }
+    val chatController = remember(session.apiKey, session.user.userId, session.user.userName) {
         ChatController(
             context = context.applicationContext,
             apiKey = session.apiKey,
             currentUsername = session.user.userName,
+            legacyUserId = session.user.userId,
+            v3 = v3Sessions,
+            v3Notice = session.v3Notice,
         )
     }
 

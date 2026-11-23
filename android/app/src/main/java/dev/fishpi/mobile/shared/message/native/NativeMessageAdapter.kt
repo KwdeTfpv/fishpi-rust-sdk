@@ -45,6 +45,9 @@ import coil3.request.ImageRequest
 import coil3.size.Precision
 import coil3.size.Size
 import dev.fishpi.mobile.shared.message.ChatListItem
+import dev.fishpi.mobile.shared.message.MessageUpdateKind
+import dev.fishpi.mobile.shared.message.MessageUpdatePlanner
+import dev.fishpi.mobile.shared.message.stableNativeKey
 import dev.fishpi.mobile.shared.message.allRenderableImageUrls
 import dev.fishpi.mobile.R
 import dev.fishpi.mobile.chatui.MarkwonChatRenderer
@@ -56,7 +59,6 @@ import dev.fishpi.mobile.utils.cleanImageSplitTextSegment
 import dev.fishpi.mobile.utils.WhitespaceRegex
 import dev.fishpi.mobile.utils.MarkdownMediaType
 import dev.fishpi.mobile.utils.toFishPiGeneratedBadgeOrNull
-import kotlinx.coroutines.Job
 import kotlin.math.roundToInt
 import dev.fishpi.mobile.utils.toMeasuredMessageText
 
@@ -201,6 +203,10 @@ internal class NativeMessageAdapter(
         if (!pendingEntranceKeys.remove(key)) return
         playedEntranceKeys.add(key)
         holder.playEntranceAnimation()
+        val appearance = currentItems[position].message.appearance
+        if (appearance?.bubbleId == NightSakuraId || appearance?.frameId == NightSakuraId) {
+            holder.playSakuraArrival()
+        }
     }
 
     override fun onViewDetachedFromWindow(holder: NativeMessageViewHolder) {
@@ -212,6 +218,7 @@ internal class NativeMessageAdapter(
 internal const val NativeRedPacketBackground = 0xFFE94E2F.toInt()
 internal const val NativeRedPacketText = 0xFFFFF7EC.toInt()
 private const val PLAYED_ENTRANCE_CAP = 200
+private const val NightSakuraId = ChatAppearanceSupport.NightSakura
 private const val ENTRANCE_DURATION_MS = 260L
 private const val ENTRANCE_RISE_DP = 16f
 private const val ENTRANCE_START_SCALE = 0.92f
@@ -244,8 +251,7 @@ private class ChatItemDiff(
     }
 }
 
-private fun ChatListItem.stableNativeKey(): String =
-    echoKey.ifBlank { message.oId.ifBlank { "${message.time}:${message.userName}:${message.content.hashCode()}" } }
+
 
 private fun List<ChatListItem>.sameContentAs(other: List<ChatListItem>): Boolean {
     if (size != other.size) return false
@@ -478,42 +484,6 @@ private class ChatVideoCard(
     }
 }
 
-private class ChatBubbleFrame(
-    context: android.content.Context,
-    private val themeProvider: () -> NativeMessageTheme,
-) : FrameLayout(context) {
-    private val theme: NativeMessageTheme
-        get() = themeProvider()
-
-    private fun themePx(value: Float): Int = (value * resources.displayMetrics.density).toInt()
-
-    val content: LinearLayout = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-    }
-
-    init {
-        clipChildren = false
-        clipToPadding = false
-        addView(content, LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        ))
-    }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        measureChild(content, widthMeasureSpec, heightMeasureSpec)
-        val desiredWidth = content.measuredWidth.coerceAtLeast(themePx(theme.bubbleMinWidthDp))
-        val desiredHeight = content.measuredHeight
-        val resolvedWidth = resolveSize(desiredWidth, widthMeasureSpec)
-        val resolvedHeight = resolveSize(desiredHeight, heightMeasureSpec)
-        setMeasuredDimension(resolvedWidth, resolvedHeight)
-    }
-
-    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-        content.layout(0, 0, content.measuredWidth, content.measuredHeight)
-    }
-}
-
 internal class NativeMessageViewHolder(
     private val view: LinearLayout,
     private val themeProvider: () -> NativeMessageTheme,
@@ -532,18 +502,26 @@ internal class NativeMessageViewHolder(
     private val onRepeatClick: (ChatRoomMessage) -> Unit,
     private val onVideoFullscreenClick: (String, PlaybackSession) -> Unit,
 ) : RecyclerView.ViewHolder(view) {
-    private var renderJob: Job? = null
     private var sourcePopup: PopupWindow? = null
     private var boundItem: ChatListItem? = null
     private var boundMine = false
     private var boundAvatars = false
     private var boundTheme: NativeMessageTheme? = null
-    private var skeleton: Skeleton? = null
+    private var boundBodyColor: Int = 0
+    private var rowView: NativeMessageRowView? = null
     private var drawableCacheTheme: NativeMessageTheme? = null
     private val drawableCache = HashMap<Long, GradientDrawable>(24)
     private val bubbleBackgroundCache = HashMap<Int, GradientDrawable>(4)
     private val theme: NativeMessageTheme
         get() = themeProvider()
+    private val bodyRenderer = MessageBodyRenderer(
+        context = view.context,
+        markdownRendererProvider = { markdownRendererProvider() },
+        styleText = { textView -> textView.configureBodyText() },
+        attachLongPress = { textView, message, isMine, anchorView ->
+            textView.enableMessageLongPress(message, isMine, anchorView)
+        },
+    )
     private val markdownRenderer: MarkwonChatRenderer
         get() = markdownRendererProvider()
     private val boxRadius: Float
@@ -557,9 +535,10 @@ internal class NativeMessageViewHolder(
     private fun themeControlPx(): Int = dp(theme.spacingControlDp).roundToInt()
 
     fun recycle() {
-        renderJob?.cancel()
-        renderJob = null
+        stopSakuraArrival()
+        bodyRenderer.cancel()
         boundItem = null
+        rowView?.recycle()
         dismissSourcePopup()
         view.animate().cancel()
         resetEntranceTransforms()
@@ -570,10 +549,19 @@ internal class NativeMessageViewHolder(
 
     fun pauseAnimations() {
         view.pauseAnimatedDrawables()
+        stopSakuraArrival()
     }
 
     fun resumeAnimations() {
         view.resumeAnimatedDrawables()
+    }
+
+    fun playSakuraArrival() {
+        rowView?.playSakuraArrival()
+    }
+
+    fun stopSakuraArrival() {
+        rowView?.stopSakuraArrival()
     }
 
     fun playEntranceAnimation() {
@@ -633,13 +621,30 @@ internal class NativeMessageViewHolder(
         ) {
             return
         }
+        val updateKind = MessageUpdatePlanner.plan(
+            previous = boundItem,
+            next = item,
+            sameContext = boundMine == isMine && boundAvatars == showAvatars && boundTheme === currentTheme,
+        )
+        if (updateKind != MessageUpdateKind.Full) {
+            when (updateKind) {
+                MessageUpdateKind.AppearanceOnly -> applyAppearanceOnly(item, isMine)
+                MessageUpdateKind.ReactionsOnly -> applyReactionsOnly(item, isMine)
+                MessageUpdateKind.AvatarOnly -> applyAvatarOnly(item, isMine)
+                MessageUpdateKind.Full -> Unit
+            }
+            boundItem = item
+            boundMine = isMine
+            boundAvatars = showAvatars
+            boundTheme = currentTheme
+            return
+        }
         boundItem = item
         boundMine = isMine
         boundAvatars = showAvatars
         boundTheme = currentTheme
         val message = item.message
-        renderJob?.cancel()
-        renderJob = null
+        bodyRenderer.cancel()
         dismissSourcePopup()
         view.stopAnimatedDrawables()
         view.removeAllViews()
@@ -653,125 +658,38 @@ internal class NativeMessageViewHolder(
             return
         }
 
-        val skeleton = this.skeleton ?: buildSkeleton().also { this.skeleton = it }
-        val row = skeleton.row
-        val column = skeleton.column
-        val bubble = skeleton.bubble
-
-        row.gravity = if (isMine) Gravity.END or Gravity.TOP else Gravity.START or Gravity.TOP
-        row.removeAllViews()
-
-        if (showAvatars && !isMine) {
-            row.addView(avatarView(message))
-        }
-
-        column.removeAllViews()
-        column.gravity = if (isMine) Gravity.END else Gravity.START
-        column.layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply {
-            leftMargin = if (isMine) 0 else themeItemPx()
-            rightMargin = if (isMine) themeItemPx() else 0
-        }
-
-        skeleton.authorLine.removeAllViews()
-        skeleton.authorLine.layoutParams = LinearLayout.LayoutParams(
-            themePx(theme.authorLineWidthDp),
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply {
-            topMargin = themePx(theme.authorLineTopMarginDp)
-        }
-        skeleton.authorLine.gravity =
-            if (isMine) Gravity.END or Gravity.CENTER_VERTICAL else Gravity.START or Gravity.CENTER_VERTICAL
-        skeleton.authorLine.setPadding(0, 0, 0, 0)
-        skeleton.authorName.text = message.authorLabel
-        skeleton.authorName.setTextColor(theme.authorName)
-        skeleton.authorName.textSize = theme.authorNameTextSizeSp
-        skeleton.authorLine.addView(skeleton.authorName)
-        column.addView(skeleton.authorLine)
-
-        bubble.content.removeAllViews()
-        bindBubble(bubble, message, item, isMine)
-        column.addView(bubble)
-
-        skeleton.metaHost.removeAllViews()
-        val meta = messageMetaLine(item, isMine)
-        if (meta == null) {
-            skeleton.metaHost.visibility = View.GONE
-        } else {
-            skeleton.metaHost.visibility = View.VISIBLE
-            skeleton.metaHost.addView(meta)
-        }
-        column.addView(skeleton.metaHost)
-
-        skeleton.reactionHost.removeAllViews()
-        if (message.reactionSummary.isEmpty()) {
-            skeleton.reactionHost.visibility = View.GONE
-        } else {
-            skeleton.reactionHost.visibility = View.VISIBLE
-            skeleton.reactionHost.addView(reactionRow(message, isMine, bubble))
-        }
-        column.addView(skeleton.reactionHost)
-
-        skeleton.repeatHost.removeAllViews()
-        val repeatStack = item.repeatStack
-        if (repeatStack == null) {
-            skeleton.repeatHost.visibility = View.GONE
-        } else {
-            skeleton.repeatHost.visibility = View.VISIBLE
-            skeleton.repeatHost.addView(repeatRow(message, repeatStack, isMine))
-        }
-        column.addView(skeleton.repeatHost)
-
-        row.addView(column)
-
-        if (showAvatars && isMine) {
-            row.addView(avatarView(message))
-        }
-
-        view.addView(row)
+        val rowView = this.rowView ?: buildRowView().also { this.rowView = it }
+        rowView.bindLayout(isMine, showAvatars)
+        if (showAvatars) rowView.bindAvatar(avatarState(message, isMine))
+        rowView.bindAuthor(message.authorLabel)
+        rowView.content.removeAllViews()
+        bindBubble(rowView.bubble, message, item, isMine)
+        rowView.attachBubble()
+        rowView.bindMeta(messageMetaLine(item, isMine))
+        rowView.bindReactions(
+            if (message.reactionSummary.isEmpty()) {
+                null
+            } else {
+                reactionRow(message, isMine, rowView.bubble)
+            },
+        )
+        rowView.bindRepeat(item.repeatStack?.let { stack -> repeatRow(message, stack, isMine) })
+        view.addView(rowView)
     }
 
-    private fun buildSkeleton(): Skeleton {
-        val context = view.context
-        val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-        val column = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        val authorLine = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-        val authorName = TextView(context).apply {
-            setTextColor(theme.authorName)
-            textSize = theme.authorNameTextSizeSp
-            typeface = Typeface.DEFAULT_BOLD
-            includeFontPadding = false
-        }
-        val bubble = ChatBubbleFrame(context, themeProvider)
-        val metaHost = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        val reactionHost = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        val repeatHost = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            )
-        }
-        return Skeleton(row, column, authorLine, authorName, bubble, metaHost, reactionHost, repeatHost)
-    }
-
-    private class Skeleton(
-        val row: LinearLayout,
-        val column: LinearLayout,
-        val authorLine: LinearLayout,
-        val authorName: TextView,
-        val bubble: ChatBubbleFrame,
-        val metaHost: LinearLayout,
-        val reactionHost: LinearLayout,
-        val repeatHost: LinearLayout,
+    private fun buildRowView(): NativeMessageRowView = NativeMessageRowView(
+        context = view.context,
+        themeProvider = themeProvider,
+        avatarStore = avatarDrawableStore,
+        imageLoaderProvider = imageLoaderProvider,
+        onAvatarClick = { userName ->
+            dismissSourcePopup()
+            onAvatarClick(userName)
+        },
+        onAvatarLongPress = { userName ->
+            dismissSourcePopup()
+            onAvatarLongPress(userName)
+        },
     )
 
     private fun serviceText(text: String): TextView {
@@ -793,6 +711,15 @@ internal class NativeMessageViewHolder(
         }
     }
 
+    private fun resetDrawableCache() {
+        val current = theme
+        if (drawableCacheTheme !== current) {
+            drawableCacheTheme = current
+            drawableCache.clear()
+            bubbleBackgroundCache.clear()
+        }
+    }
+
     private fun bubbleBackground(color: Int): GradientDrawable {
         resetDrawableCache()
         bubbleBackgroundCache[color]?.let { return it }
@@ -801,15 +728,6 @@ internal class NativeMessageViewHolder(
         }
         bubbleBackgroundCache[color] = created
         return created
-    }
-
-    private fun resetDrawableCache() {
-        val current = theme
-        if (drawableCacheTheme !== current) {
-            drawableCacheTheme = current
-            drawableCache.clear()
-            bubbleBackgroundCache.clear()
-        }
     }
 
     private fun cachedRoundRect(color: Int, radiusDp: Float): GradientDrawable {
@@ -824,47 +742,76 @@ internal class NativeMessageViewHolder(
         return created
     }
 
+
+    private fun applyReactionsOnly(item: ChatListItem, isMine: Boolean) {
+        val rowView = this.rowView ?: return
+        val message = item.message
+        rowView.bindReactions(
+            if (message.reactionSummary.isEmpty()) {
+                null
+            } else {
+                reactionRow(message, isMine, rowView.bubble)
+            },
+        )
+    }
+
+    private fun applyAvatarOnly(item: ChatListItem, mine: Boolean) {
+        val rowView = this.rowView ?: return
+        if (boundAvatars) rowView.bindAvatar(avatarState(item.message, mine))
+    }
+
+    private fun applyAppearanceOnly(item: ChatListItem, isMine: Boolean) {
+        val rowView = this.rowView ?: return
+        val message = item.message
+        val standaloneCard = item.isMediaOnlyMessage() || message.redPacket != null
+        val darkChrome = Color.luminance(theme.bubbleText) > 0.5f
+        val nextColor = rowView.bubble.bindMessage(
+            message = message,
+            isMine = isMine,
+            darkChrome = darkChrome,
+            standaloneCard = standaloneCard,
+            defaultBackground = {
+                bubbleBackground(if (isMine) theme.outgoingBubble else theme.incomingBubble)
+            },
+            imageLoader = imageLoaderProvider,
+        )
+        if (nextColor != boundBodyColor) {
+            bodyRenderer.applyTextColor(rowView.content, boundBodyColor, nextColor)
+            boundBodyColor = nextColor
+        }
+        if (boundAvatars) rowView.bindAvatar(avatarState(message, isMine))
+    }
+
     private fun bindBubble(
-        frame: ChatBubbleFrame,
+        frame: NativeChatBubbleView,
         message: ChatRoomMessage,
         item: ChatListItem,
         isMine: Boolean,
     ) {
-        val mediaOnly = item.isMediaOnlyMessage()
-        val standaloneCard = mediaOnly || message.redPacket != null
-        frame.background = when {
-            standaloneCard -> null
-            else -> bubbleBackground(if (isMine) theme.outgoingBubble else theme.incomingBubble)
-        }
-        frame.layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply {
-            topMargin = themePx(theme.bubbleTopMarginDp)
-        }
-        frame.elevation = 0f
+        val standaloneCard = item.isMediaOnlyMessage() || message.redPacket != null
+        val darkChrome = Color.luminance(theme.bubbleText) > 0.5f
         frame.enableMessageLongPress(message, isMine, frame)
-        if (standaloneCard) {
-            frame.content.setPadding(0, 0, 0, 0)
-        } else {
-            frame.content.setPadding(
-                themeControlPx() + themePx(theme.bubblePaddingHorizontalExtraDp),
-                themeControlPx() + themePx(theme.bubblePaddingTopExtraDp),
-                themeControlPx() + themePx(theme.bubblePaddingHorizontalExtraDp),
-                themeControlPx() + themePx(theme.bubblePaddingBottomExtraDp),
-            )
-        }
-
+        val bodyColor = frame.bindMessage(
+            message = message,
+            isMine = isMine,
+            darkChrome = darkChrome,
+            standaloneCard = standaloneCard,
+            defaultBackground = {
+                bubbleBackground(if (isMine) theme.outgoingBubble else theme.incomingBubble)
+            },
+            imageLoader = imageLoaderProvider,
+        )
+        boundBodyColor = bodyColor
         when {
-            item.revoked -> frame.content.addText("[该消息已撤回]", theme.bodyTextSizeSp)
-            message.contentKind == ChatContentKind.Barrage -> frame.content.addText(message.content, theme.bodyTextSizeSp)
+            item.revoked -> frame.content.addText("[该消息已撤回]", theme.bodyTextSizeSp, bodyColor)
+            message.contentKind == ChatContentKind.Barrage -> frame.content.addText(message.content, theme.bodyTextSizeSp, bodyColor)
             message.redPacket != null -> frame.content.addRedPacket(message, isMine, frame)
             else -> {
                 val markdown = item.renderHints.markdownContent
                 if (markdown.isNotBlank()) {
-                    frame.content.addMarkdownContent(message, item, isMine, frame)
+                    frame.content.addMarkdownContent(message, item, isMine, frame, bodyColor)
                 } else if (item.renderHints.plainFallback.isNotBlank()) {
-                    frame.content.addText(item.renderHints.plainFallback, theme.bodyTextSizeSp)
+                    frame.content.addText(item.renderHints.plainFallback, theme.bodyTextSizeSp, bodyColor)
                 }
                 item.renderHints.videoLinks.forEach { url -> frame.content.addVideo(url, message, isMine, frame) }
                 item.renderHints.previewLinks.take(1).forEach { url ->
@@ -873,6 +820,8 @@ internal class NativeMessageViewHolder(
             }
         }
     }
+
+
 
     private fun ChatListItem.isMediaOnlyMessage(): Boolean = renderHints.isMediaOnly
 
@@ -913,15 +862,10 @@ internal class NativeMessageViewHolder(
     }
 
     private fun LinearLayout.addText(text: CharSequence, size: Float, color: Int = theme.bubbleText) {
-        addView(TextView(context).apply {
-            this.text = text
-            textSize = size
-            setTextColor(color)
-            configureBodyText()
-        })
+        bodyRenderer.renderPlain(this, text, size, color)
     }
 
-    private fun LinearLayout.addMarkdownContent(message: ChatRoomMessage, item: ChatListItem, isMine: Boolean, anchorView: View) {
+    private fun LinearLayout.addMarkdownContent(message: ChatRoomMessage, item: ChatListItem, isMine: Boolean, anchorView: View, bodyColor: Int) {
         message.music?.let { music ->
             addMusicCard(
                 card = NativeMusicCard(
@@ -941,14 +885,14 @@ internal class NativeMessageViewHolder(
         if (content.isBlank()) return
         val tokens = item.renderHints.imageTokens.take(4)
         if (tokens.isEmpty()) {
-            addMarkdownText(message, item, content, anchorView, isMine)
+            addMarkdownText(message, item, content, anchorView, isMine, bodyColor)
             return
         }
         var cursor = 0
         tokens.forEachIndexed { index, token ->
             val before = content.substring(cursor, token.start).cleanImageSplitTextSegment()
             if (before.isNotBlank()) {
-                addMarkdownText(message, item, before, anchorView, isMine, ":text$index")
+                addMarkdownText(message, item, before, anchorView, isMine, bodyColor, ":text$index")
             }
             when (token.type) {
                 MarkdownMediaType.Image -> addImage(token.url, message, isMine, anchorView)
@@ -959,7 +903,7 @@ internal class NativeMessageViewHolder(
         }
         val tail = content.substring(cursor).cleanImageSplitTextSegment()
         if (tail.isNotBlank()) {
-            addMarkdownText(message, item, tail, anchorView, isMine, ":tail")
+            addMarkdownText(message, item, tail, anchorView, isMine, bodyColor, ":tail")
         }
     }
 
@@ -969,18 +913,18 @@ internal class NativeMessageViewHolder(
         markdown: String,
         anchorView: View,
         isMine: Boolean,
+        bodyColor: Int,
         keySuffix: String = "",
     ) {
-        val textView = TextView(context).apply {
-            configureBodyText()
-            enableMessageLongPress(message, isMine, anchorView)
-        }
-        addView(textView)
-        renderJob = markdownRenderer.renderInto(
-            textView = textView,
+        bodyRenderer.renderMarkdown(
+            container = this,
             messageKey = item.stableNativeKey() + keySuffix,
             markdown = markdown,
             fallback = item.renderHints.plainFallback,
+            message = message,
+            isMine = isMine,
+            anchorView = anchorView,
+            color = bodyColor,
         )
     }
 
@@ -1208,6 +1152,7 @@ internal class NativeMessageViewHolder(
                 topMargin = themePx(theme.spacingMicroDp)
                 leftMargin = themePx(theme.spacingTightDp)
                 rightMargin = themePx(theme.spacingTightDp)
+                gravity = if (isMine) Gravity.END else Gravity.START
             }
             message.reactionSummary.take(6).forEach { reaction ->
                 addView(TextView(context).apply {
@@ -1431,59 +1376,26 @@ internal class NativeMessageViewHolder(
     private fun String.visibleTextForWidth(): String = toMeasuredMessageText()
 
 
-    private fun avatarView(message: ChatRoomMessage): FrameLayout {
-        return FrameLayout(view.context).apply {
-            background = roundRect(theme.clientBackground, fieldRadius).apply {
+    private fun avatarState(message: ChatRoomMessage, mine: Boolean): ChatAvatarState {
+        val darkChrome = Color.luminance(theme.bubbleText) > 0.5f
+        return ChatAvatarState(
+            userName = message.userName,
+            avatarUrl = message.userAvatarURL,
+            initial = message.userName.ifBlank { message.displayName }.trim().take(1).ifBlank { "鱼" },
+            appearance = message.appearance,
+            mine = mine,
+            darkChrome = darkChrome,
+            themedInnerSizePx = dp(ChatAppearanceSupport.RoomAvatarInnerDp),
+            fallbackTextColor = theme.accent,
+            fallbackTextSizePx = theme.avatarFallbackTextSizeSp,
+            defaultBackground = roundRect(theme.clientBackground, fieldRadius).apply {
                 setStroke(themeBorderPx(), theme.bubbleBorder)
-            }
-            clipToOutline = true
-            elevation = dp(1).toFloat()
-            layoutParams = LinearLayout.LayoutParams(themePx(theme.avatarSizeDp), themePx(theme.avatarSizeDp)).apply {
-                topMargin = themeItemPx()
-            }
-            setOnClickListener {
-                dismissSourcePopup()
-                onAvatarClick(message.userName)
-            }
-            setOnLongClickListener {
-                dismissSourcePopup()
-                onAvatarLongPress(message.userName)
-                true
-            }
-            val label = TextView(context).apply {
-                text = message.userName.ifBlank { message.displayName }.trim().take(1).ifBlank { "鱼" }
-                setTextColor(theme.accent)
-                textSize = theme.avatarFallbackTextSizeSp
-                typeface = Typeface.DEFAULT_BOLD
-                gravity = Gravity.CENTER
-            }
-            addView(label, FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-            ))
-            if (message.userAvatarURL.isNotBlank()) {
-                val avatarSizePx = themePx(theme.avatarSizeDp)
-                val image = SharedAvatarImageView(
-                    context = context,
-                    store = avatarDrawableStore,
-                    imageLoaderProvider = imageLoaderProvider,
-                    avatarSizePx = avatarSizePx,
-                ).apply {
-                    visibility = View.INVISIBLE
-                    setAvatarUrl(message.userAvatarURL)
-                    onAvailabilityChanged = { available ->
-                        visibility = if (available) View.VISIBLE else View.INVISIBLE
-                        label.visibility = if (available) View.GONE else View.VISIBLE
-                    }
-                }
-                addView(image, FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                ))
-            }
-        }
+            },
+            defaultInnerRadiusDp = fieldRadius,
+            innerBackground = roundRect(theme.clientBackground, 8f),
+            topMarginPx = themeItemPx(),
+        )
     }
-
     private fun repeatRow(
         message: ChatRoomMessage,
         stack: RepeatStackInfo,
@@ -1499,6 +1411,7 @@ internal class NativeMessageViewHolder(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply {
                 topMargin = dp(3)
+                gravity = if (isMine) Gravity.END else Gravity.START
             }
             setPadding((themeItemPx() * 0.5f).roundToInt(), 0, (themeItemPx() * 0.5f).roundToInt(), 0)
 
@@ -1762,7 +1675,7 @@ private fun View.resumeAnimatedDrawables() {
     }
 }
 
-private fun ImageView.applyLoadedDrawable(drawable: Drawable) {
+internal fun ImageView.applyLoadedDrawable(drawable: Drawable) {
     setImageDrawable(drawable)
     resumeLoadedAnimation()
 }
@@ -1932,7 +1845,7 @@ internal class SharedAvatarImageView(
     context: Context,
     private val store: SharedAvatarDrawableStore,
     private val imageLoaderProvider: () -> ImageLoader,
-    private val avatarSizePx: Int,
+    private var avatarSizePx: Int,
 ) : View(context) {
     private val drawRect = Rect()
     private var avatarUrl: String = ""
@@ -1945,6 +1858,15 @@ internal class SharedAvatarImageView(
         release()
         avatarUrl = url
         if (isAttachedToWindow && isShown) {
+            subscribe()
+        }
+    }
+
+    fun setAvatarSize(sizePx: Int) {
+        if (avatarSizePx == sizePx) return
+        avatarSizePx = sizePx
+        if (avatarUrl.isNotBlank() && isAttachedToWindow && isShown) {
+            store.unsubscribe(avatarUrl, this)
             subscribe()
         }
     }

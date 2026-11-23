@@ -6,6 +6,17 @@ sealed interface ChatAction {
     data object RefreshHistory : ChatAction
     data object LoadMoreHistory : ChatAction
     data object Reconnect : ChatAction
+    data object LoadChatAppearance : ChatAction
+    data class SelectChatBubble(val bubbleId: String) : ChatAction
+    data class SelectChatFrame(val frameId: String) : ChatAction
+    data object SaveChatAppearance : ChatAction
+    data object RetryChatAppearance : ChatAction
+    data class AuthorizeChatAppearance(val password: String, val mfaCode: String?) : ChatAction
+    data class CompleteChatAppearanceCaptcha(val captchaJson: String) : ChatAction
+    data object LoadAppearanceShop : ChatAction
+    data class ConfirmAppearancePurchase(val productId: String, val days: Int) : ChatAction
+    data object RetryAppearancePurchase : ChatAction
+    data object DismissAppearancePurchase : ChatAction
     data object JumpToBottom : ChatAction
     data object MarkUnreadMessagesRead : ChatAction
     data class FollowBottomChanged(val value: Boolean) : ChatAction

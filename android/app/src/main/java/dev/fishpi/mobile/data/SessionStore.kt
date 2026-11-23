@@ -89,7 +89,10 @@ class SessionStore(context: Context) {
         prefs.edit().putString(KEY_API_KEY, apiKey.trim()).apply()
     }
 
-    fun saveAccount(apiKey: String, user: FishPiUser) {
+    fun saveAccount(
+        apiKey: String,
+        user: FishPiUser,
+    ) {
         val token = apiKey.trim()
         if (token.isBlank()) return
         val normalizedUserName = user.userName.normalizedKey()

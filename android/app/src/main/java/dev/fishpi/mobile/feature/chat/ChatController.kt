@@ -2,12 +2,14 @@ package dev.fishpi.mobile.feature.chat
 
 import android.content.Context
 import dev.fishpi.mobile.shared.message.ChatQuote
+import dev.fishpi.mobile.shared.message.native.ChatAppearanceSupport
 import dev.fishpi.mobile.shared.message.renderSource
 import dev.fishpi.mobile.shared.message.repeatableDraftContent
 import dev.fishpi.mobile.core.ui.UiController
 import dev.fishpi.mobile.data.AtUserCandidate
 import dev.fishpi.mobile.data.ChatReactionUpdate
 import dev.fishpi.mobile.data.ChatContentKind
+import dev.fishpi.mobile.data.ChatAppearanceSnapshot
 import dev.fishpi.mobile.data.ChatRoomMessage
 import dev.fishpi.mobile.realtime.ChatRoomEvent
 import dev.fishpi.mobile.realtime.ChatRoomSnapshot
@@ -19,6 +21,10 @@ import dev.fishpi.mobile.data.FishPiApiClient
 import dev.fishpi.mobile.data.RedPacketOpenResult
 import dev.fishpi.mobile.data.RedPacketStatusUpdate
 import dev.fishpi.mobile.data.SessionStore
+import dev.fishpi.mobile.data.V3FailureKind
+import dev.fishpi.mobile.data.V3RemoteException
+import dev.fishpi.mobile.data.V3SessionManager
+import dev.fishpi.mobile.data.V3ChatRealtimeClient
 import dev.fishpi.mobile.data.AttachmentUpload
 import dev.fishpi.mobile.data.AttachmentUploadQueue
 import dev.fishpi.mobile.data.ComposerAttachments
@@ -26,6 +32,9 @@ import dev.fishpi.mobile.data.ChatFilterConfig
 import dev.fishpi.mobile.feature.chat.render.ChatRenderModel
 import dev.fishpi.mobile.feature.chat.render.ChatRenderModelReducer
 import dev.fishpi.mobile.feature.chat.barrage.ChatBarrageUiModel
+import dev.fishpi.mobile.feature.chat.appearance.AppearancePurchaseUiState
+import dev.fishpi.mobile.feature.chat.appearance.AppearanceShopPhase
+import dev.fishpi.mobile.feature.chat.appearance.AppearanceShopUiState
 import dev.fishpi.mobile.feature.chat.model.ChatConnectionState
 import dev.fishpi.mobile.feature.chat.model.ChatConnectionStatus
 import dev.fishpi.mobile.feature.redpacket.DefaultRedPacketMessage
@@ -61,6 +70,9 @@ internal class ChatController(
     context: Context,
     private val apiKey: String,
     private val currentUsername: String,
+    private val legacyUserId: String,
+    private val v3: V3SessionManager,
+    private val v3Notice: String = "",
     private val api: FishPiApiClient = FishPiApiClient.shared,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) : UiController<ChatState, ChatAction> {
@@ -77,6 +89,19 @@ internal class ChatController(
 
     private val _state = MutableStateFlow(ChatState(liveness = cachedHomeLiveness()))
     override val state: StateFlow<ChatState> = _state
+
+    init {
+        if (v3Notice.isNotBlank()) {
+            _state.update {
+                it.copy(
+                    chatAppearance = it.chatAppearance.copy(
+                        hint = v3Notice,
+                        needsAuthorization = true,
+                    ),
+                )
+            }
+        }
+    }
     private val _effects = MutableSharedFlow<ChatEffect>(extraBufferCapacity = 16)
     val effects: SharedFlow<ChatEffect> = _effects.asSharedFlow()
     val legacyMessages: StateFlow<List<ChatRoomMessage>> = rawMessages.asStateFlow()
@@ -144,6 +169,31 @@ internal class ChatController(
     private var chatEventJob: Job? = null
     private var snapshotJob: Job? = null
     private var pollingActive = false
+    private data class PendingAppearance(
+        val key: String,
+        val bubbleId: String,
+        val frameId: String,
+        val ownerUserId: String,
+        val verifyOnly: Boolean = false,
+    )
+    private var pendingAppearance: PendingAppearance? = null
+    private var appearanceJob: Job? = null
+    private data class PendingAppearancePurchase(
+        val key: String,
+        val productId: String,
+        val days: Int,
+        val revision: Long,
+        val ownerUserId: String,
+    )
+    private var pendingPurchase: PendingAppearancePurchase? = null
+    private var appearanceShopJob: Job? = null
+    private var appearanceInventoryJob: Job? = null
+    private var purchaseJob: Job? = null
+    private val v3Realtime = V3ChatRealtimeClient()
+    private val pendingAppearances = LinkedHashMap<String, ChatAppearanceSnapshot>()
+    private val lastAppearanceByUser = LinkedHashMap<String, ChatAppearanceSnapshot>()
+    @Volatile private var v3AppearanceActive = false
+    private var v3AppearanceJob: Job? = null
 
     init {
         startLivenessPolling()
@@ -166,6 +216,20 @@ internal class ChatController(
             ChatAction.RefreshHistory -> refreshHistory()
             ChatAction.LoadMoreHistory -> loadMoreHistory()
             ChatAction.Reconnect -> reconnectRealtime()
+            ChatAction.LoadChatAppearance -> loadChatAppearance()
+            is ChatAction.SelectChatBubble -> selectChatBubble(action.bubbleId)
+            is ChatAction.SelectChatFrame -> selectChatFrame(action.frameId)
+            ChatAction.SaveChatAppearance -> saveChatAppearance()
+            ChatAction.RetryChatAppearance -> retryChatAppearance()
+            is ChatAction.AuthorizeChatAppearance ->
+                authorizeChatAppearance(action.password, action.mfaCode)
+            is ChatAction.CompleteChatAppearanceCaptcha ->
+                completeChatAppearanceCaptcha(action.captchaJson)
+            ChatAction.LoadAppearanceShop -> loadAppearanceShop()
+            is ChatAction.ConfirmAppearancePurchase ->
+                confirmAppearancePurchase(action.productId, action.days)
+            ChatAction.RetryAppearancePurchase -> retryAppearancePurchase()
+            ChatAction.DismissAppearancePurchase -> dismissAppearancePurchase()
             ChatAction.JumpToBottom -> _state.update {
                 it.copy(
                     unreadNewMessages = 0,
@@ -236,6 +300,564 @@ internal class ChatController(
         }
     }
 
+    private fun authorizeChatAppearance(password: String, mfaCode: String?) {
+        val state = _state.value.chatAppearance
+        if (state.isSaving) return
+        appearanceJob?.cancel()
+        _state.update {
+            it.copy(chatAppearance = it.chatAppearance.copy(phase = ChatAppearancePhase.Loading, error = null))
+        }
+        appearanceJob = scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    v3.authorize(
+                        nameOrEmail = currentUsername,
+                        password = password,
+                        mfaCode = mfaCode?.trim()?.ifBlank { null },
+                        legacyUserId = legacyUserId,
+                    )
+                }
+            }.onSuccess {
+                loadChatAppearance()
+                startV3AppearanceSubscription()
+            }
+                .onFailure { error -> failAppearance(error, verifying = false) }
+        }
+    }
+
+    private fun loadChatAppearance() {
+        val current = _state.value.chatAppearance
+        if (current.isSaving) return
+        appearanceJob?.cancel()
+        _state.update {
+            it.copy(chatAppearance = it.chatAppearance.copy(phase = ChatAppearancePhase.Loading, error = null))
+        }
+        appearanceJob = scope.launch {
+            runCatching {
+                v3.withToken(legacyUserId) { token ->
+                    withContext(Dispatchers.IO) { api.getChatAppearance(token) }
+                }
+            }.onSuccess { appearance -> applyReadAppearance(appearance) }
+                .onFailure { error -> failAppearance(error, verifying = pendingAppearance != null) }
+        }
+    }
+
+    private fun applyReadAppearance(appearance: ChatAppearanceSnapshot) {
+        val pending = pendingAppearance?.takeIf { it.ownerUserId == legacyUserId }
+        if (pending != null) {
+            if (appearance.bubbleId == pending.bubbleId && appearance.frameId == pending.frameId) {
+                pendingAppearance = null
+                _state.update {
+                    it.copy(
+                        chatAppearance = ChatAppearanceUiState(
+                            current = appearance,
+                            bubbleId = appearance.bubbleId,
+                            frameId = appearance.frameId,
+                            phase = ChatAppearancePhase.Synced,
+                        ),
+                    )
+                }
+                return
+            }
+            _state.update {
+                it.copy(
+                    chatAppearance = it.chatAppearance.copy(
+                        current = appearance,
+                        phase = ChatAppearancePhase.Verifying,
+                        error = "上次保存结果未知，可使用原操作重试",
+                        verifyOnly = true,
+                    ),
+                )
+            }
+            return
+        }
+        _state.update {
+            it.copy(
+                chatAppearance = ChatAppearanceUiState(
+                    current = appearance,
+                    bubbleId = appearance.bubbleId,
+                    frameId = appearance.frameId,
+                    phase = ChatAppearancePhase.Editing,
+                ),
+            )
+        }
+    }
+
+    private fun selectChatBubble(bubbleId: String) {
+        _state.update { state ->
+            val appearance = state.chatAppearance
+            if (appearance.isSaving || appearance.pendingIdempotencyKey != null) {
+                state
+            } else {
+                state.copy(chatAppearance = appearance.copy(bubbleId = bubbleId, error = null))
+            }
+        }
+    }
+
+    private fun selectChatFrame(frameId: String) {
+        _state.update { state ->
+            val appearance = state.chatAppearance
+            if (appearance.isSaving || appearance.pendingIdempotencyKey != null) {
+                state
+            } else {
+                state.copy(chatAppearance = appearance.copy(frameId = frameId, error = null))
+            }
+        }
+    }
+
+    private fun saveChatAppearance() {
+        val state = _state.value.chatAppearance
+        if (state.isSaving || state.current == null) return
+        val existing = pendingAppearance?.takeIf { it.ownerUserId == legacyUserId }
+        if (existing == null &&
+            state.current.bubbleId == state.bubbleId &&
+            state.current.frameId == state.frameId
+        ) {
+            _state.update {
+                it.copy(chatAppearance = it.chatAppearance.copy(phase = ChatAppearancePhase.Synced, error = null))
+            }
+            return
+        }
+        val pending = existing ?: PendingAppearance(
+            key = java.util.UUID.randomUUID().toString(),
+            bubbleId = state.bubbleId,
+            frameId = state.frameId,
+            ownerUserId = legacyUserId,
+        )
+        if (existing != null && !existing.verifyOnly &&
+            existing.bubbleId == state.bubbleId &&
+            existing.frameId == state.frameId
+        ) {
+            submitAppearance(pending)
+            return
+        }
+        pendingAppearance = pending
+        submitAppearance(pending)
+    }
+
+    private fun retryChatAppearance() {
+        val pending = pendingAppearance ?: return
+        if (_state.value.chatAppearance.isSaving) return
+        if (pending.ownerUserId != legacyUserId) {
+            pendingAppearance = null
+            loadChatAppearance()
+            return
+        }
+        if (pending.verifyOnly) verifyAppearance(pending) else submitAppearance(pending)
+    }
+
+    private fun submitAppearance(pending: PendingAppearance) {
+        _state.update {
+            it.copy(
+                chatAppearance = it.chatAppearance.copy(
+                    phase = ChatAppearancePhase.Submitting,
+                    error = null,
+                    pendingIdempotencyKey = pending.key,
+                    verifyOnly = false,
+                    needsCaptcha = false,
+                ),
+            )
+        }
+        appearanceJob = scope.launch {
+            runCatching {
+                v3.withToken(legacyUserId) { token ->
+                    withContext(Dispatchers.IO) {
+                        api.setChatAppearance(
+                            accessToken = token,
+                            idempotencyKey = pending.key,
+                            bubbleId = pending.bubbleId,
+                            frameId = pending.frameId,
+                        )
+                    }
+                }
+            }.onSuccess {
+                val verifying = pending.copy(verifyOnly = true)
+                pendingAppearance = verifying
+                verifyAppearance(verifying)
+            }.onFailure { error -> failAppearance(error, verifying = false) }
+        }
+    }
+
+    private fun verifyAppearance(pending: PendingAppearance) {
+        _state.update {
+            it.copy(
+                chatAppearance = it.chatAppearance.copy(
+                    phase = ChatAppearancePhase.Verifying,
+                    error = null,
+                    pendingIdempotencyKey = pending.key,
+                    verifyOnly = true,
+                    needsCaptcha = false,
+                ),
+            )
+        }
+        appearanceJob = scope.launch {
+            runCatching {
+                v3.withToken(legacyUserId) { token ->
+                    withContext(Dispatchers.IO) { api.getChatAppearance(token) }
+                }
+            }.onSuccess { appearance ->
+                if (pending.ownerUserId != legacyUserId) return@onSuccess
+                val sameBubble = ChatAppearanceSupport.canonicalBubbleId(appearance.bubbleId) ==
+                    ChatAppearanceSupport.canonicalBubbleId(pending.bubbleId)
+                val sameFrame = ChatAppearanceSupport.canonicalFrameId(appearance.frameId) ==
+                    ChatAppearanceSupport.canonicalFrameId(pending.frameId)
+                if (sameBubble && sameFrame) {
+                    pendingAppearance = null
+                    _state.update {
+                        it.copy(
+                            chatAppearance = ChatAppearanceUiState(
+                                current = appearance,
+                                bubbleId = appearance.bubbleId,
+                                frameId = appearance.frameId,
+                                phase = ChatAppearancePhase.Synced,
+                            ),
+                        )
+                    }
+                } else {
+                    _state.update {
+                        it.copy(
+                            chatAppearance = it.chatAppearance.copy(
+                                phase = ChatAppearancePhase.Verifying,
+                                error = "服务端配置与提交不一致，将继续核对",
+                                verifyOnly = true,
+                            ),
+                        )
+                    }
+                }
+            }.onFailure { error -> failAppearance(error, verifying = true) }
+        }
+    }
+
+    private fun failAppearance(error: Throwable, verifying: Boolean) {
+        val v3Error = error as? V3RemoteException
+        val needsCaptcha = v3Error?.kind == V3FailureKind.Captcha
+        val message = if (needsCaptcha) {
+            "接口需要人机验证，请完成验证后重试"
+        } else {
+            error.message ?: "聊天外观操作失败"
+        }
+        val needsAuthorization = v3Error?.requiresReauth == true
+        if (v3Error != null && v3Error.isRejection && !verifying) {
+            pendingAppearance = null
+            _state.update {
+                it.copy(
+                    chatAppearance = it.chatAppearance.copy(
+                        phase = ChatAppearancePhase.Editing,
+                        error = message,
+                        pendingIdempotencyKey = null,
+                        verifyOnly = false,
+                        needsAuthorization = needsAuthorization,
+                        needsCaptcha = needsCaptcha,
+                    ),
+                )
+            }
+            return
+        }
+        if (verifying) {
+            _state.update {
+                it.copy(
+                    chatAppearance = it.chatAppearance.copy(
+                        phase = ChatAppearancePhase.Verifying,
+                        error = "已提交，待核对：$message",
+                        verifyOnly = true,
+                        needsAuthorization = needsAuthorization,
+                        needsCaptcha = needsCaptcha,
+                    ),
+                )
+            }
+            return
+        }
+        _state.update {
+            it.copy(
+                chatAppearance = it.chatAppearance.copy(
+                    phase = ChatAppearancePhase.Editing,
+                    error = message,
+                    needsAuthorization = needsAuthorization,
+                    needsCaptcha = needsCaptcha,
+                ),
+            )
+        }
+    }
+
+    private fun completeChatAppearanceCaptcha(captchaJson: String) {
+        if (_state.value.chatAppearance.isSaving) return
+        appearanceJob?.cancel()
+        appearanceJob = scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { api.validateCaptcha(captchaJson) }
+            }.onSuccess {
+                val pending = pendingAppearance?.takeIf { it.ownerUserId == legacyUserId }
+                val pendingBuy = pendingPurchase?.takeIf { it.ownerUserId == legacyUserId }
+                when {
+                    pending != null ->
+                        if (pending.verifyOnly) verifyAppearance(pending) else submitAppearance(pending)
+                    pendingBuy != null -> submitAppearancePurchase(pendingBuy)
+                    v3.current()?.ownerUserId == legacyUserId -> {
+                        loadChatAppearance()
+                        loadAppearanceShop()
+                    }
+                    else -> {
+                        _state.update {
+                            it.copy(
+                                chatAppearance = it.chatAppearance.copy(
+                                    phase = ChatAppearancePhase.Editing,
+                                    error = null,
+                                    needsCaptcha = false,
+                                    needsAuthorization = true,
+                                ),
+                            )
+                        }
+                    }
+                }
+            }.onFailure { error ->
+                if (pendingPurchase?.ownerUserId == legacyUserId) {
+                    failAppearancePurchase(error)
+                } else {
+                    failAppearance(error, verifying = pendingAppearance?.verifyOnly == true)
+                }
+            }
+        }
+    }
+
+    private fun loadAppearanceShop() {
+        appearanceShopJob?.cancel()
+        _state.update {
+            it.copy(
+                appearanceShop = it.appearanceShop.copy(
+                    phase = AppearanceShopPhase.Loading,
+                    inventoryError = null,
+                    membershipError = null,
+                    error = null,
+                ),
+            )
+        }
+        appearanceShopJob = scope.launch {
+            val bound = v3.isBoundTo(legacyUserId)
+            val token = if (bound) v3.current()?.accessToken else null
+            val shopResult = runCatching {
+                withContext(Dispatchers.IO) { api.getAppearanceShop(token.orEmpty()) }
+            }
+            val inventoryResult = if (token.isNullOrBlank()) {
+                null
+            } else {
+                runCatching { withContext(Dispatchers.IO) { api.getAppearanceItems(token) } }
+            }
+            val membershipResult = if (token.isNullOrBlank()) {
+                null
+            } else {
+                runCatching { withContext(Dispatchers.IO) { api.getMembership(token) } }
+            }
+            _state.update { state ->
+                val shop = state.appearanceShop
+                val base = shopResult.fold(
+                    onSuccess = { items ->
+                        shop.copy(
+                            phase = AppearanceShopPhase.Ready,
+                            items = items,
+                            error = null,
+                        )
+                    },
+                    onFailure = { error ->
+                        shop.copy(
+                            phase = AppearanceShopPhase.Failed,
+                            items = emptyList(),
+                            error = error.message ?: "外观商城读取失败",
+                        )
+                    },
+                )
+                state.copy(
+                    appearanceShop = base.copy(
+                        inventory = inventoryResult?.getOrNull(),
+                        inventoryError = when {
+                            inventoryResult == null -> "缺少 V3 授权，无法读取权益"
+                            inventoryResult.isFailure ->
+                                inventoryResult.exceptionOrNull()?.message ?: "权益暂不可用"
+                            else -> null
+                        },
+                        membership = membershipResult?.getOrNull(),
+                        membershipError = when {
+                            membershipResult == null -> null
+                            membershipResult.isFailure ->
+                                membershipResult.exceptionOrNull()?.message ?: "会员状态暂不可用"
+                            else -> null
+                        },
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun refreshAppearanceInventory() {
+        appearanceInventoryJob?.cancel()
+        appearanceInventoryJob = scope.launch {
+            if (!v3.isBoundTo(legacyUserId)) return@launch
+            val token = v3.current()?.accessToken ?: return@launch
+            val inventoryResult = runCatching {
+                withContext(Dispatchers.IO) { api.getAppearanceItems(token) }
+            }
+            _state.update { state ->
+                val shop = state.appearanceShop
+                state.copy(
+                    appearanceShop = inventoryResult.fold(
+                        onSuccess = { inventory ->
+                            shop.copy(inventory = inventory, inventoryError = null)
+                        },
+                        onFailure = { error ->
+                            shop.copy(
+                                inventoryError = error.message ?: "权益暂不可用",
+                            )
+                        },
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun confirmAppearancePurchase(productId: String, days: Int) {
+        val shop = _state.value.appearanceShop
+        if (shop.purchase?.submitting == true) return
+        val item = shop.items.firstOrNull { it.id == productId && it.kind != "mount" } ?: return
+        if (!item.enabled) return
+        if (days != 7 && days != 30) return
+        if (days == 30 && item.price30 <= 0L) return
+        val pending = PendingAppearancePurchase(
+            key = java.util.UUID.randomUUID().toString(),
+            productId = productId,
+            days = days,
+            revision = item.revision,
+            ownerUserId = legacyUserId,
+        )
+        pendingPurchase = pending
+        submitAppearancePurchase(pending)
+    }
+
+    private fun retryAppearancePurchase() {
+        val pending = pendingPurchase?.takeIf { it.ownerUserId == legacyUserId }
+        if (pending == null) {
+            dismissAppearancePurchase()
+            return
+        }
+        if (_state.value.appearanceShop.purchase?.submitting == true) return
+        submitAppearancePurchase(pending)
+    }
+
+    private fun submitAppearancePurchase(pending: PendingAppearancePurchase) {
+        _state.update {
+            it.copy(
+                appearanceShop = it.appearanceShop.copy(
+                    purchase = AppearancePurchaseUiState(
+                        productId = pending.productId,
+                        days = pending.days,
+                        revision = pending.revision,
+                        idempotencyKey = pending.key,
+                        submitting = true,
+                    ),
+                ),
+            )
+        }
+        purchaseJob?.cancel()
+        purchaseJob = scope.launch {
+            runCatching {
+                v3.withToken(legacyUserId) { token ->
+                    withContext(Dispatchers.IO) {
+                        api.purchaseAppearanceItem(
+                            token,
+                            pending.key,
+                            pending.productId,
+                            pending.days,
+                            pending.revision,
+                        )
+                    }
+                }
+            }.onSuccess { result ->
+                pendingPurchase = null
+                _state.update {
+                    it.copy(
+                        appearanceShop = it.appearanceShop.copy(
+                            purchase = it.appearanceShop.purchase?.copy(
+                                submitting = false,
+                                unknownResult = false,
+                                error = null,
+                                success = result,
+                                needsCaptcha = false,
+                            ),
+                        ),
+                    )
+                }
+                refreshAppearanceInventory()
+            }.onFailure { error -> failAppearancePurchase(error) }
+        }
+    }
+
+    private fun failAppearancePurchase(error: Throwable) {
+        val v3Error = error as? V3RemoteException
+        when {
+            v3Error?.kind == V3FailureKind.Captcha -> {
+                _state.update {
+                    it.copy(
+                        appearanceShop = it.appearanceShop.copy(
+                            purchase = it.appearanceShop.purchase?.copy(
+                                submitting = false,
+                                needsCaptcha = true,
+                                error = "接口需要人机验证，请完成验证后重试",
+                            ),
+                        ),
+                    )
+                }
+            }
+            v3Error != null && v3Error.requiresReauth -> {
+                _state.update {
+                    it.copy(
+                        chatAppearance = it.chatAppearance.copy(
+                            phase = ChatAppearancePhase.Editing,
+                            needsAuthorization = true,
+                        ),
+                        appearanceShop = it.appearanceShop.copy(
+                            purchase = it.appearanceShop.purchase?.copy(
+                                submitting = false,
+                                error = v3Error.message,
+                            ),
+                        ),
+                    )
+                }
+            }
+            v3Error != null && v3Error.isRejection -> {
+                pendingPurchase = null
+                _state.update {
+                    it.copy(
+                        appearanceShop = it.appearanceShop.copy(
+                            purchase = it.appearanceShop.purchase?.copy(
+                                submitting = false,
+                                unknownResult = false,
+                                error = v3Error.message,
+                            ),
+                        ),
+                    )
+                }
+            }
+            else -> {
+                val message = error.message ?: "购买请求失败"
+                _state.update {
+                    it.copy(
+                        appearanceShop = it.appearanceShop.copy(
+                            purchase = it.appearanceShop.purchase?.copy(
+                                submitting = false,
+                                unknownResult = true,
+                                error = "购买结果未知：$message",
+                            ),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun dismissAppearancePurchase() {
+        pendingPurchase = null
+        _state.update {
+            it.copy(appearanceShop = it.appearanceShop.copy(purchase = null))
+        }
+    }
     private val sceneToken = pluginManager.acquireSceneToken()
 
     fun setPluginScene(scene: String) {
@@ -314,13 +936,25 @@ internal class ChatController(
                 applySnapshot(snapshot)
             }
         }
+        startV3AppearanceSubscription()
     }
 
     private suspend fun handleChatEvent(event: ChatRoomEvent) {
         val config = realtimeConnectConfig
         when (event) {
             is ChatRoomEvent.Message -> {
-                val incoming = event.message
+                var incoming = event.message
+                if (incoming.appearance == null && incoming.oId.isNotBlank()) {
+                    pendingAppearances.remove(incoming.oId)?.let { snapshot ->
+                        incoming = incoming.copy(appearance = snapshot)
+                    }
+                }
+                if (incoming.appearance == null && v3AppearanceActive) {
+                    lastAppearanceByUser[incoming.userName]?.let { snapshot ->
+                        incoming = incoming.copy(appearance = snapshot)
+                    }
+                }
+                rememberUserAppearance(incoming.userName, incoming.appearance)
                 val isOwnMessage = incoming.userName.equals(currentUsername, ignoreCase = true)
                 val followBottom = _state.value.shouldFollowBottom
                 val blocked = withContext(Dispatchers.Default) {
@@ -351,6 +985,11 @@ internal class ChatController(
         chatEventJob = null
         snapshotJob?.cancel()
         snapshotJob = null
+        v3AppearanceJob?.cancel()
+        v3AppearanceJob = null
+        v3AppearanceActive = false
+        v3Realtime.disconnect()
+        pendingAppearances.clear()
         if (markPaused && !_state.value.isLoading) {
             updateConnectionStatus(RealtimeStatus.Disconnected, "聊天室实时连接已暂停")
         }
@@ -358,6 +997,100 @@ internal class ChatController(
 
     fun reconnectRealtime() {
         RealtimeConnectionManager.reconnectChatRoom(::onStatus)
+    }
+
+    private fun startV3AppearanceSubscription() {
+        if (v3AppearanceJob?.isActive == true) return
+        v3AppearanceJob = scope.launch {
+            connectV3RealtimeWithFreshToken()
+        }
+    }
+
+    private suspend fun connectV3RealtimeWithFreshToken(): Boolean {
+        val session = v3.current()
+        if (session == null || !v3.isBoundTo(legacyUserId)) return false
+        return try {
+            val token = v3.withToken(legacyUserId) { it }
+            v3Realtime.connect(
+                accessToken = token,
+                onAppearance = ::onV3Appearance,
+                onDeleted = ::onV3AppearanceDeleted,
+                onSyncRequired = ::onV3SyncRequired,
+                onAuthExpired = ::onV3AuthExpired,
+                onStatus = ::onV3RealtimeStatus,
+            )
+            v3AppearanceActive = true
+            true
+        } catch (error: V3RemoteException) {
+            if (error.requiresReauth) {
+                _state.update {
+                    it.copy(chatAppearance = it.chatAppearance.copy(needsAuthorization = true))
+                }
+            }
+            false
+        }
+    }
+
+    private fun onV3Appearance(
+        messageId: String,
+        revision: String?,
+        appearance: ChatAppearanceSnapshot?,
+    ) {
+        if (messageId.isBlank() || appearance == null) return
+        pendingAppearances[messageId] = appearance
+        trimPendingAppearances()
+        val updated = updateMessageByOId(messageId) { message ->
+            message.copy(appearance = appearance)
+        }
+        if (updated != null) {
+            rememberUserAppearance(updated.userName, appearance)
+            pendingAppearances.remove(messageId)
+        }
+    }
+
+    private fun onV3AppearanceDeleted(messageId: String) {
+        if (messageId.isBlank()) return
+        pendingAppearances.remove(messageId)
+    }
+
+    private fun onV3SyncRequired() {
+        pendingAppearances.clear()
+    }
+
+    private fun onV3AuthExpired() {
+        v3AppearanceActive = false
+        v3Realtime.disconnect()
+        v3AppearanceJob?.cancel()
+        v3AppearanceJob = scope.launch {
+            delay(V3RealtimeReconnectDelayMs)
+            connectV3RealtimeWithFreshToken()
+        }
+    }
+
+    private fun onV3RealtimeStatus(status: String) {
+        if (!status.contains("失败")) return
+        v3AppearanceActive = false
+        v3AppearanceJob?.cancel()
+        v3AppearanceJob = scope.launch {
+            delay(V3RealtimeReconnectDelayMs)
+            connectV3RealtimeWithFreshToken()
+        }
+    }
+
+    private fun trimPendingAppearances() {
+        while (pendingAppearances.size > V3PendingAppearanceLimit) {
+            val eldest = pendingAppearances.keys.firstOrNull() ?: break
+            pendingAppearances.remove(eldest)
+        }
+    }
+
+    private fun rememberUserAppearance(userName: String, appearance: ChatAppearanceSnapshot?) {
+        if (userName.isBlank() || appearance == null) return
+        lastAppearanceByUser[userName] = appearance
+        while (lastAppearanceByUser.size > V3UserAppearanceCacheLimit) {
+            val eldest = lastAppearanceByUser.keys.firstOrNull() ?: break
+            lastAppearanceByUser.remove(eldest)
+        }
     }
 
     fun close() {
@@ -370,6 +1103,22 @@ internal class ChatController(
         livenessPollingJob = null
         renderJob?.cancel()
         renderJob = null
+        appearanceJob?.cancel()
+        appearanceJob = null
+        pendingAppearance = null
+        appearanceShopJob?.cancel()
+        appearanceShopJob = null
+        appearanceInventoryJob?.cancel()
+        appearanceInventoryJob = null
+        purchaseJob?.cancel()
+        purchaseJob = null
+        pendingPurchase = null
+        v3AppearanceJob?.cancel()
+        v3AppearanceJob = null
+        v3AppearanceActive = false
+        v3Realtime.disconnect()
+        pendingAppearances.clear()
+        lastAppearanceByUser.clear()
     }
 
     private fun startLivenessPolling() {
@@ -562,6 +1311,7 @@ internal class ChatController(
                 }
                 val merged = history + retainedLocal
                 rawMessages.value = merged
+                history.forEach { rememberUserAppearance(it.userName, it.appearance) }
                 refreshRenderModel()
                 _state.update {
                     it.copy(
@@ -625,6 +1375,11 @@ internal class ChatController(
                 val uniqueOlder = older.filterNot { it.historyStableKey() in existingKeys }
                 val nextMessages = if (uniqueOlder.isNotEmpty()) uniqueOlder + previous else previous
                 rawMessages.value = nextMessages
+                older.forEach { message ->
+                    if (message.userName !in lastAppearanceByUser) {
+                        rememberUserAppearance(message.userName, message.appearance)
+                    }
+                }
                 refreshRenderModel()
                 val duplicateStreak = if (older.isEmpty() || uniqueOlder.isEmpty()) {
                     snapshot.duplicateHistoryPageStreak + 1
@@ -774,6 +1529,7 @@ internal class ChatController(
     private fun onRevoke(messageId: String) {
         if (messageId.isBlank()) return
         revokedMessageIds += messageId
+        pendingAppearances.remove(messageId)
         replaceRenderModel(messageId)
     }
 
@@ -1613,6 +2369,9 @@ internal class ChatController(
         const val DefaultBarragerColor = "#ffffff"
         const val MaxRetainedSynthesizedMessages = 10
         const val OptimisticHistoryMatchWindowMs = 2 * 60 * 1000L
+        const val V3RealtimeReconnectDelayMs = 5_000L
+        const val V3PendingAppearanceLimit = 200
+        const val V3UserAppearanceCacheLimit = 300
     }
 
     private var lastRealtimeRefreshAtMs: Long = 0L

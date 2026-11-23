@@ -16,6 +16,7 @@ import dev.fishpi.mobile.auth.isVisitorVerificationRequired
 import dev.fishpi.mobile.data.FishPiApiClient
 import dev.fishpi.mobile.data.SavedAccount
 import dev.fishpi.mobile.data.SessionStore
+import dev.fishpi.mobile.data.V3SessionManager
 import dev.fishpi.mobile.realtime.RealtimeLifecycleController
 import dev.fishpi.mobile.ui.overlay.MediaOverlayHost
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +27,7 @@ import kotlinx.coroutines.withContext
 fun FishPiApp() {
     val context = LocalContext.current
     val store = remember { SessionStore(context.applicationContext) }
+    val v3Sessions = remember { V3SessionManager.get(context.applicationContext) }
     val fallbackTheme = FishPiThemePreset.Island
     val builtinOptions = remember { builtinThemeOptions() }
     var importedThemes by remember {
@@ -166,7 +168,16 @@ fun FishPiApp() {
                 runCatching {
                     withContext(Dispatchers.IO) {
                         val user = api.getUser(apiKey)
-                        AppSession(apiKey, user)
+                        val restored = v3Sessions.restoreFor(user.userId)
+                        AppSession(
+                            apiKey = apiKey,
+                            user = user,
+                            v3Notice = if (restored == null) {
+                                "外观功能尚未授权，可在「外观」中完成授权"
+                            } else {
+                                ""
+                            },
+                        )
                     }
                 }.onSuccess {
                     pendingVisitorRetry = null
@@ -196,11 +207,13 @@ fun FishPiApp() {
         fun retryAfterVisitorVerification() {
             when (val retry = pendingVisitorRetry) {
                 is VisitorRetryAction.SavedAccountLogin -> switchAccount(retry.account)
-                is VisitorRetryAction.SavedApiKey -> startSessionWithKey(
-                    apiKey = retry.apiKey,
-                    retryAction = retry,
-                    fallbackError = "Token 验证失败",
-                )
+                is VisitorRetryAction.SavedApiKey -> {
+                    startSessionWithKey(
+                        apiKey = retry.apiKey,
+                        retryAction = retry,
+                        fallbackError = "Token 验证失败",
+                    )
+                }
                 null -> bootError = "访客验证已完成，请重新登录"
             }
         }
@@ -271,9 +284,13 @@ fun FishPiApp() {
                             bootError = null
                         },
                         onLogout = {
-                            store.clear()
-                            refreshSavedAccounts()
-                            session = null
+                            val current = session
+                            scope.launch {
+                                if (current != null) v3Sessions.revoke(current.user.userId)
+                                store.clear()
+                                refreshSavedAccounts()
+                                session = null
+                            }
                         },
                     )
                 }

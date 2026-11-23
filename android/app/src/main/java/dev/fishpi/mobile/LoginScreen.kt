@@ -52,6 +52,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -64,6 +65,7 @@ import androidx.compose.foundation.Image
 import dev.fishpi.mobile.auth.isVisitorVerificationRequired
 import dev.fishpi.mobile.data.FishPiApiClient
 import dev.fishpi.mobile.data.SavedAccount
+import dev.fishpi.mobile.data.V3SessionManager
 import dev.fishpi.mobile.ui.components.VisitorVerifyDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -79,6 +81,8 @@ internal fun LoginScreen(
     onAuthenticated: (AppSession) -> Unit,
 ) {
     val api = remember { FishPiApiClient.shared }
+    val context = LocalContext.current
+    val v3 = remember { V3SessionManager.get(context.applicationContext) }
     val scope = rememberCoroutineScope()
     var nameOrEmail by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -123,12 +127,27 @@ internal fun LoginScreen(
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    val token = api.login(
+                    val login = api.login(
                         nameOrEmail = account,
                         password = rawPassword,
                         mfaCode = mfaCode.trim().ifBlank { null },
                     )
-                    AppSession(token, api.getUser(token))
+                    val user = api.getUser(login.apiKey)
+                    val notice = runCatching {
+                        v3.authorize(
+                            nameOrEmail = account,
+                            password = rawPassword,
+                            mfaCode = mfaCode.trim().ifBlank { null },
+                            legacyUserId = user.userId,
+                        )
+                    }.exceptionOrNull()?.let { error ->
+                        "外观功能未授权：${error.message ?: "未知原因"}"
+                    }.orEmpty()
+                    AppSession(
+                        apiKey = login.apiKey,
+                        user = user,
+                        v3Notice = notice,
+                    )
                 }
             }.onSuccess {
                 retryPasswordAfterVisitorVerify = false
@@ -472,7 +491,11 @@ internal fun LoginScreen(
                     scope.launch {
                         runCatching {
                             withContext(Dispatchers.IO) {
-                                AppSession(token, api.getUser(token))
+                                AppSession(
+                                    apiKey = token,
+                                    user = api.getUser(token),
+                                    v3Notice = "扫码登录未包含外观授权，可在「外观」中重新授权",
+                                )
                             }
                         }.onSuccess { onAuthenticated(it) }
                             .onFailure {

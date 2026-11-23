@@ -7,6 +7,47 @@ object FishPiNative {
 
     external fun login(nameOrEmail: String, password: String, mfaCode: String): String
 
+    external fun v3Login(nameOrEmail: String, password: String, mfaCode: String): String
+
+    external fun v3Refresh(cookiesJson: String): String
+
+    external fun v3Logout(cookiesJson: String): String
+
+    external fun v3Me(accessToken: String): String
+
+    external fun v3CaptchaOptions(): String
+
+    external fun validateCaptcha(captchaJson: String): String
+
+
+    external fun getChatAppearance(accessToken: String): String
+
+    external fun setChatAppearance(
+        accessToken: String,
+        idempotencyKey: String,
+        bubbleId: String,
+        frameId: String,
+    ): String
+
+    external fun getAppearanceShop(accessToken: String): String
+
+    external fun getAppearanceItems(accessToken: String): String
+
+    external fun getMembership(accessToken: String): String
+
+    external fun purchaseAppearanceItem(
+        accessToken: String,
+        idempotencyKey: String,
+        productId: String,
+        days: Int,
+        revision: Long,
+    ): String
+
+    external fun connectV3ChatRealtime(accessToken: String, callback: Any): Long
+
+    external fun disconnectV3ChatRealtime(handle: Long)
+
+
     external fun fetchRegisterCaptcha(): String
 
     external fun preRegister(username: String, phone: String, captcha: String): String

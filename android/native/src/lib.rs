@@ -16,3 +16,4 @@ mod search;
 mod session;
 mod upload;
 mod user;
+mod v3;
