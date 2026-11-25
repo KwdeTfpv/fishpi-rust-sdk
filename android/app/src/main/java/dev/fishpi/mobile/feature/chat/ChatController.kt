@@ -1437,7 +1437,10 @@ internal class ChatController(
         val current = rawMessages.value
 
         val optimisticIndex = if (incoming.userName.equals(currentUsername, ignoreCase = true)) {
-            current.indexOfFirst { it.oId.startsWith("local:") && it.matchesOptimistic(incoming) }
+            current.indexOfFirst {
+                it.oId.startsWith("local:") &&
+                    (it.matchesOptimistic(incoming) || it.matchesUnresolvedOptimistic(incoming))
+            }
         } else {
             -1
         }
@@ -1496,20 +1499,31 @@ internal class ChatController(
         return mineText.isNotEmpty() && mineText == theirText
     }
 
+    /**
+     * 时间窗内按插入顺序认领自己的服务端回显。
+     */
+    private fun ChatRoomMessage.matchesUnresolvedOptimistic(incoming: ChatRoomMessage): Boolean {
+        if (incoming.oId.isBlank()) return false
+        val insertedAtMs = oId.removePrefix("local:").toLongOrNull() ?: return false
+        return System.currentTimeMillis() - insertedAtMs <= OptimisticEchoFallbackWindowMs
+    }
+
     private fun ChatRoomMessage.matchesOptimisticHistory(history: ChatRoomMessage): Boolean {
         if (!userName.equals(currentUsername, ignoreCase = true)) return false
         if (history.userName.isNotBlank() && !history.userName.equals(currentUsername, ignoreCase = true)) {
             return false
         }
-        if (messageFingerprint() != history.messageFingerprint()) {
+        val contentMatches = if (messageFingerprint() == history.messageFingerprint()) {
+            true
+        } else {
             val mineText = content.trim().toPlainMessageText().trim()
-            val historyText = history.content.trim().toPlainMessageText().trim()
-            if (mineText.isEmpty() || mineText != historyText) return false
+            mineText.isNotEmpty() && mineText == history.content.trim().toPlainMessageText().trim()
         }
         val localTime = time.toEpochMillisOrNull()
         val historyTime = history.time.toEpochMillisOrNull()
-        if (localTime == null || historyTime == null) return true
-        return kotlin.math.abs(localTime - historyTime) <= OptimisticHistoryMatchWindowMs
+        if (localTime == null || historyTime == null) return contentMatches
+        if (kotlin.math.abs(localTime - historyTime) > OptimisticHistoryMatchWindowMs) return false
+        return true
     }
 
     private inline fun updateMessageByOId(
@@ -2376,6 +2390,7 @@ internal class ChatController(
         const val DefaultBarragerColor = "#ffffff"
         const val MaxRetainedSynthesizedMessages = 10
         const val OptimisticHistoryMatchWindowMs = 2 * 60 * 1000L
+        const val OptimisticEchoFallbackWindowMs = 60 * 1000L
         const val V3RealtimeReconnectDelayMs = 5_000L
         const val V3PendingAppearanceLimit = 200
         const val V3UserAppearanceCacheLimit = 300
