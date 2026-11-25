@@ -1746,11 +1746,18 @@ internal class ChatController(
         val mine = rawMessages.value.lastOrNull {
             it.userName.equals(currentUsername, ignoreCase = true) && !it.oId.startsWith("local:")
         }
+        val appearanceState = _state.value.chatAppearance
+        val ownAppearance = if (appearanceState.phase == ChatAppearancePhase.Synced) {
+            appearanceState.current
+        } else {
+            mine?.appearance
+        }
         val optimistic = ChatRoomMessage(
             oId = optimisticId,
             userName = currentUsername,
             userNickname = mine?.userNickname.orEmpty(),
             userAvatarURL = mine?.userAvatarURL.orEmpty(),
+            appearance = ownAppearance,
             content = sendContent,
             time = java.time.Instant.now().toString(),
             client = "Android",
