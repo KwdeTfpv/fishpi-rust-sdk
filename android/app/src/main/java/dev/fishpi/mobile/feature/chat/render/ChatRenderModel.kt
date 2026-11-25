@@ -94,8 +94,8 @@ internal class ChatRenderModelReducer {
         val ends = model.itemEndMessageIndexes
         val lastGroupStart = if (ends.size >= 2) ends[ends.size - 2] + 1 else 0
         val lastGroupFirst = visible[lastGroupStart]
-        val merges = shouldStack(appended) &&
-            shouldStack(lastGroupFirst) &&
+        val merges = shouldStack(appended, revokedIds) &&
+            shouldStack(lastGroupFirst, revokedIds) &&
             appended.repeatStackKey() == lastGroupFirst.repeatStackKey()
 
         if (merges) {
@@ -154,6 +154,9 @@ internal class ChatRenderModelReducer {
         val groupStart = if (itemIdx > 0) ends[itemIdx - 1] + 1 else 0
         val groupEnd = ends[itemIdx]
         val groupMessages = newVisible.subList(groupStart, groupEnd + 1)
+        if (groupMessages.size > 1 && updated.oId in revokedIds) {
+            return recompute(messages, filters, revokedIds, echoKeys)
+        }
         val previousOfGroup = if (groupStart > 0) newVisible[groupStart - 1] else null
         val rebuilt = buildOneItem(groupMessages, previousOfGroup, revokedIds, echoKeys)
         val newItems = model.visibleItems.toMutableList().also { it[itemIdx] = rebuilt }
@@ -168,7 +171,7 @@ internal class ChatRenderModelReducer {
         revokedIds: Set<String>,
         echoKeys: Map<String, String>,
     ): Pair<List<ChatListItem>, List<Int>> {
-        val groups = buildStackedItems(visibleMessages)
+        val groups = buildStackedItems(visibleMessages, revokedIds)
         var msgIndex = 0
         val itemEndMessageIndexes = ArrayList<Int>(groups.size)
         val items = groups.map { group ->
@@ -223,12 +226,15 @@ internal class ChatRenderModelReducer {
 
 private data class StackGroup(val messages: List<ChatRoomMessage>)
 
-private fun buildStackedItems(messages: List<ChatRoomMessage>): List<StackGroup> {
+private fun buildStackedItems(
+    messages: List<ChatRoomMessage>,
+    revokedIds: Set<String>,
+): List<StackGroup> {
     val groups = mutableListOf<StackGroup>()
     var i = 0
     while (i < messages.size) {
         val current = messages[i]
-        if (!shouldStack(current)) {
+        if (!shouldStack(current, revokedIds)) {
             groups.add(StackGroup(listOf(current)))
             i++
             continue
@@ -236,7 +242,7 @@ private fun buildStackedItems(messages: List<ChatRoomMessage>): List<StackGroup>
         val currentKey = current.repeatStackKey()
         var j = i + 1
         while (j < messages.size &&
-            shouldStack(messages[j]) &&
+            shouldStack(messages[j], revokedIds) &&
             messages[j].repeatStackKey() == currentKey
         ) {
             j++
@@ -247,11 +253,12 @@ private fun buildStackedItems(messages: List<ChatRoomMessage>): List<StackGroup>
     return groups
 }
 
-private fun shouldStack(message: ChatRoomMessage): Boolean {
+private fun shouldStack(message: ChatRoomMessage, revokedIds: Set<String>): Boolean {
     return message.contentKind != ChatContentKind.System &&
         message.contentKind != ChatContentKind.Barrage &&
         message.contentKind != ChatContentKind.RedPacket &&
-        message.redPacket == null
+        message.redPacket == null &&
+        message.oId !in revokedIds
 }
 
 private val StackFieldSeparator = Char(0x1E).toString()
